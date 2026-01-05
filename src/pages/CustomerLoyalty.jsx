@@ -66,7 +66,11 @@ const CustomerLoyalty = () => {
     }, []);
 
     const handleLogin = () => {
-        liff.login();
+        if (!import.meta.env.VITE_LIFF_ID) {
+            alert('❌ ไม่พบ LIFF ID ในระบบ!');
+            return;
+        }
+        liff.login({ redirectUri: window.location.href });
     };
 
     const handleRedeem = async (promo) => {

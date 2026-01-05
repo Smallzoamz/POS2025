@@ -62,8 +62,10 @@ const LineOrder = () => {
                     }));
                     console.log('👤 LINE Profile:', profile.displayName);
                 } else if (liff.isInClient()) {
-                    // If in LINE app but not logged in, trigger login
-                    liff.login();
+                    // Force login only if not in login process
+                    if (!liff.isLoggedIn()) {
+                        liff.login({ redirectUri: window.location.href });
+                    }
                 }
 
                 setLiffReady(true);
@@ -86,7 +88,7 @@ const LineOrder = () => {
             alert('❌ ไม่พบ LIFF ID ในระบบ! กรุณาตั้งค่า VITE_LIFF_ID ใน Render ก่อนนะคะ');
             return;
         }
-        liff.login();
+        liff.login({ redirectUri: window.location.href });
     };
 
     // Load Menu & Settings
