@@ -237,17 +237,22 @@ const OrderEntry = () => {
         // Only calculate on ordered items (not cart)
         const subtotal = orderedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-        // Coupon Discount Logic (Simplified: assuming coupon has a fixed discount or title implies amount)
-        // For now, let's look for "-฿XX" in the title or a value if we added one (we'll assume 50 for now or custom logic)
+        // Coupon Discount Logic (Support multiple Thai formats: -฿XX, XX บาท, ลด XX)
         let couponDiscount = 0;
         if (appliedCoupon) {
-            // Check if title has amount like "-฿50"
-            const match = appliedCoupon.title.match(/-฿(\d+)/);
-            if (match) {
-                couponDiscount = parseInt(match[1]);
-            } else {
-                // Default discount value or handle other promotional types
-                couponDiscount = 0;
+            // Robust parsing: Look for various amount patterns
+            const patterns = [
+                /-฿(\d+)/,            // -฿50
+                /(\d+)\s*บาท/,        // 50 บาท
+                /ลด\s*(\d+)/          // ลด 50
+            ];
+
+            for (const p of patterns) {
+                const match = appliedCoupon.title.match(p);
+                if (match) {
+                    couponDiscount = parseInt(match[1]);
+                    break;
+                }
             }
         }
 
@@ -698,21 +703,33 @@ const OrderEntry = () => {
                     <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h3 className="text-xl font-bold text-slate-900 mb-4 text-center">💳 ยืนยันการชำระเงิน</h3>
 
-                        <div className="bg-slate-50 rounded-2xl p-4 mb-6">
-                            <div className="flex justify-between mb-2">
-                                <span className="text-sm text-slate-500">ยอดรวม</span>
-                                <span className="text-lg font-bold text-slate-900">฿{finals.grandTotal.toLocaleString()}</span>
+                        <div className="bg-slate-50 rounded-2xl p-4 mb-6 space-y-2">
+                            <div className="flex justify-between">
+                                <span className="text-sm text-slate-500">ยอดรวม (Subtotal)</span>
+                                <span className="text-sm font-bold text-slate-700">฿{finals.subtotal.toLocaleString()}</span>
                             </div>
+                            {finals.validDiscount > 0 && (
+                                <div className="flex justify-between text-red-500">
+                                    <span className="text-sm">ส่วนลด (Regular + Coupon)</span>
+                                    <span className="text-sm font-bold">-฿{finals.validDiscount.toLocaleString()}</span>
+                                </div>
+                            )}
                             {depositInfo.isPaid && depositInfo.amount > 0 && (
-                                <div className="flex justify-between mb-2 text-emerald-600">
+                                <div className="flex justify-between text-emerald-600">
                                     <span className="text-sm">หักมัดจำแล้ว</span>
                                     <span className="font-bold">-฿{depositInfo.amount.toLocaleString()}</span>
                                 </div>
                             )}
                             <div className="flex justify-between border-t border-slate-200 pt-2 mt-2">
-                                <span className="text-sm font-bold text-slate-700">ต้องชำระ</span>
-                                <span className="text-xl font-bold text-orange-500">฿{finals.finalToPay.toLocaleString()}</span>
+                                <span className="text-sm font-bold text-slate-700 uppercase">ยอดสุทธิ</span>
+                                <span className="text-2xl font-bold text-orange-500">฿{finals.finalToPay.toLocaleString()}</span>
                             </div>
+                            {appliedCoupon && finals.couponDiscount === 0 && (
+                                <div className="mt-3 py-2 px-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center gap-2 text-emerald-600 animate-pulse">
+                                    <span className="text-sm">🎁</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider">สิทธิ์พิเศษ: {appliedCoupon.title}</span>
+                                </div>
+                            )}
                         </div>
 
                         {/* Coupon Section */}
@@ -811,6 +828,53 @@ const OrderEntry = () => {
                         <div className="bg-purple-50 rounded-xl p-3 mb-4">
                             <p className="text-xs text-purple-600 font-bold uppercase tracking-widest mb-1">ยอดที่ต้องชำระ</p>
                             <p className="text-2xl font-bold text-purple-700">฿{finals.finalToPay.toLocaleString()}</p>
+                            {finals.couponDiscount > 0 ? (
+                                <p className="text-[10px] text-green-600 font-bold mt-1">
+                                    (รวมส่วนลดคูปอง -฿{finals.couponDiscount})
+                                </p>
+                            ) : appliedCoupon && (
+                                <p className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center justify-center gap-1">
+                                    <span>🎁</span> Reward Ready
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Coupon Section inside QR Modal for Convenience */}
+                        <div className="mb-4 text-left">
+                            {appliedCoupon ? (
+                                <div className="flex items-center justify-between bg-orange-50/50 p-2.5 rounded-xl border border-orange-100 shadow-sm">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-500 text-sm">💎</div>
+                                        <div className="overflow-hidden">
+                                            <p className="text-[10px] font-bold text-slate-900 truncate">{appliedCoupon.title}</p>
+                                            <p className="text-[8px] text-orange-500 font-bold tracking-widest">{appliedCoupon.coupon_code}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={removeCoupon} className="p-1.5 text-slate-300 hover:text-red-500 transition-colors">
+                                        <FiX size={14} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    <div className="flex gap-1.5">
+                                        <input
+                                            type="text"
+                                            value={couponCode}
+                                            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                                            placeholder="รหัสคูปอง..."
+                                            className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:border-orange-500 outline-none uppercase tracking-widest font-bold"
+                                        />
+                                        <button
+                                            onClick={handleVerifyCoupon}
+                                            disabled={isVerifyingCoupon || !couponCode}
+                                            className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-[10px] font-bold hover:bg-slate-800 disabled:opacity-50 transition-all uppercase"
+                                        >
+                                            Verify
+                                        </button>
+                                    </div>
+                                    {couponError && <p className="text-[8px] text-red-500 font-bold pl-1">⚠️ {couponError}</p>}
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex gap-3">

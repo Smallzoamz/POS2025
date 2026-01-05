@@ -206,11 +206,27 @@ const LineOrderManagement = () => {
         }
     };
 
+    // Calculate Discount Amount
+    const getCouponDiscount = () => {
+        if (!appliedCoupon) return 0;
+        const patterns = [
+            /-฿(\d+)/,
+            /(\d+)\s*บาท/,
+            /ลด\s*(\d+)/
+        ];
+        for (const p of patterns) {
+            const match = appliedCoupon.title.match(p);
+            if (match) return parseInt(match[1]);
+        }
+        return 0;
+    };
+
+    const finalAmount = Math.max(0, (selectedOrder?.total_amount || 0) - getCouponDiscount());
+
     // Calculate change
     const calculateChange = () => {
         const received = parseFloat(cashReceived) || 0;
-        const total = selectedOrder?.total_amount || 0;
-        return Math.max(0, received - total);
+        return Math.max(0, received - finalAmount);
     };
 
     // Status Config
@@ -513,12 +529,20 @@ const LineOrderManagement = () => {
                                 <div className="text-center">
                                     <p className="text-sm text-gray-500 mb-1">ยอดที่ต้องชำระ</p>
                                     <p className="text-4xl font-black text-gray-800">
-                                        ฿{(selectedOrder.total_amount - (appliedCoupon ? (parseInt(appliedCoupon.title.match(/-฿(\d+)/)?.[1]) || 0) : 0)).toLocaleString()}
+                                        ฿{finalAmount.toLocaleString()}
                                     </p>
                                     {appliedCoupon && (
-                                        <p className="text-xs text-green-600 font-bold mt-1">
-                                            (หักส่วนลดคูปองแล้ว -฿{parseInt(appliedCoupon.title.match(/-฿(\d+)/)?.[1]) || 0})
-                                        </p>
+                                        <div className="mt-2 space-y-1">
+                                            {getCouponDiscount() > 0 ? (
+                                                <p className="text-xs text-green-600 font-bold">
+                                                    (หักส่วนลดคูปองแล้ว -฿{getCouponDiscount()})
+                                                </p>
+                                            ) : (
+                                                <p className="text-[10px] text-emerald-600 font-bold flex items-center justify-center gap-1 animate-pulse">
+                                                    <span>🎁</span> Reward Ready: {appliedCoupon.title}
+                                                </p>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
 
@@ -605,12 +629,17 @@ const LineOrderManagement = () => {
                                     <div className="flex flex-col items-center">
                                         <div className="bg-white p-3 rounded-xl shadow-lg border-2 border-blue-100">
                                             <QRCode
-                                                value={generatePayload(settings.promptpay_number, { amount: Number(selectedOrder.total_amount) })}
+                                                value={generatePayload(settings.promptpay_number, { amount: Number(finalAmount) })}
                                                 size={220}
                                             />
                                         </div>
-                                        <p className="mt-3 text-sm text-gray-500">สแกนเพื่อชำระ ฿{selectedOrder.total_amount?.toLocaleString()}</p>
+                                        <p className="mt-3 text-sm text-gray-500 font-bold">สแกนเพื่อชำระ ฿{finalAmount.toLocaleString()}</p>
                                         <p className="text-xs text-blue-600">{settings.promptpay_number}</p>
+                                        {getCouponDiscount() > 0 && (
+                                            <p className="text-[10px] text-green-600 font-bold mt-1">
+                                                (รวมส่วนลด -฿{getCouponDiscount()})
+                                            </p>
+                                        )}
                                     </div>
                                 )}
                             </div>
