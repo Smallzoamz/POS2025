@@ -48,10 +48,17 @@ const ProtectedRoute = ({ children, roles = [] }) => {
 };
 
 const RoleBasedRedirect = () => {
-    const { user } = useAuth();
-    if (user?.role === 'owner' || user?.role === 'admin' || user?.role === 'finance') return <Navigate to="/dashboard" replace />;
-    if (user?.role === 'kitchen') return <Navigate to="/kitchen" replace />;
-    if (user?.role === 'rider') return <Navigate to="/rider" replace />;
+    const { user, loading } = useAuth();
+    if (loading) return null;
+
+    if (!user) {
+        // Staff/Admin entry point should go to login
+        return <Navigate to="/login" replace />;
+    }
+
+    if (user.role === 'owner' || user.role === 'admin' || user.role === 'finance') return <Navigate to="/dashboard" replace />;
+    if (user.role === 'kitchen') return <Navigate to="/kitchen" replace />;
+    if (user.role === 'rider') return <Navigate to="/rider" replace />;
     return <Navigate to="/tables" replace />;
 };
 
@@ -65,7 +72,7 @@ function App() {
 
                     {/* Protected Routes */}
 
-                    {/* Smart Redirect for Root Path */}
+                    {/* Staff/Admin Smart Redirect */}
                     <Route path="/" element={
                         <ProtectedRoute>
                             <RoleBasedRedirect />

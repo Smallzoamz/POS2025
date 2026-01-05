@@ -17,10 +17,11 @@ const CustomerLoyalty = () => {
 
     const initLiff = async () => {
         setLoading(true);
-        const liffId = import.meta.env.VITE_LIFF_ID;
+        // Specifically use LOYALTY ID for this page
+        const liffId = import.meta.env.VITE_LIFF_LOYALTY_ID || import.meta.env.VITE_LIFF_ID;
 
         if (!liffId) {
-            setLiffError('ยังไม่ได้ตั้งค่า VITE_LIFF_ID ในระบบ (Render Environment)');
+            setLiffError('ยังไม่ได้ตั้งค่า VITE_LIFF_LOYALTY_ID ในระบบ (Render Environment)');
             setLoading(false);
             return;
         }
@@ -66,7 +67,7 @@ const CustomerLoyalty = () => {
     }, []);
 
     const handleLogin = () => {
-        if (!import.meta.env.VITE_LIFF_ID) {
+        if (!import.meta.env.VITE_LIFF_LOYALTY_ID && !import.meta.env.VITE_LIFF_ID) {
             alert('❌ ไม่พบ LIFF ID ในระบบ!');
             return;
         }
