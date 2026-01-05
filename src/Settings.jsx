@@ -15,7 +15,8 @@ const Settings = () => {
         leave_excess_deduction: '0',
         max_leave_days: '0',
         holiday_multiplier: '2.0',
-        promptpay_number: ''
+        promptpay_number: '',
+        public_url: ''
     });
     const [network, setNetwork] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -106,15 +107,23 @@ const Settings = () => {
                                     />
                                 </div>
                                 <div className="md:col-span-2 space-y-1.5">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shop Address</label>
-                                    <textarea
-                                        name="shop_address"
-                                        value={settings.shop_address}
-                                        onChange={handleChange}
-                                        rows="2"
-                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none font-medium text-slate-700 transition-all resize-none text-sm"
-                                        placeholder="Enter full address for receipts..."
-                                    ></textarea>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shop Public URL (for QR Codes)</label>
+                                    <div className="flex gap-3">
+                                        <input
+                                            type="text"
+                                            name="public_url"
+                                            value={settings.public_url || ''}
+                                            onChange={handleChange}
+                                            className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none font-medium text-slate-900 transition-all text-sm font-mono"
+                                            placeholder="https://your-shop.onrender.com"
+                                        />
+                                        <div className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center justify-center border border-blue-100 whitespace-nowrap">
+                                            Stable Link
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 ml-1 italic">
+                                        * ใส่ลิงก์ Render ของปะป๊าที่นี่ เพื่อให้ระบบสร้าง QR Code และลิงก์สั่งอาหารได้ถูกต้องค่ะ
+                                    </p>
                                 </div>
                             </div>
                         </section>
@@ -251,28 +260,6 @@ const Settings = () => {
                                 </div>
                             </div>
 
-                            <div className="tasty-card mb-6">
-                                <div className="space-y-1.5 max-w-2xl">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shop Public URL (for QR Codes)</label>
-                                    <div className="flex gap-3">
-                                        <input
-                                            type="text"
-                                            name="public_url"
-                                            value={settings.public_url || ''}
-                                            onChange={handleChange}
-                                            className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none font-medium text-slate-900 transition-all text-sm font-mono"
-                                            placeholder="https://your-shop.onrender.com"
-                                        />
-                                        <div className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center justify-center border border-blue-100">
-                                            Stable Link
-                                        </div>
-                                    </div>
-                                    <p className="text-[10px] text-slate-400 ml-1 italic">
-                                        * ใส่ลิงก์ Render ของปะป๊าที่นี่ เพื่อให้ QR Code และลิงก์สั่งอาหารใช้งานได้ตลอดเวลาค่ะ
-                                    </p>
-                                </div>
-                            </div>
-
                             <div className="tasty-card flex flex-col md:flex-row items-center gap-8 p-8">
                                 <div className="bg-white p-4 rounded-3xl shadow-lg border-4 border-orange-500/10">
                                     {network ? (
@@ -281,10 +268,10 @@ const Settings = () => {
                                                 size={180}
                                                 style={{ height: "auto", maxWidth: "100%", width: "100%" }}
                                                 value={settings.public_url
-                                                    ? `${settings.public_url}/#/takeaway`
+                                                    ? `${settings.public_url}/takeaway`
                                                     : network.cloudUrl
-                                                        ? `${network.cloudUrl}/#/takeaway`
-                                                        : `http://${network.localIp}:${window.location.port === '5173' ? '5173' : (network.port || 3000)}/#/takeaway`
+                                                        ? `${network.cloudUrl}/takeaway`
+                                                        : `http://${network.localIp}:${window.location.port === '5173' ? '5173' : (network.port || 3000)}/takeaway`
                                                 }
                                                 viewBox={`0 0 256 256`}
                                                 fgColor="#0F172A"
@@ -305,11 +292,11 @@ const Settings = () => {
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Takeaway URL</p>
                                         <code className="text-xs font-mono text-orange-600 break-all">
                                             {settings.public_url
-                                                ? `${settings.public_url}/#/takeaway`
+                                                ? `${settings.public_url}/takeaway`
                                                 : network ? (
                                                     network.cloudUrl
-                                                        ? `${network.cloudUrl}/#/takeaway`
-                                                        : `http://${network.localIp}:${window.location.port === '5173' ? '5173' : (network.port || 3000)}/#/takeaway`
+                                                        ? `${network.cloudUrl}/takeaway`
+                                                        : `http://${network.localIp}:${window.location.port === '5173' ? '5173' : (network.port || 3000)}/takeaway`
                                                 ) : '...'}
                                         </code>
                                     </div>
@@ -374,7 +361,7 @@ const Settings = () => {
                     </div>
                 </div>
             </div>
-        </MasterLayout>
+        </MasterLayout >
     );
 };
 

@@ -85,7 +85,7 @@ const TablePlan = () => {
 
     const getTableUrl = (tableName) => {
         const baseUrl = window.location.origin; // e.g., http://localhost:5173
-        return `${baseUrl}/#/order/${tableName}`; // Using HashRouter pattern if needed, but safe to use standard URL if configured
+        return `${baseUrl}/order/${tableName}`; // Standard URL for BrowserRouter
         // Or better: http://<IP>:5173/order/T-01
         // Since we are running on local network for mobile, we should use the IP.
         // For now, let's rely on the browser's current host which is correct if accessed via IP.
@@ -305,7 +305,7 @@ const TablePlan = () => {
 
                         <div className="bg-slate-50 p-6 rounded-[40px] border-2 border-orange-100 inline-block shadow-inner hover:scale-[1.02] transition-transform duration-500 mb-8">
                             <QRCode
-                                value={`${hostUrl}/#/order/${qrTable}?mode=customer`}
+                                value={`${hostUrl}/order/${qrTable}?mode=customer`}
                                 size={220}
                                 level="H"
                                 fgColor="#0f172a"
@@ -408,7 +408,7 @@ const TablePlan = () => {
 
                             <div className="bg-white p-6 rounded-[40px] shadow-none border-2 border-slate-100 mb-12">
                                 <QRCode
-                                    value={`${hostUrl}/#/order/${qrTable}?mode=customer`}
+                                    value={`${hostUrl}/order/${qrTable}?mode=customer`}
                                     size={350}
                                     level="H"
                                     fgColor="#0f172a"
