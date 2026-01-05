@@ -517,8 +517,8 @@ const LineOrderManagement = () => {
                                     <div className="flex flex-col items-center">
                                         <div className="bg-white p-3 rounded-xl shadow-lg border-2 border-blue-100">
                                             <QRCode
-                                                value={generatePayload(settings.promptpay_number, { amount: selectedOrder.total_amount })}
-                                                size={180}
+                                                value={generatePayload(settings.promptpay_number, { amount: Number(selectedOrder.total_amount) })}
+                                                size={220}
                                             />
                                         </div>
                                         <p className="mt-3 text-sm text-gray-500">สแกนเพื่อชำระ ฿{selectedOrder.total_amount?.toLocaleString()}</p>

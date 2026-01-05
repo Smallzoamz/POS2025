@@ -708,8 +708,8 @@ const OrderEntry = () => {
 
                         <div className="bg-white p-4 rounded-2xl shadow-inner border border-slate-100 inline-block mb-4">
                             <QRCode
-                                value={generatePayload(settings.promptpay_id || '0000000000', { amount: finals.finalToPay })}
-                                size={200}
+                                value={generatePayload(settings.promptpay_id || '0000000000', { amount: Number(finals.finalToPay) })}
+                                size={180}
                                 level="H"
                             />
                         </div>

@@ -286,7 +286,7 @@ const CustomerTracking = () => {
                                 <React.Fragment key={step.key}>
                                     <div className="flex flex-col items-center relative z-10 w-20">
                                         <div className={`w-12 h-12 rounded-[22px] flex items-center justify-center text-xl font-bold transition-all duration-500 border-4 border-slate-50 ${isCurrent ? 'bg-orange-500 text-white scale-125 shadow-2xl shadow-orange-500/40 ring-4 ring-orange-500/10' :
-                                                isCompleted ? 'bg-orange-500/20 text-orange-600' : 'bg-white text-slate-300 shadow-sm border-slate-100'
+                                            isCompleted ? 'bg-orange-500/20 text-orange-600' : 'bg-white text-slate-300 shadow-sm border-slate-100'
                                             }`}>
                                             {isCompleted && !isCurrent ? '✓' : step.icon}
                                         </div>
@@ -338,32 +338,42 @@ const CustomerTracking = () => {
                     </div>
                 )}
 
-                {/* QR Payment */}
+                {/* QR Payment / Delivery Instructions */}
                 {settings.promptpay_number && !['completed', 'cancelled'].includes(order.status) && (
                     <div className="space-y-4">
-                        <button
-                            onClick={() => setShowQR(!showQR)}
-                            className={`w-full py-6 rounded-[32px] font-heading font-black text-xl flex items-center justify-center gap-4 transition-all shadow-xl active:scale-[0.98] ${showQR ? 'bg-white text-slate-900 border border-slate-200 shadow-sm' : 'bg-slate-900 text-white shadow-slate-900/20'
-                                }`}
-                        >
-                            <span className="text-2xl">{showQR ? '👀' : '📱'}</span> {showQR ? 'ซ่อน QR ชำระเงิน' : 'แสดง QR เพื่อชำระเงิน'}
-                        </button>
-
-                        {showQR && (
-                            <div className="tasty-card p-10 text-center animate-fade-in-up border-4 border-orange-500/10">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Scan with any banking app to pay</p>
-                                <div className="inline-block p-6 bg-white rounded-[44px] shadow-2xl border border-slate-100 mb-8">
-                                    <QRCode
-                                        value={generatePayload(settings.promptpay_number, { amount: order.total_amount })}
-                                        size={220}
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-5xl font-heading font-black text-slate-900 tracking-tighter">฿{order.total_amount?.toLocaleString()}</p>
-                                    <p className="text-xs text-slate-500 font-black uppercase tracking-widest">{settings.promptpay_name || 'Tasty Station'}</p>
-                                    <p className="text-[10px] py-1 px-3 bg-slate-100 rounded-full inline-block font-black text-slate-400">PromptPay: {settings.promptpay_number}</p>
-                                </div>
+                        {order.order_type === 'delivery' ? (
+                            <div className="tasty-card p-8 bg-orange-50 border-orange-100 border-2 text-center">
+                                <span className="text-4xl block mb-3">🛵</span>
+                                <h3 className="font-heading font-black text-orange-600 text-xl mb-1">ชำระเงินกับไรเดอร์</h3>
+                                <p className="text-slate-500 text-sm font-medium">กรุณาเตรียมเงินสดหรือสแกนจ่ายผ่าน QR <br />กับไรเดอร์เมื่ออาหารส่งถึงมือคุณค่ะ</p>
                             </div>
+                        ) : (
+                            <>
+                                <button
+                                    onClick={() => setShowQR(!showQR)}
+                                    className={`w-full py-6 rounded-[32px] font-heading font-black text-xl flex items-center justify-center gap-4 transition-all shadow-xl active:scale-[0.98] ${showQR ? 'bg-white text-slate-900 border border-slate-200 shadow-sm' : 'bg-slate-900 text-white shadow-slate-900/20'
+                                        }`}
+                                >
+                                    <span className="text-2xl">{showQR ? '👀' : '📱'}</span> {showQR ? 'ซ่อน QR ชำระเงิน' : 'แสดง QR เพื่อชำระเงิน'}
+                                </button>
+
+                                {showQR && (
+                                    <div className="tasty-card p-10 text-center animate-fade-in-up border-4 border-orange-500/10">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Scan with any banking app to pay</p>
+                                        <div className="inline-block p-6 bg-white rounded-[44px] shadow-2xl border border-slate-100 mb-8">
+                                            <QRCode
+                                                value={generatePayload(settings.promptpay_number, { amount: Number(order.total_amount) })}
+                                                size={220}
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-5xl font-heading font-black text-slate-900 tracking-tighter">฿{order.total_amount?.toLocaleString()}</p>
+                                            <p className="text-xs text-slate-500 font-black uppercase tracking-widest">{settings.promptpay_name || 'Tasty Station'}</p>
+                                            <p className="text-[10px] py-1 px-3 bg-slate-100 rounded-full inline-block font-black text-slate-400">PromptPay: {settings.promptpay_number}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 )}

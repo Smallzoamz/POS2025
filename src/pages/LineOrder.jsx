@@ -713,7 +713,7 @@ const LineOrder = () => {
                                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-5">Pay via PromptPay QR 📱</p>
                                             <div className="p-4 bg-white border-2 border-slate-100 rounded-[32px] shadow-inner mb-4">
                                                 <QRCode
-                                                    value={generatePayload(shopSettings.promptpay_number || '0800000000', { amount: cartTotal * 0.5 })}
+                                                    value={generatePayload(shopSettings.promptpay_number || '0800000000', { amount: Number(cartTotal * 0.5) })}
                                                     size={160}
                                                 />
                                             </div>
