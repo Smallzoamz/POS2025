@@ -1757,6 +1757,7 @@ async function startServer() {
         });
 
         try {
+            console.log(`📡 Sending LINE Push to: ${to}`);
             const response = await fetch('https://api.line.me/v2/bot/message/push', {
                 method: 'POST',
                 headers: {
@@ -1775,14 +1776,19 @@ async function startServer() {
                 })
             });
             const resData = await response.json();
-            console.log('✅ LINE Message Sent:', resData);
+            if (response.ok) {
+                console.log('✅ LINE Message Sent Successfully:', resData);
+            } else {
+                console.error('❌ LINE Messaging API Error:', resData);
+            }
         } catch (err) {
-            console.error('❌ Failed to send LINE Message:', err.message);
+            console.error('❌ Failed to fetch LINE Messaging API:', err.message);
         }
     };
 
     // PUBLIC: Create LINE Order (Customer Submission)
     app.post('/api/public/line-orders', async (req, res) => {
+        console.log('📦 Incoming LINE Order:', req.body.customerName, '| Type:', req.body.orderType, '| UserID:', req.body.lineUserId);
         try {
             const {
                 orderType, customerName, customerPhone, customerAddress,
@@ -1847,11 +1853,16 @@ async function startServer() {
 
             // Trigger LINE Notification (Async)
             if (lineUserId) {
+                console.log(`🔔 Triggering LINE message for User: ${lineUserId}`);
                 query("SELECT * FROM line_orders WHERE id = $1", [orderId]).then(fullOrderRes => {
                     if (fullOrderRes.rows[0]) {
                         sendLineFlexMessage(lineUserId, fullOrderRes.rows[0]);
+                    } else {
+                        console.error('❌ Could not find order for notification:', orderId);
                     }
                 }).catch(err => console.error('Error fetching order for LINE notification:', err));
+            } else {
+                console.log('⚠️ No lineUserId found, skipping LINE notification');
             }
 
             // Also insert to line_order_items for backwards compatibility
@@ -1876,7 +1887,7 @@ async function startServer() {
                 // Create persistent notification for LINE orders
                 createNotification(
                     `ออเดอร์ LINE ใหม่ - ${customerName}`,
-                    `ประเภท: ${orderType === 'delivery' ? '🚚 ส่งถึงบ้าน' : (orderType === 'pickup' ? '🛍️ รับเองที่ร้าน' : '📅 จองโต๊ะ')} (ยอด: ${totalAmount}.-)`,
+                    `ประเภท: ${orderType === 'delivery' ? '🚚 ส่งถึงบ้าน' : (orderType === 'takeaway' ? '🛍️ รับเองที่ร้าน' : '📅 จองโต๊ะ')} (ยอด: ${totalAmount}.-)`,
                     'order',
                     { orderId, orderType, customerName }
                 );

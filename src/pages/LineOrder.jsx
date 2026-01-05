@@ -70,12 +70,16 @@ const LineOrder = () => {
             } catch (err) {
                 console.error('❌ LIFF init failed:', err);
                 setLiffError(err.message);
-                setLiffReady(true); // Still allow app to function without LIFF
+                setLiffReady(true);
             }
         };
 
         initLiff();
     }, []);
+
+    const handleLogin = () => {
+        liff.login();
+    };
 
     // Load Menu & Settings
     useEffect(() => {
@@ -189,6 +193,66 @@ const LineOrder = () => {
     // Get today's date for minimum reservation (allow same-day)
     const today = new Date();
     const minDate = today.toISOString().split('T')[0];
+
+    if (!liffReady) {
+        return (
+            <div className="min-h-screen bg-orange-50 flex items-center justify-center p-4">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-600 font-medium italic font-heading">กำลังเชื่อมต่อกับ LINE...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Force Login Screen if not logged in
+    if (!liffProfile && liffReady && !liffError) {
+        return (
+            <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center animate-fade-in-up">
+                <div className="mb-8 relative">
+                    <div className="absolute inset-0 bg-orange-200 rounded-full blur-3xl opacity-30 animate-pulse"></div>
+                    <img
+                        src="/logo.png"
+                        alt="Tasty Station"
+                        className="w-32 h-32 relative z-10"
+                        onError={(e) => { e.target.src = "https://cdn-icons-png.flaticon.com/512/3256/3256193.png"; e.target.onerror = null; }}
+                    />
+                </div>
+
+                <h1 className="text-3xl font-extrabold text-gray-900 mb-2 font-heading">อร่อยง่ายๆ ผ่าน LINE 🍱</h1>
+                <p className="text-gray-500 mb-8 max-w-xs text-sm">
+                    เข้าสู่ระบบเพื่อสั่งอาหาร ติดตามสถานะออเดอร์ และสะสมแต้มสมาชิก Tasty Station
+                </p>
+
+                <div className="space-y-4 w-full max-w-sm">
+                    <button
+                        onClick={handleLogin}
+                        className="w-full bg-[#06C755] text-white py-4 rounded-2xl font-black text-lg shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3 font-heading"
+                    >
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/4/41/LINE_logo.svg" className="w-6 h-6 invert" alt="LINE" />
+                        เข้าสู่ระบบด้วย LINE
+                    </button>
+
+                    <div className="pt-6 grid grid-cols-3 gap-4 border-t border-slate-50">
+                        {[
+                            { icon: "📍", label: "สั่งอาหาร" },
+                            { icon: "🚀", label: "ส่งไว" },
+                            { icon: "🎁", label: "สะสมแต้ม" }
+                        ].map((item, idx) => (
+                            <div key={idx} className="flex flex-col items-center gap-1">
+                                <span className="text-2xl">{item.icon}</span>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.label}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <p className="mt-12 text-[10px] text-slate-300 uppercase tracking-widest font-black">
+                    Tasty Station POS System
+                </p>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
