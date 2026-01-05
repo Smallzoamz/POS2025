@@ -4,6 +4,7 @@ import {
     FiGift, FiAward, FiClock, FiStar, FiUser,
     FiCheckCircle, FiChevronRight, FiCreditCard, FiZap
 } from 'react-icons/fi';
+import liff from '@line/liff';
 
 const CustomerLoyalty = () => {
     const [lineUser, setLineUser] = useState(null);
@@ -12,39 +13,66 @@ const CustomerLoyalty = () => {
     const [promotions, setPromotions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isFollowing, setIsFollowing] = useState(false);
+    const [liffError, setLiffError] = useState(null);
 
-    // Mock LINE Login for Demo
-    const mockLogin = async () => {
+    const initLiff = async () => {
         setLoading(true);
-        // Simulate a fixed user for demo, but in production, we'd use LIFF profile
-        const mockData = {
-            lineUserId: 'U123456789',
-            displayName: 'ลูกค้าประจำ (Demo)',
-            pictureUrl: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'
-        };
+        const liffId = import.meta.env.VITE_LIFF_ID;
+
+        if (!liffId) {
+            setLiffError('LIFF ID is not configured');
+            setLoading(false);
+            return;
+        }
 
         try {
-            const sync = await api.syncLoyaltyProfile(mockData);
-            setLineUser(sync);
-            setPoints(sync.points);
-            setIsFollowing(sync.is_following);
+            await liff.init({ liffId });
+            console.log('✅ LIFF initialized');
 
-            const profile = await api.getLoyaltyProfile(sync.line_user_id);
-            setHistory(profile.transactions || []);
+            if (liff.isLoggedIn()) {
+                const profile = await liff.getProfile();
 
-            const promos = await api.getActivePromotions();
-            setPromotions(promos);
+                // Sync profile with backend (Create/Update member)
+                const loyaltyData = {
+                    lineUserId: profile.userId,
+                    displayName: profile.displayName,
+                    pictureUrl: profile.pictureUrl
+                };
+
+                const syncRes = await api.syncLoyaltyProfile(loyaltyData);
+                setLineUser(syncRes);
+                setPoints(syncRes.points || 0);
+                setIsFollowing(syncRes.is_following || false);
+
+                // Load transactions & promotions
+                const [fullProfile, activePromos] = await Promise.all([
+                    api.getLoyaltyProfile(profile.userId),
+                    api.getActivePromotions()
+                ]);
+
+                setHistory(fullProfile.transactions || []);
+                setPromotions(activePromos || []);
+            } else {
+                // Not logged in, but we might be in external browser or LINE
+                if (liff.isInClient()) {
+                    liff.login();
+                }
+            }
         } catch (err) {
-            console.error(err);
+            console.error('❌ LIFF Error:', err);
+            setLiffError(err.message);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        // Auto mock login for demo purposes
-        mockLogin();
+        initLiff();
     }, []);
+
+    const handleLogin = () => {
+        liff.login();
+    };
 
     const handleRedeem = async (promo) => {
         if (points < promo.points_required) {
@@ -79,7 +107,7 @@ const CustomerLoyalty = () => {
                     <h1 className="text-2xl font-bold text-gray-800 mb-2">สะสมแต้มกับเรา</h1>
                     <p className="text-gray-500 mb-8">เข้าใช้งานผ่าน LINE เพื่อรับคะแนนและแลกของรางวัลมากมาย</p>
                     <button
-                        onClick={mockLogin}
+                        onClick={handleLogin}
                         className="w-full bg-[#06C755] hover:bg-[#05b34c] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-95"
                     >
                         <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center">
