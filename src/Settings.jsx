@@ -251,6 +251,28 @@ const Settings = () => {
                                 </div>
                             </div>
 
+                            <div className="tasty-card mb-6">
+                                <div className="space-y-1.5 max-w-2xl">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shop Public URL (for QR Codes)</label>
+                                    <div className="flex gap-3">
+                                        <input
+                                            type="text"
+                                            name="public_url"
+                                            value={settings.public_url || ''}
+                                            onChange={handleChange}
+                                            className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none font-medium text-slate-900 transition-all text-sm font-mono"
+                                            placeholder="https://your-shop.onrender.com"
+                                        />
+                                        <div className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center justify-center border border-blue-100">
+                                            Stable Link
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 ml-1 italic">
+                                        * ใส่ลิงก์ Render ของปะป๊าที่นี่ เพื่อให้ QR Code และลิงก์สั่งอาหารใช้งานได้ตลอดเวลาค่ะ
+                                    </p>
+                                </div>
+                            </div>
+
                             <div className="tasty-card flex flex-col md:flex-row items-center gap-8 p-8">
                                 <div className="bg-white p-4 rounded-3xl shadow-lg border-4 border-orange-500/10">
                                     {network ? (
@@ -258,9 +280,11 @@ const Settings = () => {
                                             <QRCode
                                                 size={180}
                                                 style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-                                                value={network.cloudUrl
-                                                    ? `${network.cloudUrl}/#/takeaway`
-                                                    : `http://${network.localIp}:${window.location.port === '5173' ? '5173' : (network.port || 3000)}/#/takeaway`
+                                                value={settings.public_url
+                                                    ? `${settings.public_url}/#/takeaway`
+                                                    : network.cloudUrl
+                                                        ? `${network.cloudUrl}/#/takeaway`
+                                                        : `http://${network.localIp}:${window.location.port === '5173' ? '5173' : (network.port || 3000)}/#/takeaway`
                                                 }
                                                 viewBox={`0 0 256 256`}
                                                 fgColor="#0F172A"
@@ -280,11 +304,13 @@ const Settings = () => {
                                     <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-200">
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Takeaway URL</p>
                                         <code className="text-xs font-mono text-orange-600 break-all">
-                                            {network ? (
-                                                network.cloudUrl
-                                                    ? `${network.cloudUrl}/#/takeaway`
-                                                    : `http://${network.localIp}:${window.location.port === '5173' ? '5173' : (network.port || 3000)}/#/takeaway`
-                                            ) : '...'}
+                                            {settings.public_url
+                                                ? `${settings.public_url}/#/takeaway`
+                                                : network ? (
+                                                    network.cloudUrl
+                                                        ? `${network.cloudUrl}/#/takeaway`
+                                                        : `http://${network.localIp}:${window.location.port === '5173' ? '5173' : (network.port || 3000)}/#/takeaway`
+                                                ) : '...'}
                                         </code>
                                     </div>
                                     <div className="flex flex-wrap gap-3 justify-center md:justify-start">

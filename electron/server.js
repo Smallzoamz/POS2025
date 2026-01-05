@@ -1553,12 +1553,23 @@ async function startServer() {
             console.error("Failed to fetch public IP", e);
         }
 
+        // Fetch Public URL if configured in settings
+        let configuredPublicUrl = cloudUrl;
+        try {
+            const publicUrlRes = await query("SELECT value FROM settings WHERE key = 'public_url'");
+            if (publicUrlRes.rows.length > 0 && publicUrlRes.rows[0].value) {
+                configuredPublicUrl = publicUrlRes.rows[0].value;
+            }
+        } catch (err) {
+            console.error("Failed to fetch public_url from settings", err);
+        }
+
         res.json({
             localIp: getLocalIp(),
             publicIp: publicIp,
             port: port,
-            cloudUrl: cloudUrl,
-            isCloudActive: false, // !!tunnel,
+            cloudUrl: configuredPublicUrl,
+            isCloudActive: !!configuredPublicUrl,
             isLaunching: isLaunchingCloud
         });
     });

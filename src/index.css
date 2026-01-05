@@ -22,6 +22,16 @@
   color: var(--text-dark);
   background-color: var(--bg-main);
   -webkit-tap-highlight-color: transparent;
+
+  /* Robustness for iOS standalone mode */
+  -webkit-overflow-scrolling: touch;
+  height: 100%;
+}
+
+html {
+  height: 100%;
+  overflow: hidden;
+  /* Recommended for app-like behavior, but managed by body scroll */
 }
 
 /* iPad/Touch Input Fixes */
@@ -33,13 +43,17 @@ select {
   -webkit-user-select: text !important;
   user-select: text !important;
   touch-action: manipulation !important;
+  pointer-events: auto !important;
+  /* Ensures clickability */
 }
 
 /* Ensure body doesn't block touch interaction */
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  height: 100%;
+  /* Use % instead of vh for better standalone stability */
+  overflow-y: auto;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-main);

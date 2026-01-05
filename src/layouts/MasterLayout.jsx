@@ -123,7 +123,7 @@ const MasterLayout = ({ children }) => {
     );
 
     return (
-        <div className="flex h-screen bg-[#F2F6F9] text-[#1E293B] font-sans overflow-hidden">
+        <div className="flex h-full bg-[#F2F6F9] text-[#1E293B] font-sans scroll-smooth">
 
             {/* Mobile Header */}
             <header className="md:hidden fixed top-0 w-full z-[60] bg-white border-b border-slate-100 flex items-center justify-between px-4 h-16 shadow-sm">
@@ -227,7 +227,7 @@ const MasterLayout = ({ children }) => {
             </aside>
 
             {/* Main Content Area */}
-            <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+            <main className="flex-1 flex flex-col min-w-0 relative">
                 {/* Topbar */}
                 <header className="hidden md:flex h-20 bg-white border-b border-[#E8ECEB] px-10 items-center justify-between shrink-0 sticky top-0 z-50">
                     <div className="flex-1 max-w-lg">

@@ -351,6 +351,11 @@ const initDatabasePG = async () => {
             await client.query("INSERT INTO settings (key, value) VALUES ($1, $2)", ['work_start_time', '09:00']);
         }
 
+        const publicUrlRes = await client.query("SELECT COUNT(*) FROM settings WHERE key = $1", ['public_url']);
+        if (publicUrlRes.rows[0].count == 0) {
+            await client.query("INSERT INTO settings (key, value) VALUES ($1, $2)", ['public_url', 'https://pos-backend-8cud.onrender.com']);
+        }
+
         // Delivery Settings Defaults
         const deliveryMinRes = await client.query("SELECT COUNT(*) FROM settings WHERE key = $1", ['minimum_delivery_order']);
         if (deliveryMinRes.rows[0].count == 0) {
