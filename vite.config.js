@@ -10,6 +10,7 @@ export default defineConfig({
         VitePWA({
             registerType: 'autoUpdate',
             injectRegister: 'inline', // Force injection of SW registration script
+            includeAssets: ['icon-512.png', 'vite.svg'],
             manifest: {
                 name: 'POS 2025 Smart System',
                 short_name: 'POS 2025',
@@ -17,11 +18,12 @@ export default defineConfig({
                 theme_color: '#0f172a',
                 background_color: '#0f172a',
                 display: 'standalone',
-                start_url: '/index.html', // Use root path for web deployment
+                scope: '/',
+                start_url: '/',
                 icons: [
                     {
                         src: 'icon-512.png',
-                        sizes: '192x192', // Android likes 192 too
+                        sizes: '192x192',
                         type: 'image/png'
                     },
                     {
@@ -29,6 +31,25 @@ export default defineConfig({
                         sizes: '512x512',
                         type: 'image/png',
                         purpose: 'any maskable'
+                    }
+                ]
+            },
+            workbox: {
+                globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+                runtimeCaching: [
+                    {
+                        urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+                        handler: 'CacheFirst',
+                        options: {
+                            cacheName: 'google-fonts-cache',
+                            expiration: {
+                                maxEntries: 10,
+                                maxAgeSeconds: 60 * 60 * 24 * 365 // <year>
+                            },
+                            cacheableResponse: {
+                                statuses: [0, 200]
+                            }
+                        }
                     }
                 ]
             }
