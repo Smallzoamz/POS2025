@@ -32,34 +32,40 @@ pool.on('connect', (client) => {
 const query = (text, params) => pool.query(text, params);
 
 const initDatabasePG = async () => {
-    // 1. Create a temporary client to connect to 'postgres' system database
-    const tempPool = new Pool({
-        host: process.env.DB_HOST || 'localhost',
-        port: process.env.DB_PORT || 5432,
-        user: process.env.DB_USER || 'postgres',
-        password: process.env.DB_PASSWORD,
-        database: 'postgres', // Connect to default system DB
-    });
-
-    try {
-        const dbName = process.env.DB_NAME || 'pos2025';
-        const res = await tempPool.query(`SELECT 1 FROM pg_database WHERE datname = $1`, [dbName]);
-
-        if (res.rowCount === 0) {
-            console.log(`📡 Database "${dbName}" not found. Creating it now...`);
-            await tempPool.query(`CREATE DATABASE "${dbName}"`);
-            console.log(`✨ Database "${dbName}" created successfully!`);
-        }
-    } catch (err) {
-        console.error("❌ Failed to check/create database:", err.message);
-        console.error("DEBUG INFO:", {
-            host: process.env.DB_HOST,
-            user: process.env.DB_USER,
-            msg: err.message,
-            code: err.code
+    // Skip database creation if using DATABASE_URL (cloud deployment)
+    // Cloud providers like Render create the database for us
+    if (!process.env.DATABASE_URL) {
+        // 1. Create a temporary client to connect to 'postgres' system database (LOCAL ONLY)
+        const tempPool = new Pool({
+            host: process.env.DB_HOST || 'localhost',
+            port: process.env.DB_PORT || 5432,
+            user: process.env.DB_USER || 'postgres',
+            password: process.env.DB_PASSWORD,
+            database: 'postgres', // Connect to default system DB
         });
-    } finally {
-        await tempPool.end();
+
+        try {
+            const dbName = process.env.DB_NAME || 'pos2025';
+            const res = await tempPool.query(`SELECT 1 FROM pg_database WHERE datname = $1`, [dbName]);
+
+            if (res.rowCount === 0) {
+                console.log(`📡 Database "${dbName}" not found. Creating it now...`);
+                await tempPool.query(`CREATE DATABASE "${dbName}"`);
+                console.log(`✨ Database "${dbName}" created successfully!`);
+            }
+        } catch (err) {
+            console.error("❌ Failed to check/create database:", err.message);
+            console.error("DEBUG INFO:", {
+                host: process.env.DB_HOST,
+                user: process.env.DB_USER,
+                msg: err.message,
+                code: err.code
+            });
+        } finally {
+            await tempPool.end();
+        }
+    } else {
+        console.log("☁️ Using DATABASE_URL - skipping database creation (cloud mode)");
     }
 
     // 2. Now proceed with the main initialization
