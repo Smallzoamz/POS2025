@@ -183,7 +183,7 @@ const LineOrder = () => {
     const orderTypeLabels = {
         reservation: { icon: '🪑', name: 'จองโต๊ะ', desc: 'จองโต๊ะล่วงหน้า + สั่งอาหารรอ', color: 'bg-amber-50 text-amber-600 border-amber-100' },
         delivery: { icon: '🚚', name: 'Delivery', desc: 'สั่งส่งถึงบ้าน', color: 'bg-orange-50 text-orange-600 border-orange-100' },
-        pickup: { icon: '🛍️', name: 'รับเอง', desc: 'สั่งแล้วมารับที่ร้าน', color: 'bg-blue-50 text-blue-600 border-blue-100' }
+        takeaway: { icon: '🛍️', name: 'รับเอง', desc: 'สั่งแล้วมารับที่ร้าน', color: 'bg-blue-50 text-blue-600 border-blue-100' }
     };
 
     // Get today's date for minimum reservation (allow same-day)

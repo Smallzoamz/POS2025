@@ -1622,13 +1622,173 @@ async function startServer() {
         }
     });
 
+    // --- LINE Messaging API Helper ---
+    const sendLineFlexMessage = async (to, orderData) => {
+        const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+        if (!token || !to) {
+            console.log('⚠️ Skipping LINE Message: No token or lineUserId' + (!token ? ' (LINE_CHANNEL_ACCESS_TOKEN missing in .env)' : ''));
+            return;
+        }
+
+        const { order_type, id, customer_name, customer_phone, total_amount, items_json } = orderData;
+        const trackingUrl = `https://pos-backend-8cud.onrender.com/tracking/${orderData.tracking_token}`;
+
+        let items = [];
+        try { items = JSON.parse(items_json || '[]'); } catch (e) { items = []; }
+
+        // Build Item List String
+        const itemsList = items.map(item => `- ${item.name} x${item.quantity}`).join('\n');
+
+        let bubbleContent = {
+            "type": "bubble",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    { "type": "text", "text": "ยืนยันออเดอร์สำเร็จ", "weight": "bold", "color": "#1DB446", "size": "sm" },
+                    { "type": "text", "text": "Tasty Station POS", "weight": "bold", "size": "xxl", "margin": "md" },
+                    { "type": "text", "text": `Order ID: #${id}`, "size": "xs", "color": "#aaaaaa" }
+                ]
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    { "type": "separator", "margin": "md" },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "xxl",
+                        "spacing": "sm",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    { "type": "text", "text": "ลูกค้า", "size": "sm", "color": "#555555", "flex": 0 },
+                                    { "type": "text", "text": customer_name || '-', "size": "sm", "color": "#111111", "align": "end" }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    { "type": "text", "text": "ที่อยู่/เบอร์โทร", "size": "sm", "color": "#555555", "flex": 0 },
+                                    { "type": "text", "text": customer_phone || '-', "size": "sm", "color": "#111111", "align": "end" }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    { "type": "text", "text": "ขอบคุณที่ใช้บริการค่ะ! 🙏✨", "style": "italic", "size": "xs", "color": "#aaaaaa", "align": "center" }
+                ]
+            }
+        };
+
+        // Customize Body based on Order Type
+        if (order_type === 'reservation') {
+            bubbleContent.body.contents.push({
+                "type": "box",
+                "layout": "vertical",
+                "margin": "md",
+                "contents": [
+                    { "type": "text", "text": "📌 รายละเอียดการจอง", "weight": "bold", "size": "sm" },
+                    { "type": "text", "text": `วันที่: ${orderData.reservation_date || '-'}`, "size": "sm", "margin": "xs" },
+                    { "type": "text", "text": `เวลา: ${orderData.reservation_time || '-'}`, "size": "sm" },
+                    { "type": "text", "text": `จำนวน: ${orderData.guests_count || '-'} ท่าน`, "size": "sm" },
+                    { "type": "text", "text": `โต๊ะที่จอง: ${orderData.assigned_table || 'พนักงานจะจัดให้เมื่อถึงร้าน'}`, "size": "sm", "color": "#06C755", "weight": "bold" }
+                ]
+            });
+        } else if (order_type === 'delivery') {
+            bubbleContent.body.contents.push({
+                "type": "box",
+                "layout": "vertical",
+                "margin": "md",
+                "contents": [
+                    { "type": "text", "text": "🚀 รายละเอียดการจัดส่ง", "weight": "bold", "size": "sm" },
+                    { "type": "text", "text": orderData.customer_address || '-', "size": "sm", "wrap": true, "margin": "xs" },
+                    { "type": "separator", "margin": "md" }
+                ]
+            });
+            bubbleContent.footer.contents.unshift({
+                "type": "button",
+                "action": { "type": "uri", "label": "ติดตามสถานะไรเดอร์", "uri": trackingUrl },
+                "style": "primary",
+                "color": "#06C755"
+            });
+        } else if (order_type === 'takeaway') {
+            bubbleContent.body.contents.push({
+                "type": "box",
+                "layout": "vertical",
+                "margin": "md",
+                "contents": [
+                    { "type": "text", "text": "🥡 รับกลับบ้าน", "weight": "bold", "size": "sm" },
+                    { "type": "text", "text": `รหัสรับอาหาร: #${id}`, "size": "sm", "margin": "xs" },
+                    { "type": "text", "text": `นัดรับเวลา: ${orderData.reservation_time || 'เร็วที่สุด'}`, "size": "sm" }
+                ]
+            });
+        }
+
+        // Add Items and Total
+        bubbleContent.body.contents.push({
+            "type": "box",
+            "layout": "vertical",
+            "margin": "lg",
+            "contents": [
+                { "type": "text", "text": "📦 รายการอาหาร", "weight": "bold", "size": "sm" },
+                { "type": "text", "text": itemsList || 'ไม่ได้ระบุรายการ', "size": "xs", "color": "#888888", "wrap": true, "margin": "xs" },
+                { "type": "separator", "margin": "md" },
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "margin": "md",
+                    "contents": [
+                        { "type": "text", "text": "ยอดรวมทั้งสิ้น", "weight": "bold", "size": "md" },
+                        { "type": "text", "text": `฿${total_amount}`, "weight": "bold", "size": "md", "align": "end", "color": "#D32F2F" }
+                    ]
+                }
+            ]
+        });
+
+        try {
+            const response = await fetch('https://api.line.me/v2/bot/message/push', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    to: to,
+                    messages: [
+                        {
+                            "type": "flex",
+                            "altText": `ยืนยันออเดอร์ #${id} - Tasty Station`,
+                            "contents": bubbleContent
+                        }
+                    ]
+                })
+            });
+            const resData = await response.json();
+            console.log('✅ LINE Message Sent:', resData);
+        } catch (err) {
+            console.error('❌ Failed to send LINE Message:', err.message);
+        }
+    };
+
     // PUBLIC: Create LINE Order (Customer Submission)
     app.post('/api/public/line-orders', async (req, res) => {
         try {
             const {
                 orderType, customerName, customerPhone, customerAddress,
                 latitude, longitude, reservationDate, reservationTime,
-                guestsCount, assignedTable, items, totalAmount, note
+                guestsCount, assignedTable, items, totalAmount, note,
+                lineUserId // Capture from LIFF
             } = req.body;
 
             // Validate minimum order for delivery
@@ -1660,8 +1820,8 @@ async function startServer() {
                 (order_type, customer_name, customer_phone, customer_address, 
                  total_amount, status, note, tracking_token, items_json,
                  latitude, longitude, reservation_date, reservation_time, guests_count,
-                 deposit_amount, is_deposit_paid, assigned_table)
-                VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                 deposit_amount, is_deposit_paid, assigned_table, line_user_id)
+                VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
                 RETURNING id
             `, [
                 orderType || 'delivery',
@@ -1679,10 +1839,20 @@ async function startServer() {
                 guestsCount || null,
                 depositAmount,
                 false, // is_deposit_paid
-                assignedTable || null
+                assignedTable || null,
+                lineUserId || null // $17
             ]);
 
             const orderId = orderRes.rows[0].id;
+
+            // Trigger LINE Notification (Async)
+            if (lineUserId) {
+                query("SELECT * FROM line_orders WHERE id = $1", [orderId]).then(fullOrderRes => {
+                    if (fullOrderRes.rows[0]) {
+                        sendLineFlexMessage(lineUserId, fullOrderRes.rows[0]);
+                    }
+                }).catch(err => console.error('Error fetching order for LINE notification:', err));
+            }
 
             // Also insert to line_order_items for backwards compatibility
             if (items && items.length > 0) {
