@@ -2628,4 +2628,12 @@ async function startServer() {
     })
 }
 
+// Auto-start when running directly (e.g., on Render)
+if (require.main === module) {
+    startServer().catch(err => {
+        console.error('❌ Failed to start server:', err);
+        process.exit(1);
+    });
+}
+
 module.exports = startServer
