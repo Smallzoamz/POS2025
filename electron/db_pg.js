@@ -233,10 +233,16 @@ const initDatabasePG = async () => {
                 id SERIAL PRIMARY KEY,
                 order_type TEXT NOT NULL DEFAULT 'delivery',
                 customer_name TEXT NOT NULL,
-                contact_number TEXT,
-                delivery_address TEXT,
-                delivery_location TEXT,
-                total_amount DECIMAL(12,2) NOT NULL,
+                customer_phone TEXT,
+                customer_address TEXT,
+                latitude DECIMAL(10, 8),
+                longitude DECIMAL(11, 8),
+                reservation_date DATE,
+                reservation_time TEXT,
+                guests_count INTEGER,
+                assigned_table TEXT,
+                items_json TEXT NOT NULL DEFAULT '[]',
+                total_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
                 status TEXT DEFAULT 'pending',
                 payment_method TEXT,
                 note TEXT,
@@ -246,16 +252,12 @@ const initDatabasePG = async () => {
                 rider_id INTEGER REFERENCES users(id),
                 rider_lat DECIMAL(10, 8),
                 rider_lng DECIMAL(11, 8),
-                customer_lat DECIMAL(10, 8),
-                customer_lng DECIMAL(11, 8),
                 delivery_started_at TIMESTAMP,
                 delivered_at TIMESTAMP,
                 estimated_delivery_time INTEGER,
                 delivery_fee DECIMAL(12,2) DEFAULT 0,
                 tracking_token TEXT,
                 queue_position INTEGER,
-                -- Reservation & Deposit
-                assigned_table TEXT,
                 deposit_amount DECIMAL(12,2) DEFAULT 0,
                 is_deposit_paid BOOLEAN DEFAULT FALSE
             )
@@ -545,6 +547,23 @@ const initDatabasePG = async () => {
             console.log('✅ Loyalty System migration completed');
         } catch (migrationErr8) {
             console.error('Loyalty migration error:', migrationErr8.message);
+        }
+
+        // --- MIGRATION 9: Add missing line_orders columns ---
+        try {
+            console.log('📦 Running Migration 9: line_orders columns...');
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS customer_phone TEXT`);
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS customer_address TEXT`);
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS latitude DECIMAL(10, 8)`);
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS longitude DECIMAL(11, 8)`);
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS reservation_date DATE`);
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS reservation_time TEXT`);
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS guests_count INTEGER`);
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS items_json TEXT DEFAULT '[]'`);
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS line_user_id TEXT`);
+            console.log('✅ Migration 9: line_orders columns completed');
+        } catch (migrationErr9) {
+            console.error('Migration 9 error:', migrationErr9.message);
         }
 
     } catch (e) {
