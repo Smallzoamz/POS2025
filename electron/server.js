@@ -95,7 +95,7 @@ async function startServer() {
         if (!customerId) return null;
         try {
             // Check if customer is following LINE OA (Requirement)
-            const customerRes = await query("SELECT is_following FROM loyalty_customers WHERE id = $1", [customerId]);
+            const customerRes = await query("SELECT id, line_user_id, points, is_following FROM loyalty_customers WHERE id = $1", [customerId]);
             if (!customerRes.rows[0]?.is_following) {
                 console.log(`[Loyalty] Customer #${customerId} skipped points (Not following LINE OA)`);
                 return null;
@@ -119,6 +119,65 @@ async function startServer() {
             `, [customerId, pointsToEarn, orderId, lineOrderId, `สะสมคะแนนจากยอดซื้อ ${amount}.-`]);
 
             console.log(`[Loyalty] Customer #${customerId} earned ${pointsToEarn} points`);
+
+            // 3. Send LINE Notification for Points (Async)
+            if (customerRes.rows[0].line_user_id) {
+                const lineUserId = customerRes.rows[0].line_user_id;
+                const totalPointsBefore = parseInt(customerRes.rows[0].points || 0);
+                const newTotalPoints = totalPointsBefore + pointsToEarn;
+
+                // Simple Flex Message for Points
+                const pointBubble = {
+                    "type": "bubble",
+                    "header": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            { "type": "text", "text": "ยินดีด้วยค่ะ! 🎉", "weight": "bold", "color": "#FF9800", "size": "sm" },
+                            { "type": "text", "text": "คุณได้รับแต้มสะสมใหม่", "weight": "bold", "size": "xl", "margin": "md" }
+                        ]
+                    },
+                    "body": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "margin": "lg",
+                                "contents": [
+                                    { "type": "text", "text": "ได้รับเพิ่ม", "size": "sm", "color": "#555555" },
+                                    { "type": "text", "text": `+ ${pointsToEarn} แต้ม`, "weight": "bold", "size": "sm", "color": "#1DB446", "align": "end" }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "margin": "md",
+                                "contents": [
+                                    { "type": "text", "text": "แต้มสะสมรวม", "size": "sm", "color": "#555555" },
+                                    { "type": "text", "text": `${newTotalPoints} แต้ม`, "weight": "bold", "size": "sm", "color": "#111111", "align": "end" }
+                                ]
+                            },
+                            { "type": "separator", "margin": "lg" },
+                            { "type": "text", "text": "ตรวจสอบสิทธิพิเศษและของรางวัลได้ที่เมนูสะสมแต้มนะคะ", "size": "xs", "color": "#999999", "margin": "md", "wrap": true }
+                        ]
+                    }
+                };
+
+                const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+                if (token) {
+                    fetch('https://api.line.me/v2/bot/message/push', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({
+                            to: lineUserId,
+                            messages: [{ "type": "flex", "altText": `คุณได้รับ ${pointsToEarn} แต้ม! - Tasty Station`, "contents": pointBubble }]
+                        })
+                    }).catch(err => console.error('Error sending point notification:', err));
+                }
+            }
+
             return pointsToEarn;
         } catch (err) {
             console.error('Failed to earn loyalty points', err);
@@ -1806,14 +1865,23 @@ async function startServer() {
                 }
             }
 
+            // Lookup customer_id automatically if lineUserId provided
+            let customerId = null;
+            if (lineUserId) {
+                const customerLookup = await query("SELECT id FROM loyalty_customers WHERE line_user_id = $1", [lineUserId]);
+                if (customerLookup.rowCount > 0) {
+                    customerId = customerLookup.rows[0].id;
+                }
+            }
+
             // Calculate Deposit (50% for reservations with items)
             let depositAmount = 0;
             if (orderType === 'reservation' && items && items.length > 0) {
                 depositAmount = totalAmount * 0.5;
             }
 
-            // Generate tracking token for delivery
-            const trackingToken = orderType === 'delivery'
+            // Generate tracking token for delivery (Case-insensitive check)
+            const trackingToken = (orderType && orderType.toLowerCase() === 'delivery')
                 ? 'TRK' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 8).toUpperCase()
                 : null;
 
@@ -1826,8 +1894,8 @@ async function startServer() {
                 (order_type, customer_name, customer_phone, customer_address, 
                  total_amount, status, note, tracking_token, items_json,
                  latitude, longitude, reservation_date, reservation_time, guests_count,
-                 deposit_amount, is_deposit_paid, assigned_table, line_user_id)
-                VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                 deposit_amount, is_deposit_paid, assigned_table, line_user_id, customer_id)
+                VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
                 RETURNING id
             `, [
                 orderType || 'delivery',
@@ -1846,7 +1914,8 @@ async function startServer() {
                 depositAmount,
                 false, // is_deposit_paid
                 assignedTable || null,
-                lineUserId || null // $17
+                lineUserId || null, // $17
+                customerId // $18
             ]);
 
             const orderId = orderRes.rows[0].id;
@@ -2102,6 +2171,15 @@ async function startServer() {
                 "UPDATE line_orders SET status = 'completed', payment_method = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
                 [paymentMethod || 'cash', id]
             );
+
+            // Earn Loyalty Points (Fetch customer info first)
+            const orderRes = await query("SELECT customer_id, total_amount FROM line_orders WHERE id = $1", [id]);
+            const order = orderRes.rows[0];
+            if (order && order.customer_id) {
+                console.log(`💎 Awarding points for completed LINE order: #${id}`);
+                await earnLoyaltyPoints(order.customer_id, order.total_amount, null, id);
+            }
+
             io.emit('line-order-update', { orderId: id, status: 'completed' });
             io.emit('delivery-order-update', { orderId: id, status: 'completed' });
             res.json({ success: true });
@@ -2209,6 +2287,15 @@ async function startServer() {
         const { id } = req.params;
         try {
             await query("UPDATE line_orders SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
+
+            // Earn Loyalty Points (Fetch customer info first)
+            const orderRes = await query("SELECT customer_id, total_amount FROM line_orders WHERE id = $1", [id]);
+            const order = orderRes.rows[0];
+            if (order && order.customer_id) {
+                console.log(`💎 Awarding points for completed LINE order: #${id}`);
+                await earnLoyaltyPoints(order.customer_id, order.total_amount, null, id);
+            }
+
             io.emit('line-order-update', { orderId: id, status: 'completed' });
             res.json({ success: true });
         } catch (err) {
@@ -2424,6 +2511,7 @@ async function startServer() {
             const orderRes = await query("SELECT customer_id, total_amount FROM line_orders WHERE id = $1", [id]);
             const order = orderRes.rows[0];
             if (order && order.customer_id) {
+                console.log(`💎 Awarding points for delivered LINE order: #${id}`);
                 await earnLoyaltyPoints(order.customer_id, order.total_amount, null, id);
             }
 
@@ -2507,7 +2595,7 @@ async function startServer() {
 
             const result = await client.query(`
                 INSERT INTO line_orders (
-                    order_type, customer_name, contact_number, delivery_address,
+                    order_type, customer_name, customer_phone, delivery_address,
                     customer_lat, customer_lng, total_amount, status, note, tracking_token
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9) 
                 RETURNING id
