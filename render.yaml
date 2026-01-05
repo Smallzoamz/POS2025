@@ -1,0 +1,22 @@
+databases:
+  - name: pos-database
+    databaseName: pos_db
+    user: pos_admin
+    plan: free
+    region: singapore
+
+services:
+  - type: web
+    name: pos-backend
+    runtime: node
+    region: singapore
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node electron/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pos-database
+          property: connectionString

@@ -1,0 +1,33 @@
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Build outputs
+dist/
+dist_exe/
+
+# Environment variables (DO NOT COMMIT SECRETS!)
+.env
+
+# Electron
+out/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database (local SQLite)
+*.db
+*.sqlite
+
+# Capacitor
+android/
+ios/
+
+# Logs
+*.log
+logs/
