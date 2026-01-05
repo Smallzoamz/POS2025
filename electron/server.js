@@ -126,6 +126,10 @@ async function startServer() {
                 const totalPointsBefore = parseInt(customerRes.rows[0].points || 0);
                 const newTotalPoints = totalPointsBefore + pointsToEarn;
 
+                // Fetch Shop Name for Notification AltText
+                const shopNameRes = await query("SELECT value FROM settings WHERE key = 'shop_name'");
+                const shopName = shopNameRes.rows[0]?.value || 'Tasty Station';
+
                 // Simple Flex Message for Points
                 const pointBubble = {
                     "type": "bubble",
@@ -172,7 +176,7 @@ async function startServer() {
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({
                             to: lineUserId,
-                            messages: [{ "type": "flex", "altText": `คุณได้รับ ${pointsToEarn} แต้ม! - Tasty Station`, "contents": pointBubble }]
+                            messages: [{ "type": "flex", "altText": `คุณได้รับ ${pointsToEarn} แต้ม! - ${shopName}`, "contents": pointBubble }]
                         })
                     }).catch(err => console.error('Error sending point notification:', err));
                 }
@@ -1692,6 +1696,10 @@ async function startServer() {
         const { order_type, id, customer_name, customer_phone, total_amount, items_json } = orderData;
         const trackingUrl = `https://pos-backend-8cud.onrender.com/tracking/${orderData.tracking_token}`;
 
+        // Fetch Shop Name
+        const shopNameRes = await query("SELECT value FROM settings WHERE key = 'shop_name'");
+        const shopName = shopNameRes.rows[0]?.value || 'Tasty Station';
+
         let items = [];
         try { items = JSON.parse(items_json || '[]'); } catch (e) { items = []; }
 
@@ -1705,7 +1713,7 @@ async function startServer() {
                 "layout": "vertical",
                 "contents": [
                     { "type": "text", "text": "ยืนยันออเดอร์สำเร็จ", "weight": "bold", "color": "#1DB446", "size": "sm" },
-                    { "type": "text", "text": "Tasty Station POS", "weight": "bold", "size": "xxl", "margin": "md" },
+                    { "type": "text", "text": shopName, "weight": "bold", "size": "xxl", "margin": "md" },
                     { "type": "text", "text": `Order ID: #${id}`, "size": "xs", "color": "#aaaaaa" }
                 ]
             },
@@ -1828,7 +1836,7 @@ async function startServer() {
                     messages: [
                         {
                             "type": "flex",
-                            "altText": `ยืนยันออเดอร์ #${id} - Tasty Station`,
+                            "altText": `ยืนยันออเดอร์ #${id} - ${shopName}`,
                             "contents": bubbleContent
                         }
                     ]

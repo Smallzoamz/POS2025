@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    base: './',
+    base: '/',
     plugins: [
         react(),
         VitePWA({
@@ -17,7 +17,7 @@ export default defineConfig({
                 theme_color: '#0f172a',
                 background_color: '#0f172a',
                 display: 'standalone',
-                start_url: './index.html', // More specific start URL for local files
+                start_url: '/index.html', // Use root path for web deployment
                 icons: [
                     {
                         src: 'icon-512.png',
