@@ -17,6 +17,12 @@ const LineOrderManagement = () => {
     const [cashReceived, setCashReceived] = useState('');
     const [settings, setSettings] = useState({});
 
+    // Loyalty Coupon State
+    const [couponCode, setCouponCode] = useState('');
+    const [appliedCoupon, setAppliedCoupon] = useState(null);
+    const [isVerifyingCoupon, setIsVerifyingCoupon] = useState(false);
+    const [couponError, setCouponError] = useState('');
+
     // Load Orders
     const loadOrders = async () => {
         try {
@@ -83,6 +89,34 @@ const LineOrderManagement = () => {
         setShowPaymentModal(true);
         setPaymentMethod('cash');
         setCashReceived('');
+        setCouponCode('');
+        setAppliedCoupon(null);
+        setCouponError('');
+    };
+
+    const handleVerifyCoupon = async () => {
+        if (!couponCode) return;
+        setIsVerifyingCoupon(true);
+        setCouponError('');
+        try {
+            const res = await api.verifyCoupon(couponCode);
+            if (res.error) {
+                setCouponError(res.error);
+                setAppliedCoupon(null);
+            } else {
+                setAppliedCoupon(res);
+                setCouponCode('');
+            }
+        } catch (err) {
+            setCouponError('ไม่สามารถตรวจสอบคูปองได้');
+        } finally {
+            setIsVerifyingCoupon(false);
+        }
+    };
+
+    const removeCoupon = () => {
+        setAppliedCoupon(null);
+        setCouponError('');
     };
 
     // Confirm Payment
@@ -95,6 +129,14 @@ const LineOrderManagement = () => {
             });
             const data = await res.json();
             if (data.success) {
+                // If coupon applied, mark it as used
+                if (appliedCoupon) {
+                    try {
+                        await api.useCoupon(appliedCoupon.coupon_code, null, selectedOrder.id);
+                    } catch (e) {
+                        console.error("Failed to mark coupon as used:", e);
+                    }
+                }
                 alert('✅ ชำระเงินเรียบร้อย!');
                 setShowPaymentModal(false);
                 setSelectedOrder(null);
@@ -470,7 +512,53 @@ const LineOrderManagement = () => {
                                 {/* Total */}
                                 <div className="text-center">
                                     <p className="text-sm text-gray-500 mb-1">ยอดที่ต้องชำระ</p>
-                                    <p className="text-4xl font-black text-gray-800">฿{selectedOrder.total_amount?.toLocaleString()}</p>
+                                    <p className="text-4xl font-black text-gray-800">
+                                        ฿{(selectedOrder.total_amount - (appliedCoupon ? (parseInt(appliedCoupon.title.match(/-฿(\d+)/)?.[1]) || 0) : 0)).toLocaleString()}
+                                    </p>
+                                    {appliedCoupon && (
+                                        <p className="text-xs text-green-600 font-bold mt-1">
+                                            (หักส่วนลดคูปองแล้ว -฿{parseInt(appliedCoupon.title.match(/-฿(\d+)/)?.[1]) || 0})
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Coupon Section */}
+                                <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
+                                    <p className="text-[10px] font-bold text-orange-400 uppercase tracking-widest mb-3">Loyalty Coupon</p>
+                                    {appliedCoupon ? (
+                                        <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-orange-200 shadow-sm">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-500 text-xl">💎</div>
+                                                <div>
+                                                    <p className="text-xs font-bold text-gray-800">{appliedCoupon.title}</p>
+                                                    <p className="text-[9px] text-orange-500 font-bold tracking-widest">{appliedCoupon.coupon_code}</p>
+                                                </div>
+                                            </div>
+                                            <button onClick={removeCoupon} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={couponCode}
+                                                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                                                    placeholder="กรอกรหัสคูปอง..."
+                                                    className="flex-1 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:border-orange-500 outline-none uppercase font-bold tracking-widest"
+                                                />
+                                                <button
+                                                    onClick={handleVerifyCoupon}
+                                                    disabled={isVerifyingCoupon || !couponCode}
+                                                    className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-700 disabled:opacity-50 transition-all uppercase tracking-widest"
+                                                >
+                                                    {isVerifyingCoupon ? '...' : 'Verify'}
+                                                </button>
+                                            </div>
+                                            {couponError && <p className="text-[10px] text-red-500 font-bold pl-2">⚠️ {couponError}</p>}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Payment Method Selection */}

@@ -356,6 +356,11 @@ const initDatabasePG = async () => {
             await client.query("INSERT INTO settings (key, value) VALUES ($1, $2)", ['public_url', 'https://pos-backend-8cud.onrender.com']);
         }
 
+        const printerRes = await client.query("SELECT COUNT(*) FROM settings WHERE key = $1", ['enable_receipt_printer']);
+        if (printerRes.rows[0].count == 0) {
+            await client.query("INSERT INTO settings (key, value) VALUES ($1, $2)", ['enable_receipt_printer', 'true']);
+        }
+
         // Delivery Settings Defaults
         const deliveryMinRes = await client.query("SELECT COUNT(*) FROM settings WHERE key = $1", ['minimum_delivery_order']);
         if (deliveryMinRes.rows[0].count == 0) {
@@ -569,6 +574,27 @@ const initDatabasePG = async () => {
             console.log('✅ Migration 9: line_orders columns completed');
         } catch (migrationErr9) {
             console.error('Migration 9 error:', migrationErr9.message);
+        }
+
+        // --- MIGRATION 10: Loyalty Coupons ---
+        try {
+            console.log('📦 Running Migration 10: loyalty_coupons...');
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS loyalty_coupons (
+                    id SERIAL PRIMARY KEY,
+                    customer_id INTEGER REFERENCES loyalty_customers(id),
+                    promotion_id INTEGER REFERENCES loyalty_promotions(id),
+                    coupon_code TEXT UNIQUE NOT NULL,
+                    status TEXT DEFAULT 'active', -- 'active', 'used', 'expired'
+                    redeemed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    used_at TIMESTAMPTZ,
+                    order_id INTEGER, -- Link to in-store order when used
+                    line_order_id INTEGER -- Link to line order when used
+                )
+            `);
+            console.log('✅ Migration 10: loyalty_coupons completed');
+        } catch (migrationErr10) {
+            console.error('Migration 10 error:', migrationErr10.message);
         }
 
     } catch (e) {

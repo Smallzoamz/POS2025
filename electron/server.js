@@ -2765,13 +2765,20 @@ async function startServer() {
         }
     });
 
-    // Redemption Logic
+    const generateCouponCode = () => {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return `ANAN-${code}`;
+    };
+
     app.post('/api/loyalty/redeem', async (req, res) => {
         const { customerId, promotionId } = req.body;
         try {
             await query('BEGIN');
 
-            // 1. Get info
             const promoRes = await query('SELECT * FROM loyalty_promotions WHERE id = $1', [promotionId]);
             const promo = promoRes.rows[0];
             const customerRes = await query('SELECT id, points, is_following FROM loyalty_customers WHERE id = $1', [customerId]);
@@ -2792,20 +2799,87 @@ async function startServer() {
                 return res.status(400).json({ error: 'คะแนนไม่เพียงพอค่ะ' });
             }
 
-            // 2. Deduct points
+            // 1. Deduct points
             await query('UPDATE loyalty_customers SET points = points - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [promo.points_required, customerId]);
+
+            // 2. Generate Coupon
+            const couponCode = generateCouponCode();
+            await query(`
+                INSERT INTO loyalty_coupons (customer_id, promotion_id, coupon_code)
+                VALUES ($1, $2, $3)
+            `, [customerId, promotionId, couponCode]);
 
             // 3. Log transaction
             await query(`
                 INSERT INTO loyalty_point_transactions 
                 (customer_id, type, points, promotion_id, description)
                 VALUES ($1, 'redeem', $2, $3, $4)
-            `, [customerId, promo.points_required, promotionId, `แลกรางวัล: ${promo.title}`]);
+            `, [customerId, promo.points_required, promotionId, `แลกรางวัล: ${promo.title} (Code: ${couponCode})`]);
 
             await query('COMMIT');
-            res.json({ success: true, newPoints: customer.points - promo.points_required });
+            res.json({ success: true, newPoints: customer.points - promo.points_required, couponCode });
         } catch (err) {
             await query('ROLLBACK');
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.get('/api/loyalty/coupons/:customerId', async (req, res) => {
+        try {
+            const result = await query(`
+                SELECT c.*, p.title as promotion_title, p.description as promotion_description, p.image_url
+                FROM loyalty_coupons c
+                JOIN loyalty_promotions p ON c.promotion_id = p.id
+                WHERE c.customer_id = $1
+                ORDER BY c.redeemed_at DESC
+            `, [req.params.customerId]);
+            res.json(result.rows);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.post('/api/loyalty/coupons/verify', async (req, res) => {
+        const { code } = req.body;
+        try {
+            const result = await query(`
+                SELECT c.*, p.title, p.description, cust.display_name as customer_name
+                FROM loyalty_coupons c
+                JOIN loyalty_promotions p ON c.promotion_id = p.id
+                JOIN loyalty_customers cust ON c.customer_id = cust.id
+                WHERE c.coupon_code = $1 AND c.status = 'active'
+            `, [code.toUpperCase()]);
+
+            if (result.rowCount === 0) {
+                return res.status(404).json({ error: 'รหัสคูปองไม่ถูกต้อง หรือถูกใช้งานไปแล้วค่ะ' });
+            }
+            res.json(result.rows[0]);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // POS: Use Coupon
+    app.post('/api/loyalty/coupons/use', async (req, res) => {
+        const { code, orderId, lineOrderId } = req.body;
+        try {
+            const result = await query(`
+                UPDATE loyalty_coupons 
+                SET status = 'used', 
+                    used_at = CURRENT_TIMESTAMP, 
+                    order_id = $1, 
+                    line_order_id = $2 
+                WHERE coupon_code = $3 AND status = 'active'
+                RETURNING *
+            `, [orderId || null, lineOrderId || null, code.toUpperCase()]);
+
+            if (result.rowCount === 0) {
+                return res.status(404).json({ error: 'ไม่พบรหัสคูปอง หรือคูปองถูกใช้ไปแล้ว' });
+            }
+
+            res.json({ success: true, coupon: result.rows[0] });
+        } catch (err) {
+            console.error('Use coupon error:', err);
             res.status(500).json({ error: err.message });
         }
     });

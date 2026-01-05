@@ -506,5 +506,26 @@ export const api = {
             body: JSON.stringify({ customerId })
         });
         return res.json();
+    },
+    getCustomerCoupons: async (customerId) => {
+        const res = await fetch(`${BASE_URL}/loyalty/coupons/${customerId}`);
+        return res.json();
+    },
+    verifyCoupon: async (code) => {
+        const res = await fetch(`${BASE_URL}/loyalty/coupons/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+        });
+        return res.json();
+    },
+
+    useCoupon: async (code, orderId = null, lineOrderId = null) => {
+        const res = await fetch(`${BASE_URL}/loyalty/coupons/use`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, orderId, lineOrderId })
+        });
+        return res.json();
     }
 };

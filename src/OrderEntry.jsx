@@ -39,6 +39,12 @@ const OrderEntry = () => {
     const [receiptData, setReceiptData] = useState(null);
     const receiptRef = useRef();
 
+    // Loyalty Coupon State
+    const [couponCode, setCouponCode] = useState('');
+    const [appliedCoupon, setAppliedCoupon] = useState(null);
+    const [isVerifyingCoupon, setIsVerifyingCoupon] = useState(false);
+    const [couponError, setCouponError] = useState('');
+
     useEffect(() => {
         loadData();
     }, []);
@@ -140,6 +146,31 @@ const OrderEntry = () => {
         }
     };
 
+    const handleVerifyCoupon = async () => {
+        if (!couponCode) return;
+        setIsVerifyingCoupon(true);
+        setCouponError('');
+        try {
+            const res = await api.verifyCoupon(couponCode);
+            if (res.error) {
+                setCouponError(res.error);
+                setAppliedCoupon(null);
+            } else {
+                setAppliedCoupon(res);
+                setCouponCode(''); // Clear input on success
+            }
+        } catch (err) {
+            setCouponError('ไม่สามารถตรวจสอบคูปองได้');
+        } finally {
+            setIsVerifyingCoupon(false);
+        }
+    };
+
+    const removeCoupon = () => {
+        setAppliedCoupon(null);
+        setCouponError('');
+    };
+
     const addToCart = (item) => {
         setCart(prev => {
             const existing = prev.find(i => i.id === item.id);
@@ -205,8 +236,23 @@ const OrderEntry = () => {
     const calculateFinal = () => {
         // Only calculate on ordered items (not cart)
         const subtotal = orderedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        const validDiscount = Math.min(discountAmount, subtotal);
-        const afterDiscount = subtotal - validDiscount;
+
+        // Coupon Discount Logic (Simplified: assuming coupon has a fixed discount or title implies amount)
+        // For now, let's look for "-฿XX" in the title or a value if we added one (we'll assume 50 for now or custom logic)
+        let couponDiscount = 0;
+        if (appliedCoupon) {
+            // Check if title has amount like "-฿50"
+            const match = appliedCoupon.title.match(/-฿(\d+)/);
+            if (match) {
+                couponDiscount = parseInt(match[1]);
+            } else {
+                // Default discount value or handle other promotional types
+                couponDiscount = 0;
+            }
+        }
+
+        const totalDiscount = Math.min(discountAmount + couponDiscount, subtotal);
+        const afterDiscount = subtotal - totalDiscount;
         const taxRate = parseFloat(settings.tax_rate) || 0;
         const taxAmount = afterDiscount * (taxRate / 100);
         const grandTotal = afterDiscount + taxAmount;
@@ -215,7 +261,7 @@ const OrderEntry = () => {
         const paidDeposit = depositInfo.isPaid ? depositInfo.amount : 0;
         const finalToPay = Math.max(0, grandTotal - paidDeposit);
 
-        return { subtotal, validDiscount, taxAmount, grandTotal, paidDeposit, finalToPay };
+        return { subtotal, validDiscount: totalDiscount, couponDiscount, taxAmount, grandTotal, paidDeposit, finalToPay };
     };
 
     const calculateChange = () => {
@@ -243,6 +289,14 @@ const OrderEntry = () => {
             });
 
             if (res.success) {
+                // If coupon applied, mark it as used
+                if (appliedCoupon) {
+                    try {
+                        await api.useCoupon(appliedCoupon.coupon_code, activeOrderId);
+                    } catch (e) {
+                        console.error("Failed to mark coupon as used:", e);
+                    }
+                }
                 // Receipt data for printing component
                 const dataToPrint = {
                     tableId: tableId,
@@ -659,6 +713,46 @@ const OrderEntry = () => {
                                 <span className="text-sm font-bold text-slate-700">ต้องชำระ</span>
                                 <span className="text-xl font-bold text-orange-500">฿{finals.finalToPay.toLocaleString()}</span>
                             </div>
+                        </div>
+
+                        {/* Coupon Section */}
+                        <div className="mb-6 p-4 bg-orange-50 rounded-2xl border border-orange-100">
+                            <label className="text-[10px] font-bold text-orange-400 uppercase tracking-[0.2em] mb-3 block">คูปองส่วนลด / Loyalty Coupon</label>
+
+                            {appliedCoupon ? (
+                                <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-orange-200 shadow-sm animate-in zoom-in duration-200">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-500 text-xl">💎</div>
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-900">{appliedCoupon.title}</p>
+                                            <p className="text-[9px] text-orange-500 font-bold tracking-widest">{appliedCoupon.coupon_code}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={removeCoupon} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                                        <FiX size={18} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={couponCode}
+                                            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                                            placeholder="กรอกรหัสคูปอง..."
+                                            className="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:border-orange-500 outline-none uppercase tracking-widest font-bold"
+                                        />
+                                        <button
+                                            onClick={handleVerifyCoupon}
+                                            disabled={isVerifyingCoupon || !couponCode}
+                                            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 disabled:opacity-50 transition-all uppercase tracking-widest"
+                                        >
+                                            {isVerifyingCoupon ? '...' : 'Verify'}
+                                        </button>
+                                    </div>
+                                    {couponError && <p className="text-[10px] text-red-500 font-bold pl-2">⚠️ {couponError}</p>}
+                                </div>
+                            )}
                         </div>
 
                         {paymentMethod === 'cash' && (
