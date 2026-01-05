@@ -20,7 +20,7 @@ const CustomerLoyalty = () => {
         const liffId = import.meta.env.VITE_LIFF_ID;
 
         if (!liffId) {
-            setLiffError('LIFF ID is not configured');
+            setLiffError('ยังไม่ได้ตั้งค่า VITE_LIFF_ID ในระบบ (Render Environment)');
             setLoading(false);
             return;
         }
@@ -31,8 +31,7 @@ const CustomerLoyalty = () => {
 
             if (liff.isLoggedIn()) {
                 const profile = await liff.getProfile();
-
-                // Sync profile with backend (Create/Update member)
+                // Sync profile with backend
                 const loyaltyData = {
                     lineUserId: profile.userId,
                     displayName: profile.displayName,
@@ -44,7 +43,6 @@ const CustomerLoyalty = () => {
                 setPoints(syncRes.points || 0);
                 setIsFollowing(syncRes.is_following || false);
 
-                // Load transactions & promotions
                 const [fullProfile, activePromos] = await Promise.all([
                     api.getLoyaltyProfile(profile.userId),
                     api.getActivePromotions()
@@ -52,16 +50,13 @@ const CustomerLoyalty = () => {
 
                 setHistory(fullProfile.transactions || []);
                 setPromotions(activePromos || []);
+                setLoading(false);
             } else {
-                // Not logged in, but we might be in external browser or LINE
-                if (liff.isInClient()) {
-                    liff.login();
-                }
+                setLoading(false);
             }
         } catch (err) {
-            console.error('❌ LIFF Error:', err);
-            setLiffError(err.message);
-        } finally {
+            console.error('❌ LIFF init failed:', err);
+            setLiffError('ไม่สามารถเชื่อมต่อ LINE ได้ กรุณาเช็ค LIFF ID');
             setLoading(false);
         }
     };

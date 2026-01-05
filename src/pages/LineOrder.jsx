@@ -69,15 +69,23 @@ const LineOrder = () => {
                 setLiffReady(true);
             } catch (err) {
                 console.error('❌ LIFF init failed:', err);
-                setLiffError(err.message);
+                setLiffError('ไม่สามารถเชื่อมต่อ LINE ได้ กรุณาเช็ค LIFF ID');
                 setLiffReady(true);
             }
         };
 
-        initLiff();
+        if (import.meta.env.VITE_LIFF_ID) {
+            initLiff();
+        } else {
+            setLiffReady(true);
+        }
     }, []);
 
     const handleLogin = () => {
+        if (!import.meta.env.VITE_LIFF_ID) {
+            alert('❌ ไม่พบ LIFF ID ในระบบ! กรุณาตั้งค่า VITE_LIFF_ID ใน Render ก่อนนะคะ');
+            return;
+        }
         liff.login();
     };
 
@@ -225,13 +233,20 @@ const LineOrder = () => {
                 </p>
 
                 <div className="space-y-4 w-full max-w-sm">
-                    <button
-                        onClick={handleLogin}
-                        className="w-full bg-[#06C755] text-white py-4 rounded-2xl font-black text-lg shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3 font-heading"
-                    >
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/4/41/LINE_logo.svg" className="w-6 h-6 invert" alt="LINE" />
-                        เข้าสู่ระบบด้วย LINE
-                    </button>
+                    {!import.meta.env.VITE_LIFF_ID ? (
+                        <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-sm font-bold">
+                            ⚠️ ยังไม่ได้ตั้งค่า VITE_LIFF_ID <br />
+                            (กรุณาตั้งค่าใน Render Environment)
+                        </div>
+                    ) : (
+                        <button
+                            onClick={handleLogin}
+                            className="w-full bg-[#06C755] text-white py-4 rounded-2xl font-black text-lg shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3 font-heading"
+                        >
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/4/41/LINE_logo.svg" className="w-6 h-6 invert" alt="LINE" />
+                            เข้าสู่ระบบด้วย LINE
+                        </button>
+                    )}
 
                     <div className="pt-6 grid grid-cols-3 gap-4 border-t border-slate-50">
                         {[
