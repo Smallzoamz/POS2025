@@ -518,8 +518,8 @@ async function startServer() {
                 [paymentMethod || 'cash', id]
             );
 
-            // 2. Get table name and customer info
-            const orderRes = await client.query("SELECT table_name, customer_id, total_amount FROM orders WHERE id = $1", [id]);
+            // 2. Get table name, customer info, and linked reservation
+            const orderRes = await client.query("SELECT table_name, customer_id, total_amount, line_order_id FROM orders WHERE id = $1", [id]);
             const order = orderRes.rows[0];
 
             // 3. Mark table as available
@@ -530,6 +530,16 @@ async function startServer() {
             // 4. Earn Loyalty Points
             if (order && order.customer_id) {
                 await earnLoyaltyPoints(order.customer_id, order.total_amount, id, null);
+            }
+
+            // 5. If it's a linked reservation, mark it as completed
+            if (order && order.line_order_id) {
+                console.log(`✅ Completing linked reservation #${order.line_order_id} for POS order #${id}`);
+                await client.query(
+                    "UPDATE line_orders SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+                    [order.line_order_id]
+                );
+                io.emit('line-order-update', { orderId: order.line_order_id, status: 'completed' });
             }
 
             await client.query('COMMIT');
@@ -2339,8 +2349,8 @@ async function startServer() {
             // 4. Update table status
             await query("UPDATE tables SET status = 'occupied' WHERE name = $1", [lineOrder.assigned_table]);
 
-            // 5. Update LINE order status to 'preparing' (so it's "active")
-            await query("UPDATE line_orders SET status = 'preparing' WHERE id = $1", [id]);
+            // 5. Update LINE order status to 'ready' (as requested: Check-in sets to Ready)
+            await query("UPDATE line_orders SET status = 'ready' WHERE id = $1", [id]);
 
             // 6. Get pre-order items from line_order_items table
             const itemsRes = await query("SELECT product_id, product_name, price, quantity FROM line_order_items WHERE line_order_id = $1", [id]);

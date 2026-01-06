@@ -106,7 +106,8 @@ const MenuManagement = () => {
             // Optimistic update
             setProducts(products.map(p => p.id === product.id ? { ...p, is_available: newStatus } : p));
 
-            await api.updateProduct(product.id, { is_available: newStatus });
+            // Send full product object to satisfy DB NOT NULL constraints
+            await api.updateProduct(product.id, { ...product, is_available: newStatus });
         } catch (error) {
             console.error("Error toggling availability:", error);
             // Rollback on error
