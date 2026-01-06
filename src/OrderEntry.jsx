@@ -49,6 +49,7 @@ const OrderEntry = () => {
     const [showOptionsModal, setShowOptionsModal] = useState(false);
     const [selectedProductForOptions, setSelectedProductForOptions] = useState(null);
     const [selectedOptions, setSelectedOptions] = useState([]);
+    const [optionQuantity, setOptionQuantity] = useState(1);
 
     // Edit Table Modal State
     const [showEditTableModal, setShowEditTableModal] = useState(false);
@@ -193,6 +194,7 @@ const OrderEntry = () => {
             // Has options - show options modal
             setSelectedProductForOptions(item);
             setSelectedOptions([]);
+            setOptionQuantity(1);
             setShowOptionsModal(true);
         } else {
             // No options - add directly to cart
@@ -200,7 +202,7 @@ const OrderEntry = () => {
         }
     };
 
-    const addToCart = (item, options = []) => {
+    const addToCart = (item, options = [], qty = 1) => {
         const optionsTotal = options.reduce((sum, opt) => sum + (parseFloat(opt.price_modifier) || 0), 0);
         const itemWithOptions = {
             ...item,
@@ -215,18 +217,19 @@ const OrderEntry = () => {
         setCart(prev => {
             const existing = prev.find(i => i.cartKey === cartKey);
             if (existing) {
-                return prev.map(i => i.cartKey === cartKey ? { ...i, quantity: i.quantity + 1 } : i);
+                return prev.map(i => i.cartKey === cartKey ? { ...i, quantity: i.quantity + qty } : i);
             }
-            return [...prev, { ...itemWithOptions, cartKey, quantity: 1 }];
+            return [...prev, { ...itemWithOptions, cartKey, quantity: qty }];
         });
     };
 
     const handleAddWithOptions = () => {
         if (!selectedProductForOptions) return;
-        addToCart(selectedProductForOptions, selectedOptions);
+        addToCart(selectedProductForOptions, selectedOptions, optionQuantity);
         setShowOptionsModal(false);
         setSelectedProductForOptions(null);
         setSelectedOptions([]);
+        setOptionQuantity(1);
     };
 
     const toggleOption = (option) => {
@@ -1217,16 +1220,36 @@ const OrderEntry = () => {
                             )}
                         </div>
 
+                        {/* Quantity Selector */}
+                        <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 text-center">จำนวน</p>
+                            <div className="flex items-center justify-center gap-4">
+                                <button
+                                    onClick={() => setOptionQuantity(q => Math.max(1, q - 1))}
+                                    className="w-10 h-10 bg-white rounded-xl shadow border border-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 hover:bg-slate-50"
+                                >
+                                    -
+                                </button>
+                                <span className="text-2xl font-black text-slate-900 w-12 text-center">{optionQuantity}</span>
+                                <button
+                                    onClick={() => setOptionQuantity(q => Math.min(99, q + 1))}
+                                    className="w-10 h-10 bg-white rounded-xl shadow border border-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 hover:bg-slate-50"
+                                >
+                                    +
+                                </button>
+                            </div>
+                        </div>
+
                         {/* Footer */}
                         <div className="p-6 border-t border-slate-100 bg-slate-50">
                             <div className="flex items-center justify-between mb-4">
                                 <span className="text-sm font-bold text-slate-500">ราคารวม</span>
                                 <span className="text-2xl font-black text-orange-600">
-                                    ฿{(parseFloat(selectedProductForOptions.price) + selectedOptions.reduce((sum, o) => sum + parseFloat(o.price_modifier || 0), 0)).toLocaleString()}
+                                    ฿{((parseFloat(selectedProductForOptions.price) + selectedOptions.reduce((sum, o) => sum + parseFloat(o.price_modifier || 0), 0)) * optionQuantity).toLocaleString()}
                                 </span>
                             </div>
                             <button onClick={handleAddWithOptions} className="w-full py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-orange-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all">
-                                เพิ่มลงตะกร้า
+                                เพิ่ม {optionQuantity} รายการ
                             </button>
                         </div>
                     </div>

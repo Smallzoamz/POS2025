@@ -2413,10 +2413,24 @@ async function startServer() {
             // Insert items
             if (items && items.length > 0) {
                 for (const item of items) {
-                    await query(`
+                    const finalPrice = item.unitPrice || item.price;
+                    const itemResult = await query(`
                         INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
                         VALUES ($1, $2, $3, $4, $5)
-                    `, [orderId, item.product_id, item.product_name, item.price, item.quantity]);
+                        RETURNING id
+                    `, [orderId, item.product_id, item.product_name, finalPrice, item.quantity]);
+
+                    const orderItemId = itemResult.rows[0].id;
+
+                    // Insert options
+                    if (item.options && item.options.length > 0) {
+                        for (const opt of item.options) {
+                            await query(
+                                'INSERT INTO order_item_options (order_item_id, option_id, option_name, price_modifier) VALUES ($1, $2, $3, $4)',
+                                [orderItemId, opt.id, opt.name, opt.price_modifier || 0]
+                            );
+                        }
+                    }
                 }
             }
 

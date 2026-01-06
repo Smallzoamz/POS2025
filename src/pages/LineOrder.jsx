@@ -41,6 +41,14 @@ const LineOrder = () => {
     const [availableCoupons, setAvailableCoupons] = useState([]);
     const [selectedCoupon, setSelectedCoupon] = useState(null);
 
+    // Options Modal State
+    const [showOptionsModal, setShowOptionsModal] = useState(false);
+    const [selectedProductForOptions, setSelectedProductForOptions] = useState(null);
+    const [productOptions, setProductOptions] = useState([]);
+    const [selectedOptions, setSelectedOptions] = useState([]);
+    const [optionQuantity, setOptionQuantity] = useState(1);
+    const [loadingOptions, setLoadingOptions] = useState(false);
+
     // Initialize LIFF
     useEffect(() => {
         const initLiff = async () => {
@@ -138,27 +146,86 @@ const LineOrder = () => {
         loadData();
     }, []);
 
-    // Cart Functions
-    const addToCart = (item) => {
-        setCart(prev => {
-            const existing = prev.find(i => i.id === item.id);
-            if (existing) {
-                return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+    // Cart Functions - Handle product with options
+    const handleProductClick = async (item) => {
+        if (!item.is_available) return;
+
+        // Check if product has options
+        setLoadingOptions(true);
+        try {
+            const res = await fetch(`/api/products/${item.id}/options`);
+            const options = await res.json();
+
+            if (options && options.length > 0) {
+                // Show options modal
+                setSelectedProductForOptions(item);
+                setProductOptions(options);
+                setSelectedOptions([]);
+                setOptionQuantity(1);
+                setShowOptionsModal(true);
+            } else {
+                // No options, add directly to cart
+                addToCartDirect(item, []);
             }
-            return [...prev, { ...item, quantity: 1 }];
+        } catch (err) {
+            console.error('Failed to load options:', err);
+            addToCartDirect(item, []);
+        }
+        setLoadingOptions(false);
+    };
+
+    const addToCartDirect = (item, options = [], qty = 1) => {
+        const optionsTotal = options.reduce((sum, o) => sum + (parseFloat(o.price_modifier) || 0), 0);
+        const cartKey = `${item.id}-${options.map(o => o.id).sort().join('-')}`;
+
+        const itemWithOptions = {
+            ...item,
+            cartKey,
+            options: options,
+            unitPrice: parseFloat(item.price) + optionsTotal,
+            optionsLabel: options.length > 0 ? options.map(o => o.name).join(', ') : ''
+        };
+
+        setCart(prev => {
+            const existing = prev.find(i => i.cartKey === cartKey);
+            if (existing) {
+                return prev.map(i => i.cartKey === cartKey ? { ...i, quantity: i.quantity + qty } : i);
+            }
+            return [...prev, { ...itemWithOptions, quantity: qty }];
         });
     };
 
-    const updateQuantity = (itemId, delta) => {
+    const confirmAddWithOptions = () => {
+        if (selectedProductForOptions) {
+            addToCartDirect(selectedProductForOptions, selectedOptions, optionQuantity);
+            setShowOptionsModal(false);
+            setSelectedProductForOptions(null);
+            setProductOptions([]);
+            setSelectedOptions([]);
+            setOptionQuantity(1);
+        }
+    };
+
+    const toggleOption = (option) => {
+        setSelectedOptions(prev => {
+            const exists = prev.find(o => o.id === option.id);
+            if (exists) {
+                return prev.filter(o => o.id !== option.id);
+            }
+            return [...prev, option];
+        });
+    };
+
+    const updateQuantity = (cartKey, delta) => {
         setCart(prev => prev.map(item => {
-            if (item.id === itemId) {
+            if (item.cartKey === cartKey) {
                 return { ...item, quantity: Math.max(0, item.quantity + delta) };
             }
             return item;
         }).filter(item => item.quantity > 0));
     };
 
-    const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const cartTotal = cart.reduce((sum, item) => sum + ((item.unitPrice || item.price) * item.quantity), 0);
 
     // Submit Order
     const submitOrder = async () => {
@@ -206,8 +273,12 @@ const LineOrder = () => {
                     items: finalCart.map(item => ({
                         id: item.id,
                         name: item.name,
+                        product_name: item.name, // Added for KDS consistency
                         price: item.price,
-                        quantity: item.quantity
+                        unitPrice: item.unitPrice || item.price,
+                        quantity: item.quantity,
+                        options: item.options || [],
+                        optionsLabel: item.optionsLabel || ''
                     })),
                     totalAmount: finalTotal,
                     note: customerInfo.note
@@ -634,12 +705,12 @@ const LineOrder = () => {
                         {/* Menu Grid */}
                         <div className="grid grid-cols-2 gap-4 mb-24">
                             {menuItems.filter(i => i.category_id === selectedCategory).map(item => {
-                                const inCart = cart.find(c => c.id === item.id);
+                                const inCartCount = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.quantity, 0);
                                 return (
                                     <div
                                         key={item.id}
-                                        onClick={() => item.is_available && addToCart(item)}
-                                        className={`tasty-card p-0 overflow-hidden group transition-all ${!item.is_available ? 'opacity-80 cursor-not-allowed grayscale' : 'hover:scale-[1.02] active:scale-95'}`}
+                                        onClick={() => handleProductClick(item)}
+                                        className={`tasty-card p-0 overflow-hidden group transition-all ${!item.is_available ? 'opacity-80 cursor-not-allowed grayscale' : 'hover:scale-[1.02] active:scale-95'} ${loadingOptions ? 'pointer-events-none' : ''}`}
                                     >
                                         <div className="aspect-square bg-slate-100 relative overflow-hidden">
                                             {item.image ? (
@@ -656,9 +727,9 @@ const LineOrder = () => {
                                                 </div>
                                             )}
 
-                                            {inCart && (
+                                            {inCartCount > 0 && (
                                                 <div className="absolute top-3 right-3 w-10 h-10 bg-orange-500 text-white rounded-2xl flex items-center justify-center font-black shadow-xl ring-4 ring-orange-500/20 animate-bounce-subtle">
-                                                    {inCart.quantity}
+                                                    {inCartCount}
                                                 </div>
                                             )}
                                         </div>
@@ -775,17 +846,20 @@ const LineOrder = () => {
 
                             <div className="space-y-4 max-h-[300px] overflow-y-auto no-scrollbar">
                                 {cart.map(item => (
-                                    <div key={item.id} className="flex justify-between items-center group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center font-black text-orange-500 border border-slate-100">
+                                    <div key={item.cartKey || item.id} className="flex justify-between items-start group">
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center font-black text-orange-500 border border-slate-100 flex-shrink-0">
                                                 {item.quantity}
                                             </div>
                                             <div>
                                                 <p className="font-bold text-slate-800 leading-tight">{item.name}</p>
-                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">฿{item.price?.toLocaleString()} each</p>
+                                                {item.optionsLabel && (
+                                                    <p className="text-[10px] text-orange-500 font-bold mt-0.5">+ {item.optionsLabel}</p>
+                                                )}
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">฿{(item.unitPrice || item.price)?.toLocaleString()} each</p>
                                             </div>
                                         </div>
-                                        <p className="font-heading font-black text-slate-900 text-lg">฿{(item.price * item.quantity).toLocaleString()}</p>
+                                        <p className="font-heading font-black text-slate-900 text-lg">฿{((item.unitPrice || item.price) * item.quantity).toLocaleString()}</p>
                                     </div>
                                 ))}
                             </div>
@@ -1023,6 +1097,103 @@ const LineOrder = () => {
                     border-color: rgba(249, 115, 22, 0.2);
                 }
             `}</style>
+
+            {/* Options Modal */}
+            {showOptionsModal && selectedProductForOptions && (
+                <div className="fixed inset-0 bg-black/60 z-[200] flex items-end justify-center backdrop-blur-sm" onClick={() => setShowOptionsModal(false)}>
+                    <div
+                        className="bg-white rounded-t-[40px] w-full max-w-lg max-h-[85vh] overflow-hidden animate-slide-up"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="p-6 border-b border-slate-100 sticky top-0 bg-white z-10">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-xl font-heading font-black text-slate-900">{selectedProductForOptions.name}</h3>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">เลือกเพิ่มเติม / Add Options</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowOptionsModal(false)}
+                                    className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Options List */}
+                        <div className="p-6 space-y-3 overflow-y-auto max-h-[50vh]">
+                            {productOptions.length === 0 ? (
+                                <div className="text-center py-10 text-slate-400">
+                                    <span className="text-4xl mb-4 block">📭</span>
+                                    <p className="font-bold">ไม่มี Option สำหรับสินค้านี้</p>
+                                </div>
+                            ) : (
+                                productOptions.map(opt => {
+                                    const isSelected = selectedOptions.some(o => o.id === opt.id);
+                                    return (
+                                        <button
+                                            key={opt.id}
+                                            onClick={() => toggleOption(opt)}
+                                            className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${isSelected
+                                                ? 'bg-orange-50 border-orange-500 ring-4 ring-orange-500/10'
+                                                : 'bg-slate-50 border-slate-100 hover:border-orange-200'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-orange-500 border-orange-500' : 'border-slate-300'
+                                                    }`}>
+                                                    {isSelected && <span className="text-white text-xs">✓</span>}
+                                                </div>
+                                                <span className="font-bold text-slate-800">{opt.name}</span>
+                                            </div>
+                                            <span className={`font-black ${opt.price_modifier > 0 ? 'text-orange-500' : 'text-slate-400'}`}>
+                                                {opt.price_modifier > 0 ? `+฿${opt.price_modifier}` : 'ฟรี'}
+                                            </span>
+                                        </button>
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* Quantity Selector */}
+                        <div className="p-4 border-t border-slate-100 bg-slate-50">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 text-center">จำนวน</p>
+                            <div className="flex items-center justify-center gap-4">
+                                <button
+                                    onClick={() => setOptionQuantity(q => Math.max(1, q - 1))}
+                                    className="w-10 h-10 bg-white rounded-xl shadow border border-slate-200 flex items-center justify-center text-xl font-bold text-slate-600"
+                                >
+                                    -
+                                </button>
+                                <span className="text-2xl font-bold text-slate-900 w-12 text-center">{optionQuantity}</span>
+                                <button
+                                    onClick={() => setOptionQuantity(q => Math.min(99, q + 1))}
+                                    className="w-10 h-10 bg-white rounded-xl shadow border border-slate-200 flex items-center justify-center text-xl font-bold text-slate-600"
+                                >
+                                    +
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 border-t border-slate-100 bg-slate-50/50">
+                            <div className="flex items-center justify-between mb-4">
+                                <span className="text-sm font-bold text-slate-500">ราคารวม</span>
+                                <span className="text-2xl font-heading font-black text-orange-500">
+                                    ฿{((parseFloat(selectedProductForOptions.price) + selectedOptions.reduce((s, o) => s + (parseFloat(o.price_modifier) || 0), 0)) * optionQuantity).toLocaleString()}
+                                </span>
+                            </div>
+                            <button
+                                onClick={confirmAddWithOptions}
+                                className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-heading font-black text-lg shadow-xl shadow-orange-500/30 transition-all active:scale-95"
+                            >
+                                ✓ เพิ่ม {optionQuantity} รายการ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

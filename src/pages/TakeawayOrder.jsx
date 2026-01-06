@@ -15,6 +15,14 @@ const TakeawayOrder = () => {
     const [submitting, setSubmitting] = useState(false);
     const [shopName, setShopName] = useState('Tasty Station');
 
+    // Option Modal State
+    const [showOptionsModal, setShowOptionsModal] = useState(false);
+    const [selectedProductForOptions, setSelectedProductForOptions] = useState(null);
+    const [productOptions, setProductOptions] = useState([]);
+    const [selectedOptions, setSelectedOptions] = useState([]);
+    const [optionQuantity, setOptionQuantity] = useState(1);
+    const [loadingOptions, setLoadingOptions] = useState(false);
+
     useEffect(() => {
         loadMenu();
         loadSettings();
@@ -49,19 +57,76 @@ const TakeawayOrder = () => {
         }
     };
 
-    const addToCart = (item) => {
-        setCart(prev => {
-            const existing = prev.find(i => i.id === item.id);
-            if (existing) {
-                return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+    // Cart Functions - Handle product with options
+    const handleProductClick = async (item) => {
+        if (!item.is_available) return;
+
+        setLoadingOptions(true);
+        try {
+            const res = await fetch(`/api/products/${item.id}/options`);
+            const options = await res.json();
+
+            if (options && options.length > 0) {
+                setSelectedProductForOptions(item);
+                setProductOptions(options);
+                setSelectedOptions([]);
+                setOptionQuantity(1);
+                setShowOptionsModal(true);
+            } else {
+                addToCartDirect(item, [], 1);
             }
-            return [...prev, { ...item, quantity: 1 }];
+        } catch (err) {
+            console.error('Failed to load options:', err);
+            addToCartDirect(item, [], 1);
+        }
+        setLoadingOptions(false);
+    };
+
+    const addToCartDirect = (item, options = [], qty = 1) => {
+        const optionsTotal = options.reduce((sum, o) => sum + (parseFloat(o.price_modifier) || 0), 0);
+        const cartKey = `${item.id}-${options.map(o => o.id).sort().join('-')}`;
+
+        const itemWithOptions = {
+            ...item,
+            cartKey,
+            options: options,
+            unitPrice: parseFloat(item.price) + optionsTotal,
+            optionsLabel: options.length > 0 ? options.map(o => o.name).join(', ') : ''
+        };
+
+        setCart(prev => {
+            const existing = prev.find(i => i.cartKey === cartKey);
+            if (existing) {
+                return prev.map(i => i.cartKey === cartKey ? { ...i, quantity: i.quantity + qty } : i);
+            }
+            return [...prev, { ...itemWithOptions, quantity: qty }];
         });
     };
 
-    const updateQuantity = (itemId, delta) => {
+    const confirmAddWithOptions = () => {
+        if (selectedProductForOptions) {
+            addToCartDirect(selectedProductForOptions, selectedOptions, optionQuantity);
+            setShowOptionsModal(false);
+            setSelectedProductForOptions(null);
+            setProductOptions([]);
+            setSelectedOptions([]);
+            setOptionQuantity(1);
+        }
+    };
+
+    const toggleOption = (option) => {
+        setSelectedOptions(prev => {
+            const exists = prev.find(o => o.id === option.id);
+            if (exists) {
+                return prev.filter(o => o.id !== option.id);
+            }
+            return [...prev, option];
+        });
+    };
+
+    const updateQuantity = (cartKey, delta) => {
         setCart(prev => prev.map(item => {
-            if (item.id === itemId) {
+            if (item.cartKey === cartKey) {
                 const newQty = item.quantity + delta;
                 return newQty > 0 ? { ...item, quantity: newQty } : null;
             }
@@ -69,7 +134,7 @@ const TakeawayOrder = () => {
         }).filter(Boolean));
     };
 
-    const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const totalAmount = cart.reduce((sum, item) => sum + ((item.unitPrice || item.price) * item.quantity), 0);
 
     const handleSubmitOrder = async () => {
         if (cart.length === 0) return alert('กรุณาเลือกเมนูก่อน');
@@ -86,7 +151,10 @@ const TakeawayOrder = () => {
                         product_id: item.id,
                         product_name: item.name,
                         price: item.price,
-                        quantity: item.quantity
+                        unitPrice: item.unitPrice || item.price,
+                        quantity: item.quantity,
+                        options: item.options || [],
+                        optionsLabel: item.optionsLabel || ''
                     })),
                     total_amount: totalAmount
                 })
@@ -217,30 +285,35 @@ const TakeawayOrder = () => {
                 {/* Menu Grid */}
                 <div className="flex-1 p-2 pb-32">
                     <div className="grid grid-cols-2 gap-1.5">
-                        {Array.isArray(menuItems) && menuItems.filter(i => !selectedCategory || i.category_id === selectedCategory).map(item => (
-                            <div key={item.id} className="bg-white rounded-xl p-2 shadow-sm">
-                                <div className="aspect-[4/3] rounded-lg overflow-hidden mb-1.5 bg-slate-100">
-                                    {item.image ? (
-                                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-xl opacity-30">🍽️</div>
-                                    )}
+                        {Array.isArray(menuItems) && menuItems.filter(i => !selectedCategory || i.category_id === selectedCategory).map(item => {
+                            const inCartCount = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.quantity, 0);
+                            return (
+                                <div key={item.id} className={`bg-white rounded-xl p-2 shadow-sm ${loadingOptions ? 'pointer-events-none opacity-70' : ''}`}>
+                                    <div className="aspect-[4/3] rounded-lg overflow-hidden mb-1.5 bg-slate-100 relative">
+                                        {item.image ? (
+                                            <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-xl opacity-30">🍽️</div>
+                                        )}
+                                        {inCartCount > 0 && (
+                                            <div className="absolute top-1 right-1 w-6 h-6 bg-orange-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow">
+                                                {inCartCount}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <h4 className="text-[11px] font-bold text-slate-800 line-clamp-1 leading-tight mb-1">{item.name}</h4>
+                                    <div className="flex items-center justify-between mt-auto">
+                                        <span className="text-[11px] font-bold text-orange-500">฿{item.price}</span>
+                                        <button
+                                            onClick={() => handleProductClick(item)}
+                                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-orange-500 text-white font-bold text-sm shadow-sm hover:bg-orange-600 transition-colors"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
                                 </div>
-                                <h4 className="text-[11px] font-bold text-slate-800 line-clamp-1 leading-tight mb-1">{item.name}</h4>
-                                <div className="flex items-center justify-between mt-auto">
-                                    <span className="text-[11px] font-bold text-orange-500">฿{item.price}</span>
-                                    {cart.find(c => c.id === item.id) ? (
-                                        <div className="flex items-center gap-1 bg-orange-50 rounded-lg p-0.5">
-                                            <button onClick={() => updateQuantity(item.id, -1)} className="w-5 h-5 flex items-center justify-center text-orange-500 font-bold text-xs">-</button>
-                                            <span className="w-4 text-center text-[10px] font-bold text-orange-600">{cart.find(c => c.id === item.id).quantity}</span>
-                                            <button onClick={() => updateQuantity(item.id, 1)} className="w-5 h-5 flex items-center justify-center text-orange-500 font-bold text-xs">+</button>
-                                        </div>
-                                    ) : (
-                                        <button onClick={() => addToCart(item)} className="w-6 h-6 flex items-center justify-center rounded-lg bg-orange-500 text-white font-bold text-sm shadow-sm">+</button>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 </div>
 
@@ -259,6 +332,100 @@ const TakeawayOrder = () => {
                             >
                                 {submitting ? 'ส่ง...' : '✓ ยืนยันสั่ง'}
                             </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Options Modal with Quantity Selector */}
+                {showOptionsModal && selectedProductForOptions && (
+                    <div className="fixed inset-0 bg-black/60 z-[200] flex items-end justify-center" onClick={() => setShowOptionsModal(false)}>
+                        <div
+                            className="bg-white rounded-t-3xl w-full max-w-md max-h-[80vh] overflow-hidden"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            {/* Header */}
+                            <div className="p-4 border-b border-slate-100 bg-white sticky top-0 z-10">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h3 className="text-lg font-bold text-slate-900">{selectedProductForOptions.name}</h3>
+                                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">เลือกเพิ่มเติม</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowOptionsModal(false)}
+                                        className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-400"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Options List */}
+                            <div className="p-4 space-y-2 overflow-y-auto max-h-[40vh]">
+                                {productOptions.length === 0 ? (
+                                    <p className="text-center text-slate-400 py-6">ไม่มี Option</p>
+                                ) : (
+                                    productOptions.map(opt => {
+                                        const isSelected = selectedOptions.some(o => o.id === opt.id);
+                                        return (
+                                            <button
+                                                key={opt.id}
+                                                onClick={() => toggleOption(opt)}
+                                                className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${isSelected
+                                                    ? 'bg-orange-50 border-orange-500'
+                                                    : 'bg-slate-50 border-slate-100'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-orange-500 border-orange-500' : 'border-slate-300'
+                                                        }`}>
+                                                        {isSelected && <span className="text-white text-[10px]">✓</span>}
+                                                    </div>
+                                                    <span className="font-bold text-sm text-slate-800">{opt.name}</span>
+                                                </div>
+                                                <span className={`font-bold text-sm ${opt.price_modifier > 0 ? 'text-orange-500' : 'text-slate-400'}`}>
+                                                    {opt.price_modifier > 0 ? `+฿${opt.price_modifier}` : 'ฟรี'}
+                                                </span>
+                                            </button>
+                                        );
+                                    })
+                                )}
+                            </div>
+
+                            {/* Quantity Selector */}
+                            <div className="p-4 border-t border-slate-100 bg-slate-50">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 text-center">จำนวน</p>
+                                <div className="flex items-center justify-center gap-4">
+                                    <button
+                                        onClick={() => setOptionQuantity(q => Math.max(1, q - 1))}
+                                        className="w-10 h-10 bg-white rounded-xl shadow border border-slate-200 flex items-center justify-center text-xl font-bold text-slate-600"
+                                    >
+                                        -
+                                    </button>
+                                    <span className="text-2xl font-bold text-slate-900 w-12 text-center">{optionQuantity}</span>
+                                    <button
+                                        onClick={() => setOptionQuantity(q => Math.min(99, q + 1))}
+                                        className="w-10 h-10 bg-white rounded-xl shadow border border-slate-200 flex items-center justify-center text-xl font-bold text-slate-600"
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="p-4 border-t border-slate-100">
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="text-sm text-slate-500">ราคารวม</span>
+                                    <span className="text-xl font-bold text-orange-500">
+                                        ฿{((parseFloat(selectedProductForOptions.price) + selectedOptions.reduce((s, o) => s + (parseFloat(o.price_modifier) || 0), 0)) * optionQuantity).toLocaleString()}
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={confirmAddWithOptions}
+                                    className="w-full py-3 bg-orange-500 text-white rounded-xl font-bold shadow-lg shadow-orange-500/30 transition-all active:scale-95"
+                                >
+                                    ✓ เพิ่ม {optionQuantity} รายการ
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
