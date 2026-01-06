@@ -35,6 +35,8 @@ const LineOrder = () => {
 
     // LIFF State
     const [liffError, setLiffError] = useState(null);
+    const [liffReady, setLiffReady] = useState(false);
+    const [liffProfile, setLiffProfile] = useState(null);
     const [loyaltyCustomer, setLoyaltyCustomer] = useState(null);
     const [availableCoupons, setAvailableCoupons] = useState([]);
     const [selectedCoupon, setSelectedCoupon] = useState(null);

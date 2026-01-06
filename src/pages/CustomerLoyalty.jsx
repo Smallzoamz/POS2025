@@ -74,7 +74,8 @@ const CustomerLoyalty = () => {
         ]);
         setHistory(fullProfile.transactions || []);
         setCoupons(userCoupons || []);
-        setPoints(fullProfile.points || 0);
+        // API returns { customer: {...}, transactions: [...] }, so access customer.points
+        setPoints(fullProfile.customer?.points || 0);
     };
 
     const handleLogin = () => {
