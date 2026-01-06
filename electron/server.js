@@ -189,6 +189,113 @@ async function startServer() {
         }
     };
 
+    // --- STOCK MANAGEMENT HELPER ---
+    /**
+     * Centralized stock deduction logic for Ingredients and Product Options.
+     * @param {Array} items - Array of order items with options
+     * @param {Object} dbClient - Database client (pool or transaction client)
+     */
+    const processStockDeduction = async (items, dbClient) => {
+        const ingredientsNeeded = new Map(); // ingredient_id -> total_needed
+        const optionsToDeductStock = []; // { option_id, quantity }
+
+        for (const item of items) {
+            const productId = item.product_id || item.id;
+            const orderQty = item.quantity || 1;
+
+            // 1. Base Product Recipe
+            const recipeRes = await dbClient.query(
+                "SELECT ingredient_id, quantity_used FROM product_ingredients WHERE product_id = $1",
+                [productId]
+            );
+            for (const r of recipeRes.rows) {
+                const totalForThisItem = parseFloat(r.quantity_used) * orderQty;
+                const current = ingredientsNeeded.get(r.ingredient_id) || 0;
+                ingredientsNeeded.set(r.ingredient_id, current + totalForThisItem);
+            }
+
+            // 2. Options Recipes & Multipliers
+            const selectedOptions = item.options || item.selectedOptions || [];
+            if (selectedOptions.length > 0) {
+                for (const opt of selectedOptions) {
+                    const optId = opt.option_id || opt.id;
+
+                    // A. Fetch Option Data (for multiplier and stock tracking)
+                    const optDataRes = await dbClient.query(
+                        "SELECT recipe_multiplier, is_size_option FROM product_options WHERE id = $1",
+                        [optId]
+                    );
+                    const optData = optDataRes.rows[0];
+                    if (!optData) continue;
+
+                    const optMultiplier = parseFloat(optData.recipe_multiplier || 1.00);
+
+                    // B. Multiplier Logic (Adds to base consumption)
+                    if (optMultiplier > 1.0) {
+                        const extraMultiplier = optMultiplier - 1.0;
+                        for (const r of recipeRes.rows) {
+                            const extraForThisOption = (parseFloat(r.quantity_used) * extraMultiplier) * orderQty;
+                            const current = ingredientsNeeded.get(r.ingredient_id) || 0;
+                            ingredientsNeeded.set(r.ingredient_id, current + extraForThisOption);
+                        }
+                    }
+
+                    // C. Specific Option Recipe (Add-ons like Extra Cheese)
+                    const optRecipeRes = await dbClient.query(
+                        "SELECT ingredient_id, quantity_used FROM option_recipes WHERE option_id = $1",
+                        [optId]
+                    );
+                    for (const r of optRecipeRes.rows) {
+                        const totalForThisOption = parseFloat(r.quantity_used) * orderQty;
+                        const current = ingredientsNeeded.get(r.ingredient_id) || 0;
+                        ingredientsNeeded.set(r.ingredient_id, current + totalForThisOption);
+                    }
+
+                    // D. Direct Stock Tracking for Size Options
+                    if (optData.is_size_option) {
+                        optionsToDeductStock.push({ id: optId, quantity: orderQty });
+                    }
+                }
+            }
+        }
+
+        // 3. Verify Availability
+        // A. Ingredients
+        for (const [ingId, needed] of ingredientsNeeded.entries()) {
+            const ingRes = await dbClient.query("SELECT name, total_quantity, unit FROM ingredients WHERE id = $1", [ingId]);
+            const ing = ingRes.rows[0];
+
+            if (!ing) throw new Error(`Ingredient ID ${ingId} not found`);
+
+            if (parseFloat(ing.total_quantity) < needed) {
+                throw new Error(`วัตถุดิบ '${ing.name}' ไม่พอ (ขาด ${needed - parseFloat(ing.total_quantity)} ${ing.unit || 'units'})`);
+            }
+        }
+
+        // B. Size Options
+        for (const optToDeduct of optionsToDeductStock) {
+            const optRes = await dbClient.query("SELECT name, stock_quantity, is_size_option FROM product_options WHERE id = $1", [optToDeduct.id]);
+            const opt = optRes.rows[0];
+            if (opt && opt.is_size_option && opt.stock_quantity < optToDeduct.quantity) {
+                throw new Error(`สินค้า '${opt.name}' ไม่พอ (มีเพียง ${opt.stock_quantity} ชิ้น)`);
+            }
+        }
+
+        // 4. Perform Deduction
+        // A. Ingredients
+        for (const [ingId, needed] of ingredientsNeeded.entries()) {
+            await dbClient.query("UPDATE ingredients SET total_quantity = total_quantity - $1 WHERE id = $2", [needed, ingId]);
+        }
+
+        // B. Size Options
+        for (const optToDeduct of optionsToDeductStock) {
+            await dbClient.query(
+                "UPDATE product_options SET stock_quantity = stock_quantity - $1 WHERE id = $2 AND is_size_option = TRUE",
+                [optToDeduct.quantity, optToDeduct.id]
+            );
+        }
+    };
+
     app.get('/api/notifications', async (req, res) => {
         try {
             const result = await query('SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100');
@@ -553,90 +660,7 @@ async function startServer() {
             await client.query("UPDATE tables SET status = 'occupied' WHERE name = $1", [tableName]);
 
             // 1.5 CHECK STOCK and DECREMENT (INGREDIENTS & OPTIONS)
-            const ingredientsNeeded = new Map(); // ingredient_id -> total_needed
-            const optionsToDeductStock = []; // { option_id, quantity }
-
-            for (const item of items) {
-                const orderQty = item.quantity || 1;
-
-                // A. Base Product Recipe
-                const recipeRes = await client.query(
-                    "SELECT ingredient_id, quantity_used FROM product_ingredients WHERE product_id = $1",
-                    [item.id]
-                );
-                for (const r of recipeRes.rows) {
-                    const totalForThisItem = parseFloat(r.quantity_used) * orderQty;
-                    const current = ingredientsNeeded.get(r.ingredient_id) || 0;
-                    ingredientsNeeded.set(r.ingredient_id, current + totalForThisItem);
-                }
-
-                // B. Options Recipes (Add-ons like Fried Egg)
-                const selectedOptions = item.options || item.selectedOptions || [];
-                if (selectedOptions.length > 0) {
-                    for (const opt of selectedOptions) {
-                        // B0. Handle Multiplier (e.g. "Special" menu adds 3% to all ingredients)
-                        // Fetch the actual option to get its recipe_multiplier
-                        const optDataRes = await client.query("SELECT recipe_multiplier FROM product_options WHERE id = $1", [opt.id]);
-                        const optMultiplier = parseFloat(optDataRes.rows[0]?.recipe_multiplier || 1.00);
-
-                        if (optMultiplier > 1.0) {
-                            const extraMultiplier = optMultiplier - 1.0;
-                            // Add extra ingredient consumption based on base recipe
-                            for (const r of recipeRes.rows) {
-                                const extraForThisOption = (parseFloat(r.quantity_used) * extraMultiplier) * orderQty;
-                                const current = ingredientsNeeded.get(r.ingredient_id) || 0;
-                                ingredientsNeeded.set(r.ingredient_id, current + extraForThisOption);
-                            }
-                        }
-
-                        // B1. Ingredient Recipe for Option (Specific added items like Fried Egg)
-                        const optRecipeRes = await client.query(
-                            "SELECT ingredient_id, quantity_used FROM option_recipes WHERE option_id = $1",
-                            [opt.id]
-                        );
-                        for (const r of optRecipeRes.rows) {
-                            const totalForThisOption = parseFloat(r.quantity_used) * orderQty;
-                            const current = ingredientsNeeded.get(r.ingredient_id) || 0;
-                            ingredientsNeeded.set(r.ingredient_id, current + totalForThisOption);
-                        }
-
-                        // B2. Stock Deduction for Size Options (Direct stock tracking on the option itself)
-                        // If it's a size option, we might want to deduct its specific stock
-                        optionsToDeductStock.push({ id: opt.id, quantity: orderQty });
-                    }
-                }
-            }
-
-            // Verify stock availability (Ingredients)
-            for (const [ingId, needed] of ingredientsNeeded.entries()) {
-                const ingRes = await client.query("SELECT name, total_quantity, unit FROM ingredients WHERE id = $1", [ingId]);
-                const ing = ingRes.rows[0];
-
-                if (!ing) throw new Error(`Ingredient ID ${ingId} not found`);
-
-                if (parseFloat(ing.total_quantity) < needed) {
-                    throw new Error(`วัตถุดิบ '${ing.name}' ไม่พอ (ขาด ${needed - parseFloat(ing.total_quantity)} ${ing.unit || 'units'})`);
-                }
-            }
-
-            // Verify stock availability (Options - specifically Size Options with stock)
-            for (const optToDeduct of optionsToDeductStock) {
-                const optRes = await client.query("SELECT name, stock_quantity, is_size_option FROM product_options WHERE id = $1", [optToDeduct.id]);
-                const opt = optRes.rows[0];
-                if (opt && opt.is_size_option && opt.stock_quantity < optToDeduct.quantity) {
-                    throw new Error(`สินค้า '${opt.name}' ไม่พอ (มีเพียง ${opt.stock_quantity} ชิ้น)`);
-                }
-            }
-
-            // Deduct stock (Ingredients)
-            for (const [ingId, needed] of ingredientsNeeded.entries()) {
-                await client.query("UPDATE ingredients SET total_quantity = total_quantity - $1 WHERE id = $2", [needed, ingId]);
-            }
-
-            // Deduct stock (Options)
-            for (const optToDeduct of optionsToDeductStock) {
-                await client.query("UPDATE product_options SET stock_quantity = stock_quantity - $1 WHERE id = $2 AND is_size_option = TRUE", [optToDeduct.quantity, optToDeduct.id]);
-            }
+            await processStockDeduction(items, client);
 
             // 2. Insert Items
             for (const item of items) {
@@ -2195,7 +2219,10 @@ async function startServer() {
     // PUBLIC: Create LINE Order (Customer Submission)
     app.post('/api/public/line-orders', async (req, res) => {
         console.log('📦 Incoming LINE Order:', req.body.customerName, '| Type:', req.body.orderType, '| UserID:', req.body.lineUserId);
+        const client = await pool.connect();
         try {
+            await client.query('BEGIN');
+
             const {
                 orderType, customerName, customerPhone, customerAddress,
                 latitude, longitude, reservationDate, reservationTime,
@@ -2205,9 +2232,10 @@ async function startServer() {
 
             // Validate minimum order for delivery
             if (orderType === 'delivery') {
-                const settingsRes = await query("SELECT value FROM settings WHERE key = 'minimum_delivery_order'");
+                const settingsRes = await client.query("SELECT value FROM settings WHERE key = 'minimum_delivery_order'");
                 const minOrder = parseFloat(settingsRes.rows[0]?.value) || 100;
                 if (totalAmount < minOrder) {
+                    await client.query('ROLLBACK');
                     return res.status(400).json({ error: `ยอดสั่งซื้อขั้นต่ำสำหรับ Delivery คือ ฿${minOrder}` });
                 }
             }
@@ -2215,7 +2243,7 @@ async function startServer() {
             // Lookup customer_id automatically if lineUserId provided
             let customerId = null;
             if (lineUserId) {
-                const customerLookup = await query("SELECT id FROM loyalty_customers WHERE line_user_id = $1", [lineUserId]);
+                const customerLookup = await client.query("SELECT id FROM loyalty_customers WHERE line_user_id = $1", [lineUserId]);
                 if (customerLookup.rowCount > 0) {
                     customerId = customerLookup.rows[0].id;
                 }
@@ -2229,16 +2257,12 @@ async function startServer() {
 
             // 1. Associate Phone with LINE Account (Loyalty)
             if (lineUserId && customerPhone) {
-                try {
-                    // Update phone if it's null or empty
-                    await query(`
-                        UPDATE loyalty_customers 
-                        SET phone = $1, updated_at = CURRENT_TIMESTAMP 
-                        WHERE line_user_id = $2 AND (phone IS NULL OR phone = '')
-                    `, [customerPhone, lineUserId]);
-                } catch (phoneErr) {
-                    console.error('Error associating phone with LINE user:', phoneErr);
-                }
+                // Update phone if it's null or empty
+                await client.query(`
+                    UPDATE loyalty_customers 
+                    SET phone = $1, updated_at = CURRENT_TIMESTAMP 
+                    WHERE line_user_id = $2 AND (phone IS NULL OR phone = '')
+                `, [customerPhone, lineUserId]);
             }
 
             // 2. Coupon Processing
@@ -2247,41 +2271,36 @@ async function startServer() {
             const { couponCode } = req.body;
 
             if (couponCode && customerId) {
-                try {
-                    // Verify coupon is active and belongs to this customer
-                    const couponCheck = await query(`
-                        SELECT c.*, p.title, p.description
-                        FROM loyalty_coupons c
-                        JOIN loyalty_promotions p ON c.promotion_id = p.id
-                        WHERE c.coupon_code = $1 AND c.customer_id = $2 AND c.status = 'active'
-                    `, [couponCode.toUpperCase(), customerId]);
+                // Verify coupon is active and belongs to this customer
+                const couponCheck = await client.query(`
+                    SELECT c.*, p.title, p.description
+                    FROM loyalty_coupons c
+                    JOIN loyalty_promotions p ON c.promotion_id = p.id
+                    WHERE c.coupon_code = $1 AND c.customer_id = $2 AND c.status = 'active'
+                `, [couponCode.toUpperCase(), customerId]);
 
-                    if (couponCheck.rowCount > 0) {
-                        const coupon = couponCheck.rows[0];
-                        // Apply discount logic here (for now we assume fixed value or percentage based on promo title/desc)
-                        // In a real system, you'd have a 'discount_value' column. 
-                        // Let's check for "ลด X บาท" in title
-                        const match = coupon.title.match(/ลด\s*(\d+)/);
-                        if (match) {
-                            couponDiscount = parseInt(match[1]);
-                        } else if (coupon.title.includes('%')) {
-                            const pctMatch = coupon.title.match(/(\d+)%/);
-                            if (pctMatch) {
-                                couponDiscount = Math.floor(totalAmount * (parseInt(pctMatch[1]) / 100));
-                            }
+                if (couponCheck.rowCount > 0) {
+                    const coupon = couponCheck.rows[0];
+                    const match = coupon.title.match(/ลด\s*(\d+)/);
+                    if (match) {
+                        couponDiscount = parseInt(match[1]);
+                    } else if (coupon.title.includes('%')) {
+                        const pctMatch = coupon.title.match(/(\d+)%/);
+                        if (pctMatch) {
+                            couponDiscount = Math.floor(totalAmount * (parseInt(pctMatch[1]) / 100));
                         }
-
-                        if (couponDiscount > 0) {
-                            finalTotal = Math.max(0, totalAmount - couponDiscount);
-                            console.log(`🎟️ Applied Coupon: ${couponCode} (-฿${couponDiscount})`);
-                        }
-
-                        // Mark coupon as used (will be updated further after order is inserted)
                     }
-                } catch (couponErr) {
-                    console.error('Coupon verification error:', couponErr);
+
+                    if (couponDiscount > 0) {
+                        finalTotal = Math.max(0, totalAmount - couponDiscount);
+                        console.log(`🎟️ Applied Coupon: ${couponCode} (-฿${couponDiscount})`);
+                    }
                 }
             }
+
+            // 2.5 STOCK DEDUCTION (Centralized)
+            // This will throw if stock is insufficient
+            await processStockDeduction(items, client);
 
             // Generate tracking token for delivery (Case-insensitive check)
             const trackingToken = (orderType && orderType.toLowerCase() === 'delivery')
@@ -2292,7 +2311,7 @@ async function startServer() {
             const itemsJson = JSON.stringify(items || []);
 
             // Insert order with correct column names from actual schema
-            const orderRes = await query(`
+            const orderRes = await client.query(`
                 INSERT INTO line_orders 
                 (order_type, customer_name, customer_phone, customer_address, 
                  total_amount, status, note, tracking_token, items_json,
@@ -2325,32 +2344,18 @@ async function startServer() {
 
             // 3. Mark coupon as used and link to order
             if (couponCode && couponDiscount > 0) {
-                await query(`
+                await client.query(`
                     UPDATE loyalty_coupons 
                     SET status = 'used', used_at = CURRENT_TIMESTAMP, line_order_id = $1 
                     WHERE coupon_code = $2 AND customer_id = $3
                 `, [orderId, couponCode.toUpperCase(), customerId]);
             }
 
-            // Trigger LINE Notification (Async)
-            if (lineUserId) {
-                console.log(`🔔 Triggering LINE message for User: ${lineUserId}`);
-                query("SELECT * FROM line_orders WHERE id = $1", [orderId]).then(fullOrderRes => {
-                    if (fullOrderRes.rows[0]) {
-                        sendLineFlexMessage(lineUserId, fullOrderRes.rows[0]);
-                    } else {
-                        console.error('❌ Could not find order for notification:', orderId);
-                    }
-                }).catch(err => console.error('Error fetching order for LINE notification:', err));
-            } else {
-                console.log('⚠️ No lineUserId found, skipping LINE notification');
-            }
-
             // Also insert to line_order_items for backwards compatibility
             if (items && items.length > 0) {
                 for (const item of items) {
                     try {
-                        await query(`
+                        await client.query(`
                             INSERT INTO line_order_items (line_order_id, product_id, product_name, quantity, price)
                             VALUES ($1, $2, $3, $4, $5)
                         `, [orderId, item.id, item.name, item.quantity, item.price]);
@@ -2360,12 +2365,21 @@ async function startServer() {
                 }
             }
 
+            await client.query('COMMIT');
+
+            // Trigger LINE Notification (Async - outside transaction)
+            if (lineUserId) {
+                console.log(`🔔 Triggering LINE message for User: ${lineUserId}`);
+                query("SELECT * FROM line_orders WHERE id = $1", [orderId]).then(fullOrderRes => {
+                    if (fullOrderRes.rows[0]) {
+                        sendLineFlexMessage(lineUserId, fullOrderRes.rows[0]);
+                    }
+                }).catch(err => console.error('Error fetching order for LINE notification:', err));
+            }
+
             // Emit socket event
-            // Excludes reservations without items from the kitchen display.
             if (orderType !== 'reservation' || (items && items.length > 0)) {
                 io.emit('new-line-order', { orderId, orderType, customerName, totalAmount, depositAmount });
-
-                // Create persistent notification for LINE orders
                 createNotification(
                     `ออเดอร์ LINE ใหม่ - ${customerName}`,
                     `ประเภท: ${orderType === 'delivery' ? '🚚 ส่งถึงบ้าน' : (orderType === 'takeaway' ? '🛍️ รับเองที่ร้าน' : '📅 จองโต๊ะ')} (ยอด: ${totalAmount}.-)`,
@@ -2376,8 +2390,11 @@ async function startServer() {
 
             res.json({ success: true, orderId, trackingToken, depositAmount });
         } catch (err) {
+            await client.query('ROLLBACK');
             console.error('Public line-orders error:', err);
             res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
         }
     });
 
@@ -2395,13 +2412,20 @@ async function startServer() {
 
     // PUBLIC: Register Takeaway Order (Customers ordering from QR)
     app.post('/api/public/takeaway-orders', async (req, res) => {
+        const client = await pool.connect();
         try {
+            await client.query('BEGIN');
+
             const {
                 customer_name, customer_phone, items, total_amount
             } = req.body;
 
-            // Insert into main orders table as 'takeaway'
-            const orderRes = await query(`
+            // 1. STOCK DEDUCTION (Centralized)
+            // Expects items to have product_id/id and options/selectedOptions
+            await processStockDeduction(items, client);
+
+            // 2. Insert into main orders table as 'takeaway'
+            const orderRes = await client.query(`
                 INSERT INTO orders 
                 (order_type, status, total_amount, subtotal, grand_total, customer_name, customer_phone)
                 VALUES ($1, 'cooking', $2, $2, $2, $3, $4)
@@ -2410,11 +2434,11 @@ async function startServer() {
 
             const orderId = orderRes.rows[0].id;
 
-            // Insert items
+            // 3. Insert items
             if (items && items.length > 0) {
                 for (const item of items) {
                     const finalPrice = item.unitPrice || item.price;
-                    const itemResult = await query(`
+                    const itemResult = await client.query(`
                         INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
                         VALUES ($1, $2, $3, $4, $5)
                         RETURNING id
@@ -2422,10 +2446,10 @@ async function startServer() {
 
                     const orderItemId = itemResult.rows[0].id;
 
-                    // Insert options
+                    // 4. Insert options
                     if (item.options && item.options.length > 0) {
                         for (const opt of item.options) {
-                            await query(
+                            await client.query(
                                 'INSERT INTO order_item_options (order_item_id, option_id, option_name, price_modifier) VALUES ($1, $2, $3, $4)',
                                 [orderItemId, opt.id, opt.name, opt.price_modifier || 0]
                             );
@@ -2434,10 +2458,10 @@ async function startServer() {
                 }
             }
 
-            // Emit socket event for kitchen
-            io.emit('new-order', { orderId, orderType: 'takeaway', customerName: customer_name });
+            await client.query('COMMIT');
 
-            // Create persistent notification
+            // 5. Success Notifications (Outside transaction)
+            io.emit('new-order', { orderId, orderType: 'takeaway', customerName: customer_name });
             createNotification(
                 `ออเดอร์ Takeaway ใหม่!`,
                 `ลูกค้าคุณ ${customer_name} สั่งอาหารกลับบ้าน (ยอด: ${total_amount}.-)`,
@@ -2447,8 +2471,11 @@ async function startServer() {
 
             res.json({ success: true, orderId });
         } catch (err) {
+            await client.query('ROLLBACK');
             console.error('Public takeaway-order error:', err);
             res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
         }
     });
 
