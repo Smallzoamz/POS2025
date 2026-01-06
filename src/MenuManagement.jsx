@@ -100,6 +100,20 @@ const MenuManagement = () => {
         }
     };
 
+    const handleToggleAvailability = async (product) => {
+        try {
+            const newStatus = !product.is_available;
+            // Optimistic update
+            setProducts(products.map(p => p.id === product.id ? { ...p, is_available: newStatus } : p));
+
+            await api.updateProduct(product.id, { is_available: newStatus });
+        } catch (error) {
+            console.error("Error toggling availability:", error);
+            // Rollback on error
+            loadData();
+        }
+    };
+
     const openCategoryModal = () => {
         setCategoryForm({ id: '', name: '', icon: '' });
         setShowCategoryModal(true);
@@ -198,6 +212,7 @@ const MenuManagement = () => {
                                             <tr className="bg-[#F8FAFC]">
                                                 <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Visual</th>
                                                 <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Asset Name & Category</th>
+                                                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Status</th>
                                                 <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Unit Value</th>
                                                 {isOwner && <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Actions</th>}
                                             </tr>
@@ -222,8 +237,21 @@ const MenuManagement = () => {
                                                                 {cat ? cat.name : p.category_id}
                                                             </span>
                                                         </td>
+                                                        <td className="px-8 py-6 text-center">
+                                                            <div className="flex flex-col items-center gap-2">
+                                                                <div
+                                                                    onClick={() => handleToggleAvailability(p)}
+                                                                    className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-all duration-300 ${p.is_available ? 'bg-orange-500' : 'bg-slate-300'}`}
+                                                                >
+                                                                    <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${p.is_available ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                                                </div>
+                                                                <span className={`text-[9px] font-black uppercase tracking-tighter ${p.is_available ? 'text-orange-600' : 'text-slate-400'}`}>
+                                                                    {p.is_available ? 'Available' : 'Sold Out'}
+                                                                </span>
+                                                            </div>
+                                                        </td>
                                                         <td className="px-8 py-6 text-right">
-                                                            <div className="text-xl font-black text-orange-600 tabular-nums tracking-tighter">
+                                                            <div className={`text-xl font-black tabular-nums tracking-tighter ${p.is_available ? 'text-orange-600' : 'text-slate-300'}`}>
                                                                 ฿{p.price.toLocaleString()}
                                                             </div>
                                                         </td>
@@ -355,19 +383,6 @@ const MenuManagement = () => {
                                                 >
                                                     {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
                                                 </select>
-                                            </div>
-                                        </div>
-
-                                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 border-l-4 border-l-orange-500 flex justify-between items-center transition-all hover:bg-white selection:bg-orange-100">
-                                            <div>
-                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Product Availability</label>
-                                                <span className="text-sm font-bold text-slate-700">{productForm.is_available ? '✔️ Available' : '❌ Sold Out'}</span>
-                                            </div>
-                                            <div
-                                                onClick={() => setProductForm({ ...productForm, is_available: !productForm.is_available })}
-                                                className={`w-14 h-8 rounded-full p-1 cursor-pointer transition-all duration-300 ${productForm.is_available ? 'bg-orange-500' : 'bg-slate-300'}`}
-                                            >
-                                                <div className={`w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-300 ${productForm.is_available ? 'translate-x-6' : 'translate-x-0'}`}></div>
                                             </div>
                                         </div>
 

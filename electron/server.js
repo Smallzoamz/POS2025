@@ -1899,6 +1899,62 @@ async function startServer() {
                 depositAmount = totalAmount * 0.5;
             }
 
+            // 1. Associate Phone with LINE Account (Loyalty)
+            if (lineUserId && customerPhone) {
+                try {
+                    // Update phone if it's null or empty
+                    await query(`
+                        UPDATE loyalty_customers 
+                        SET phone = $1, updated_at = CURRENT_TIMESTAMP 
+                        WHERE line_user_id = $2 AND (phone IS NULL OR phone = '')
+                    `, [customerPhone, lineUserId]);
+                } catch (phoneErr) {
+                    console.error('Error associating phone with LINE user:', phoneErr);
+                }
+            }
+
+            // 2. Coupon Processing
+            let couponDiscount = 0;
+            let finalTotal = totalAmount;
+            const { couponCode } = req.body;
+
+            if (couponCode && customerId) {
+                try {
+                    // Verify coupon is active and belongs to this customer
+                    const couponCheck = await query(`
+                        SELECT c.*, p.title, p.description
+                        FROM loyalty_coupons c
+                        JOIN loyalty_promotions p ON c.promotion_id = p.id
+                        WHERE c.coupon_code = $1 AND c.customer_id = $2 AND c.status = 'active'
+                    `, [couponCode.toUpperCase(), customerId]);
+
+                    if (couponCheck.rowCount > 0) {
+                        const coupon = couponCheck.rows[0];
+                        // Apply discount logic here (for now we assume fixed value or percentage based on promo title/desc)
+                        // In a real system, you'd have a 'discount_value' column. 
+                        // Let's check for "ลด X บาท" in title
+                        const match = coupon.title.match(/ลด\s*(\d+)/);
+                        if (match) {
+                            couponDiscount = parseInt(match[1]);
+                        } else if (coupon.title.includes('%')) {
+                            const pctMatch = coupon.title.match(/(\d+)%/);
+                            if (pctMatch) {
+                                couponDiscount = Math.floor(totalAmount * (parseInt(pctMatch[1]) / 100));
+                            }
+                        }
+
+                        if (couponDiscount > 0) {
+                            finalTotal = Math.max(0, totalAmount - couponDiscount);
+                            console.log(`🎟️ Applied Coupon: ${couponCode} (-฿${couponDiscount})`);
+                        }
+
+                        // Mark coupon as used (will be updated further after order is inserted)
+                    }
+                } catch (couponErr) {
+                    console.error('Coupon verification error:', couponErr);
+                }
+            }
+
             // Generate tracking token for delivery (Case-insensitive check)
             const trackingToken = (orderType && orderType.toLowerCase() === 'delivery')
                 ? 'TRK' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -1921,7 +1977,7 @@ async function startServer() {
                 customerName || '',
                 customerPhone || '',
                 customerAddress || '',
-                totalAmount || 0,
+                finalTotal, // Use calculated total
                 note || '',
                 trackingToken,
                 itemsJson,
@@ -1938,6 +1994,15 @@ async function startServer() {
             ]);
 
             const orderId = orderRes.rows[0].id;
+
+            // 3. Mark coupon as used and link to order
+            if (couponCode && couponDiscount > 0) {
+                await query(`
+                    UPDATE loyalty_coupons 
+                    SET status = 'used', used_at = CURRENT_TIMESTAMP, line_order_id = $1 
+                    WHERE coupon_code = $2 AND customer_id = $3
+                `, [orderId, couponCode.toUpperCase(), customerId]);
+            }
 
             // Trigger LINE Notification (Async)
             if (lineUserId) {
@@ -2669,10 +2734,11 @@ async function startServer() {
         if (!q) return res.json([]);
         try {
             const result = await query(`
-                SELECT id, line_user_id, display_name, picture_url, points 
+                SELECT id, line_user_id, display_name, picture_url, points, phone 
                 FROM loyalty_customers 
                 WHERE display_name ILIKE $1 
                 OR line_user_id ILIKE $1 
+                OR phone ILIKE $1
                 LIMIT 10
             `, [`%${q}%`]);
             res.json(result.rows);

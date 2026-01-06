@@ -34,9 +34,10 @@ const LineOrder = () => {
     const [loadingTables, setLoadingTables] = useState(false);
 
     // LIFF State
-    const [liffProfile, setLiffProfile] = useState(null);
-    const [liffReady, setLiffReady] = useState(false);
     const [liffError, setLiffError] = useState(null);
+    const [loyaltyCustomer, setLoyaltyCustomer] = useState(null);
+    const [availableCoupons, setAvailableCoupons] = useState([]);
+    const [selectedCoupon, setSelectedCoupon] = useState(null);
 
     // Initialize LIFF
     useEffect(() => {
@@ -60,6 +61,29 @@ const LineOrder = () => {
                         ...prev,
                         name: profile.displayName || prev.name
                     }));
+
+                    // Sync with loyalty system
+                    try {
+                        const syncRes = await fetch('/api/loyalty/sync', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                lineUserId: profile.userId,
+                                displayName: profile.displayName,
+                                pictureUrl: profile.pictureUrl
+                            })
+                        });
+                        const customer = await syncRes.json();
+                        setLoyaltyCustomer(customer);
+
+                        // Fetch coupons
+                        const couponsRes = await fetch(`/api/loyalty/coupons/${customer.id}`);
+                        const coupons = await couponsRes.json();
+                        setAvailableCoupons(coupons.filter(c => c.status === 'active'));
+                    } catch (syncErr) {
+                        console.error('Loyalty sync failed:', syncErr);
+                    }
+
                     console.log('👤 LINE Profile:', profile.displayName);
                 } else if (liff.isInClient()) {
                     // Force login only if not in login process
@@ -139,7 +163,22 @@ const LineOrder = () => {
         setLoading(true);
         try {
             const finalCart = customerInfo.preOrderFood ? cart : [];
-            const finalTotal = customerInfo.preOrderFood ? cartTotal : 0;
+            const cartAmt = customerInfo.preOrderFood ? cartTotal : 0;
+
+            // Calculate final total with coupon
+            let couponDiscount = 0;
+            if (selectedCoupon) {
+                const match = selectedCoupon.promotion_title.match(/ลด\s*(\d+)/);
+                if (match) {
+                    couponDiscount = parseInt(match[1]);
+                } else if (selectedCoupon.promotion_title.includes('%')) {
+                    const pctMatch = selectedCoupon.promotion_title.match(/(\d+)%/);
+                    if (pctMatch) {
+                        couponDiscount = Math.floor(cartAmt * (parseInt(pctMatch[1]) / 100));
+                    }
+                }
+            }
+            const finalTotal = Math.max(0, cartAmt - couponDiscount);
 
             const res = await fetch('/api/public/line-orders', {
                 method: 'POST',
@@ -156,6 +195,8 @@ const LineOrder = () => {
                     guestsCount: customerInfo.guestsCount,
                     assignedTable: customerInfo.assignedTable,
                     lineUserId: liffProfile?.userId || null, // Link to LINE profile for loyalty
+                    customerId: loyaltyCustomer?.id || null,
+                    couponCode: selectedCoupon?.coupon_code || null,
                     items: finalCart.map(item => ({
                         id: item.id,
                         name: item.name,
@@ -687,6 +728,38 @@ const LineOrder = () => {
                             </div>
                         </div>
 
+                        {/* Loyalty Coupons */}
+                        {availableCoupons.length > 0 && (
+                            <div className="tasty-card p-6 mb-6 border-emerald-100 bg-emerald-50/20">
+                                <h3 className="font-heading font-black text-slate-900 border-b border-emerald-100 pb-4 mb-4 flex justify-between items-center">
+                                    💎 คูปองของคุณ
+                                    <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest">Select One</span>
+                                </h3>
+                                <div className="space-y-3">
+                                    {availableCoupons.map(coupon => (
+                                        <button
+                                            key={coupon.id}
+                                            onClick={() => setSelectedCoupon(selectedCoupon?.id === coupon.id ? null : coupon)}
+                                            className={`w-full p-4 rounded-2xl border transition-all flex items-center justify-between ${selectedCoupon?.id === coupon.id ? 'bg-white border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg' : 'bg-white/50 border-slate-100 hover:border-emerald-200'}`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl ${selectedCoupon?.id === coupon.id ? 'bg-emerald-500 text-white' : 'bg-emerald-100 text-emerald-500'}`}>
+                                                    🎁
+                                                </div>
+                                                <div className="text-left">
+                                                    <p className={`font-bold text-sm leading-tight ${selectedCoupon?.id === coupon.id ? 'text-emerald-700' : 'text-slate-700'}`}>{coupon.promotion_title}</p>
+                                                    <p className="text-[10px] text-slate-400 font-bold tracking-widest mt-0.5">{coupon.coupon_code}</p>
+                                                </div>
+                                            </div>
+                                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedCoupon?.id === coupon.id ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-200 text-transparent'}`}>
+                                                <span className="text-xs font-black">✓</span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Order Items */}
                         <div className="tasty-card p-6 mb-8 border-orange-100 bg-orange-50/30">
                             <h3 className="font-heading font-black text-slate-900 border-b border-orange-100 pb-4 mb-4 flex justify-between items-center text-lg">
@@ -716,28 +789,84 @@ const LineOrder = () => {
                                     <span>Subtotal</span>
                                     <span>฿{cartTotal.toLocaleString()}</span>
                                 </div>
+                                {selectedCoupon && (
+                                    <div className="flex justify-between text-emerald-600 font-black uppercase tracking-widest text-[10px] animate-pulse">
+                                        <span>Coupon Discount</span>
+                                        <span>
+                                            -฿{(() => {
+                                                let disc = 0;
+                                                const match = selectedCoupon.promotion_title.match(/ลด\s*(\d+)/);
+                                                if (match) {
+                                                    disc = parseInt(match[1]);
+                                                } else if (selectedCoupon.promotion_title.includes('%')) {
+                                                    const pctMatch = selectedCoupon.promotion_title.match(/(\d+)%/);
+                                                    if (pctMatch) disc = Math.floor(cartTotal * (parseInt(pctMatch[1]) / 100));
+                                                }
+                                                return disc.toLocaleString();
+                                            })()}
+                                        </span>
+                                    </div>
+                                )}
                                 {orderType === 'reservation' && cart.length > 0 && customerInfo.preOrderFood && (
                                     <>
                                         <div className="flex justify-between text-rose-500 font-bold uppercase tracking-widest text-[10px]">
                                             <span>Required Deposit (50%)</span>
-                                            <span>฿{(cartTotal * 0.5).toLocaleString()}</span>
+                                            <span>฿{((cartTotal - (selectedCoupon ? (() => {
+                                                let disc = 0;
+                                                const match = selectedCoupon.promotion_title.match(/ลด\s*(\d+)/);
+                                                if (match) disc = parseInt(match[1]);
+                                                else if (selectedCoupon.promotion_title.includes('%')) {
+                                                    const pctMatch = selectedCoupon.promotion_title.match(/(\d+)%/);
+                                                    if (pctMatch) disc = Math.floor(cartTotal * (parseInt(pctMatch[1]) / 100));
+                                                }
+                                                return disc;
+                                            })() : 0)) * 0.5).toLocaleString()}</span>
                                         </div>
                                         <div className="bg-white p-5 rounded-[40px] shadow-2xl border border-slate-100 mt-6 flex flex-col items-center">
                                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-5">Pay via PromptPay QR 📱</p>
                                             <div className="p-4 bg-white border-2 border-slate-100 rounded-[32px] shadow-inner mb-4">
                                                 <QRCode
-                                                    value={generatePayload(shopSettings.promptpay_number || '0800000000', { amount: Number(cartTotal * 0.5) })}
+                                                    value={generatePayload(shopSettings.promptpay_number || '0800000000', {
+                                                        amount: Number((cartTotal - (selectedCoupon ? (() => {
+                                                            let disc = 0;
+                                                            const match = selectedCoupon.promotion_title.match(/ลด\s*(\d+)/);
+                                                            if (match) disc = parseInt(match[1]);
+                                                            else if (selectedCoupon.promotion_title.includes('%')) {
+                                                                const pctMatch = selectedCoupon.promotion_title.match(/(\d+)%/);
+                                                                if (pctMatch) disc = Math.floor(cartTotal * (parseInt(pctMatch[1]) / 100));
+                                                            }
+                                                            return disc;
+                                                        })() : 0)) * 0.5)
+                                                    })}
                                                     size={160}
                                                 />
                                             </div>
-                                            <p className="text-3xl font-heading font-black text-slate-900">฿{(cartTotal * 0.5).toLocaleString()}</p>
+                                            <p className="text-3xl font-heading font-black text-slate-900">฿{((cartTotal - (selectedCoupon ? (() => {
+                                                let disc = 0;
+                                                const match = selectedCoupon.promotion_title.match(/ลด\s*(\d+)/);
+                                                if (match) disc = parseInt(match[1]);
+                                                else if (selectedCoupon.promotion_title.includes('%')) {
+                                                    const pctMatch = selectedCoupon.promotion_title.match(/(\d+)%/);
+                                                    if (pctMatch) disc = Math.floor(cartTotal * (parseInt(pctMatch[1]) / 100));
+                                                }
+                                                return disc;
+                                            })() : 0)) * 0.5).toLocaleString()}</p>
                                             <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">{shopSettings.promptpay_name || 'Tasty Station'}</p>
                                         </div>
                                     </>
                                 )}
                                 <div className="flex justify-between items-center mt-2 p-4 bg-orange-500 rounded-[28px] text-white shadow-xl shadow-orange-500/30">
                                     <span className="font-heading font-black text-lg">ORDER TOTAL</span>
-                                    <span className="text-3xl font-heading font-black">฿{cartTotal.toLocaleString()}</span>
+                                    <span className="text-3xl font-heading font-black">฿{(cartTotal - (selectedCoupon ? (() => {
+                                        let disc = 0;
+                                        const match = selectedCoupon.promotion_title.match(/ลด\s*(\d+)/);
+                                        if (match) disc = parseInt(match[1]);
+                                        else if (selectedCoupon.promotion_title.includes('%')) {
+                                            const pctMatch = selectedCoupon.promotion_title.match(/(\d+)%/);
+                                            if (pctMatch) disc = Math.floor(cartTotal * (parseInt(pctMatch[1]) / 100));
+                                        }
+                                        return disc;
+                                    })() : 0)).toLocaleString()}</span>
                                 </div>
                             </div>
                         </div>

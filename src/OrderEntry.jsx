@@ -33,6 +33,7 @@ const OrderEntry = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [customerCoupons, setCustomerCoupons] = useState([]);
     const [orderStatus, setOrderStatus] = useState('cooking'); // cooking, served, completed
 
     // Receipt State
@@ -95,6 +96,8 @@ const OrderEntry = () => {
                         displayName: orderData.order.customer_name,
                         pictureUrl: orderData.order.customer_picture
                     });
+                    // Fetch coupons for existing linked customer
+                    api.getCustomerCoupons(orderData.order.customer_id).then(setCustomerCoupons).catch(console.error);
                 }
 
                 setDepositInfo({
@@ -138,6 +141,10 @@ const OrderEntry = () => {
                 displayName: customer.display_name,
                 pictureUrl: customer.picture_url
             });
+            // Fetch coupons for selected customer
+            const coupons = await api.getCustomerCoupons(customer.id);
+            setCustomerCoupons(coupons);
+
             setShowCustomerModal(false);
             setSearchTerm('');
             setSearchResults([]);
@@ -169,6 +176,7 @@ const OrderEntry = () => {
     const removeCoupon = () => {
         setAppliedCoupon(null);
         setCouponError('');
+        setCouponCode('');
     };
 
     const addToCart = (item) => {
@@ -747,7 +755,7 @@ const OrderEntry = () => {
 
                         {/* Coupon Section */}
                         <div className="mb-6 p-4 bg-orange-50 rounded-2xl border border-orange-100">
-                            <label className="text-[10px] font-bold text-orange-400 uppercase tracking-[0.2em] mb-3 block">คูปองส่วนลด / Loyalty Coupon</label>
+                            <label className="text-[10px] font-bold text-orange-400 uppercase tracking-[0.2em] mb-3 block">คูปองส่วนลด / Loyalty Rewards</label>
 
                             {appliedCoupon ? (
                                 <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-orange-200 shadow-sm animate-in zoom-in duration-200">
@@ -763,7 +771,26 @@ const OrderEntry = () => {
                                     </button>
                                 </div>
                             ) : (
-                                <div className="space-y-2">
+                                <div className="space-y-3">
+                                    {/* Selection List */}
+                                    {customerCoupons.length > 0 && (
+                                        <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
+                                            {customerCoupons.filter(c => c.status === 'active').map(coupon => (
+                                                <button
+                                                    key={coupon.id}
+                                                    onClick={() => setAppliedCoupon({ ...coupon, title: coupon.promotion_title })}
+                                                    className="flex-shrink-0 bg-white border border-orange-200 rounded-xl p-3 text-left hover:border-orange-500 hover:shadow-md transition-all group max-w-[140px]"
+                                                >
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-sm">🎁</span>
+                                                        <span className="text-[9px] font-bold text-orange-600 truncate">{coupon.promotion_title}</span>
+                                                    </div>
+                                                    <p className="text-[8px] text-slate-400 font-bold truncate">{coupon.coupon_code}</p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
                                     <div className="flex gap-2">
                                         <input
                                             type="text"
@@ -868,7 +895,23 @@ const OrderEntry = () => {
                                     </button>
                                 </div>
                             ) : (
-                                <div className="space-y-1.5">
+                                <div className="space-y-2">
+                                    {/* Selection List Mini */}
+                                    {customerCoupons.length > 0 && (
+                                        <div className="flex gap-1.5 overflow-x-auto pb-1.5 hide-scrollbar">
+                                            {customerCoupons.filter(c => c.status === 'active').map(coupon => (
+                                                <button
+                                                    key={coupon.id}
+                                                    onClick={() => setAppliedCoupon({ ...coupon, title: coupon.promotion_title })}
+                                                    className="flex-shrink-0 bg-white border border-orange-100 rounded-lg p-2 text-left hover:border-orange-400 transition-all max-w-[110px]"
+                                                >
+                                                    <p className="text-[8px] font-bold text-orange-600 truncate mb-0.5">{coupon.promotion_title}</p>
+                                                    <p className="text-[7px] text-slate-400 font-bold truncate">{coupon.coupon_code}</p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
                                     <div className="flex gap-1.5">
                                         <input
                                             type="text"
@@ -943,7 +986,7 @@ const OrderEntry = () => {
                                 <FiSearch className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                                 <input
                                     type="text"
-                                    placeholder="พิมพ์ชื่อหรือ Line ID..."
+                                    placeholder="พิมพ์ชื่อ, Line ID หรือเบอร์โทร..."
                                     className="w-full bg-slate-50 border-none rounded-2xl pl-14 pr-6 py-4 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
                                     value={searchTerm}
                                     onChange={handleSearchCustomer}
@@ -970,9 +1013,14 @@ const OrderEntry = () => {
                                                     <div className="w-full h-full flex items-center justify-center text-slate-300"><FiUser size={24} /></div>
                                                 )}
                                             </div>
-                                            <div className="text-left">
+                                            <div className="text-left flex-1">
                                                 <p className="font-bold text-slate-800 group-hover:text-orange-600 transition-colors uppercase tracking-tight">{customer.display_name}</p>
-                                                <p className="text-xs text-slate-400 font-medium tracking-wide">คะแนนสะสม: {customer.points} แต้ม</p>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <p className="text-[10px] text-slate-400 font-medium tracking-wide">คะแนนสะสม: {customer.points} แต้ม</p>
+                                                    {customer.phone && (
+                                                        <p className="text-[10px] text-orange-400 font-bold tracking-wider">• {customer.phone}</p>
+                                                    )}
+                                                </div>
                                             </div>
                                         </button>
                                     ))}

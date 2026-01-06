@@ -600,6 +600,16 @@ const initDatabasePG = async () => {
             console.error('Migration 10 error:', migrationErr10.message);
         }
 
+        // --- MIGRATION 11: Loyalty Customer Phone ---
+        try {
+            console.log('📦 Running Migration 11: loyalty_customers phone...');
+            await client.query(`ALTER TABLE loyalty_customers ADD COLUMN IF NOT EXISTS phone TEXT`);
+            console.log('✅ Migration 11: loyalty_customers phone completed');
+        } catch (migrationErr11) {
+            console.error('Migration 11 error:', migrationErr11.message);
+        }
+
+        await client.query('COMMIT');
     } catch (e) {
         await client.query('ROLLBACK');
         console.error("❌ PostgreSQL Initialization Error:", e);
