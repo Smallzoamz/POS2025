@@ -170,14 +170,18 @@ const LineOrder = () => {
             // Calculate final total with coupon
             let couponDiscount = 0;
             if (selectedCoupon) {
-                const match = selectedCoupon.promotion_title.match(/ลด\s*(\d+)/);
-                if (match) {
-                    couponDiscount = parseInt(match[1]);
-                } else if (selectedCoupon.promotion_title.includes('%')) {
-                    const pctMatch = selectedCoupon.promotion_title.match(/(\d+)%/);
-                    if (pctMatch) {
-                        couponDiscount = Math.floor(cartAmt * (parseInt(pctMatch[1]) / 100));
-                    }
+                const title = selectedCoupon.promotion_title || '';
+                // Try multiple patterns: "ลด X", "X บาท", "-฿X", "X%"
+                const numericMatch = title.match(/(\d+)\s*(?:บาท|฿|baht)/i);
+                const ldMatch = title.match(/ลด\s*(\d+)/);
+                const pctMatch = title.match(/(\d+)%/);
+
+                if (numericMatch) {
+                    couponDiscount = parseInt(numericMatch[1]);
+                } else if (ldMatch) {
+                    couponDiscount = parseInt(ldMatch[1]);
+                } else if (pctMatch) {
+                    couponDiscount = Math.floor(cartAmt * (parseInt(pctMatch[1]) / 100));
                 }
             }
             const finalTotal = Math.max(0, cartAmt - couponDiscount);

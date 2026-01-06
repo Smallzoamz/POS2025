@@ -1,10 +1,11 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext'; // Import Auth
 import { socket } from '../services/api'; // Import socket
 
 const MasterLayout = ({ children }) => {
     const location = useLocation();
+    const navigate = useNavigate();
     const { user, logout } = useAuth();
     const [isSidebarOpen, setIsSidebarOpen] = React.useState(false); // Mobile Sidebar State
     const [isNotificationOpen, setIsNotificationOpen] = React.useState(false); // Notification History Sidebar
@@ -76,6 +77,28 @@ const MasterLayout = ({ children }) => {
             await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
         } catch (err) { }
+    };
+
+    const handleNotificationClick = (n) => {
+        handleMarkAsRead(n.id);
+        setIsNotificationOpen(false);
+
+        // Parse notification data for navigation
+        const data = typeof n.data === 'string' ? JSON.parse(n.data || '{}') : (n.data || {});
+
+        if (n.type === 'order' && data.tableName) {
+            // Navigate to order entry for that table
+            navigate(`/order/${data.tableName}`);
+        } else if (n.type === 'line_order' && data.orderId) {
+            // Navigate to LINE orders management
+            navigate('/line-orders');
+        } else if (n.type === 'bill') {
+            // Navigate to tables page
+            navigate('/tables');
+        } else if (n.type === 'takeaway') {
+            // Navigate to takeaway orders
+            navigate('/tables');
+        }
     };
 
     const handleMarkAllRead = async () => {
@@ -317,7 +340,7 @@ const MasterLayout = ({ children }) => {
                                     return (
                                         <div
                                             key={n.id}
-                                            onClick={() => handleMarkAsRead(n.id)}
+                                            onClick={() => handleNotificationClick(n)}
                                             className={`
                                                 group p-4 rounded-2xl border transition-all duration-300 cursor-pointer relative
                                                 ${n.is_read ? 'bg-white border-slate-100 opacity-60' : `${style.bg} ${style.border} shadow-sm scale-[1.02]`}
