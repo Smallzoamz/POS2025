@@ -89,9 +89,8 @@ const KitchenDisplay = () => {
 
         try {
             const itemsWithRecipes = await Promise.all(order.items.map(async (item) => {
-                // LINE orders use 'id' instead of 'product_id' and 'name' instead of 'product_name'
-                const ingredients = await api.getProductRecipe(item.id);
-                return { ...item, product_name: item.name, ingredients };
+                const ingredients = await api.getProductRecipe(item.product_id);
+                return { ...item, ingredients };
             }));
 
             setSelectedRecipe({ ...order, table_name: order.customer_name, items: itemsWithRecipes });
@@ -414,13 +413,9 @@ const KitchenDisplay = () => {
 
                                             <div className="px-4 flex-1 space-y-1.5 mb-4">
                                                 {(order.items || []).map((item, idx) => (
-                                                    <div key={idx} className="flex gap-2 items-start">
-                                                        <span className="flex-shrink-0 w-5 h-5 bg-slate-800 rounded-md flex items-center justify-center text-[10px] font-bold text-white">
-                                                            {item.quantity}
-                                                        </span>
-                                                        <span className="text-sm font-medium text-slate-300 leading-tight">
-                                                            {item.name}
-                                                        </span>
+                                                    <div key={idx} className="flex justify-between items-center text-sm md:text-base">
+                                                        <span className="font-bold text-slate-300">{item.quantity} x {item.product_name}</span>
+                                                        <button onClick={() => handleViewLineRecipe(item)} className="p-1 px-2 bg-slate-800 text-[10px] font-bold text-slate-400 rounded hover:bg-orange-500 hover:text-white transition-all uppercase">Manual</button>
                                                     </div>
                                                 ))}
                                             </div>

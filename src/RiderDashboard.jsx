@@ -200,8 +200,8 @@ const RiderDashboard = () => {
     };
 
     const openNavigation = (order) => {
-        const dest = order.customer_lat && order.customer_lng
-            ? `${order.customer_lat},${order.customer_lng}`
+        const dest = order.latitude && order.longitude
+            ? `${order.latitude},${order.longitude}`
             : encodeURIComponent(order.delivery_address || '');
         window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`, '_blank');
     };
@@ -289,17 +289,23 @@ const RiderDashboard = () => {
                                             <p className="text-sm font-bold text-slate-600 leading-relaxed line-clamp-2">{order.delivery_address}</p>
                                         </div>
                                         <div className="flex gap-3">
+                                            <a
+                                                href={`tel:${order.contact_number || order.customer_phone}`}
+                                                className="flex-1 py-4 bg-white border-2 border-slate-100 hover:border-green-200 rounded-2xl font-heading font-black text-sm text-slate-500 hover:text-green-600 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                            >
+                                                📞 โทรหา
+                                            </a>
                                             <button
                                                 onClick={() => openNavigation(order)}
                                                 className="flex-1 py-4 bg-white border-2 border-slate-100 hover:border-orange-200 rounded-2xl font-heading font-black text-sm text-slate-500 hover:text-orange-500 transition-all active:scale-95"
                                             >
-                                                🗺️ ดูแผนที่
+                                                🗺️ แผนที่
                                             </button>
                                             <button
                                                 onClick={() => handlePickup(order.id)}
-                                                className="flex-1 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-heading font-black text-sm shadow-lg shadow-orange-500/20 shadow-xl transition-all active:scale-95"
+                                                className="flex-1 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-heading font-black text-sm shadow-lg shadow-orange-500/20 transition-all active:scale-95"
                                             >
-                                                ✓ รับพัสดุ
+                                                ✓ รับงาน
                                             </button>
                                         </div>
                                     </div>
@@ -364,21 +370,27 @@ const RiderDashboard = () => {
                                         )}
 
                                         <div className="flex gap-3 pt-2">
+                                            <a
+                                                href={`tel:${order.contact_number || order.customer_phone}`}
+                                                className="flex-1 py-4 bg-white border-2 border-slate-100 hover:border-green-200 rounded-2xl font-heading font-black text-sm text-slate-500 hover:text-green-600 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                            >
+                                                📞 โทรหาลูกค้า
+                                            </a>
                                             {order.status === 'picked_up' && (
                                                 <button
                                                     onClick={() => handleStartDelivery(order)}
-                                                    className="w-full py-5 bg-orange-500 hover:bg-orange-600 text-white rounded-[24px] font-heading font-black text-lg shadow-xl shadow-orange-500/20 transition-all active:scale-95"
+                                                    className="flex-[2] py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-heading font-black text-lg shadow-xl shadow-orange-500/20 transition-all active:scale-95"
                                                 >
-                                                    🚚 เริ่มการจัดส่ง
+                                                    🚚 เริ่มจัดส่ง
                                                 </button>
                                             )}
 
                                             {order.status === 'delivering' && (
                                                 <button
                                                     onClick={() => handleDelivered(order)}
-                                                    className="w-full py-5 bg-green-600 hover:bg-green-700 text-white rounded-[24px] font-heading font-black text-lg shadow-xl shadow-green-600/20 transition-all active:scale-95"
+                                                    className="flex-[2] py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-heading font-black text-lg shadow-xl shadow-green-600/20 transition-all active:scale-95"
                                                 >
-                                                    ✅ ส่งถึง & เก็บเงิน
+                                                    ✅ ส่งสำเร็จ
                                                 </button>
                                             )}
                                         </div>

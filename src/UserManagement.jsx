@@ -12,6 +12,7 @@ const UserManagement = () => {
     const [formData, setFormData] = useState({
         name: '',
         full_name: '',
+        phone: '',
         pin: '',
         role: 'staff',
         hourly_rate: 0,
@@ -43,6 +44,7 @@ const UserManagement = () => {
             setFormData({
                 name: user.name,
                 full_name: user.full_name || '',
+                phone: user.phone || '',
                 pin: user.pin,
                 role: user.role,
                 hourly_rate: user.hourly_rate || 0,
@@ -55,6 +57,7 @@ const UserManagement = () => {
             setFormData({
                 name: '',
                 full_name: '',
+                phone: '',
                 pin: '',
                 role: 'staff',
                 hourly_rate: 0,
@@ -167,7 +170,9 @@ const UserManagement = () => {
                                                 </div>
                                                 <div>
                                                     <div className="font-bold text-slate-900 leading-tight">{user.name}</div>
-                                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{user.full_name || 'Generic Asset'}</div>
+                                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                                        {user.phone ? `📞 ${user.phone}` : (user.full_name || 'Generic Asset')}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
@@ -235,15 +240,27 @@ const UserManagement = () => {
                         )}
 
                         <form onSubmit={handleSubmit} className={`space-y-5 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Nickname</label>
-                                <input
-                                    type="text"
-                                    required
-                                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-3 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none font-bold text-slate-900 transition-all"
-                                    value={formData.name}
-                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                />
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Nickname</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-3 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none font-bold text-slate-900 transition-all text-sm"
+                                        value={formData.name}
+                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                                    <input
+                                        type="tel"
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-3 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none font-bold text-slate-900 transition-all text-sm"
+                                        placeholder="08x-xxx-xxxx"
+                                        value={formData.phone}
+                                        onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                    />
+                                </div>
                             </div>
 
                             <div className="space-y-1.5">

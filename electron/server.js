@@ -1079,7 +1079,7 @@ async function startServer() {
     // --- USER MANAGEMENT API ---
     app.get('/api/users', async (req, res) => {
         try {
-            const usersRes = await query("SELECT id, name, full_name, role, pin, hourly_rate, off_day, off_day2, can_deliver FROM users");
+            const usersRes = await query("SELECT id, name, full_name, phone, role, pin, hourly_rate, off_day, off_day2, can_deliver FROM users");
             res.json(usersRes.rows);
         } catch (err) {
             console.error(err);
@@ -1088,11 +1088,11 @@ async function startServer() {
     });
 
     app.post('/api/users', async (req, res) => {
-        const { name, full_name, pin, role, hourly_rate, off_day, off_day2, can_deliver } = req.body;
+        const { name, full_name, phone, pin, role, hourly_rate, off_day, off_day2, can_deliver } = req.body;
         try {
             const result = await query(
-                "INSERT INTO users (name, full_name, pin, role, hourly_rate, off_day, off_day2, can_deliver) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
-                [name, full_name || '', pin, role, hourly_rate || 0, off_day ?? 7, off_day2 ?? 7, can_deliver || false]
+                "INSERT INTO users (name, full_name, phone, pin, role, hourly_rate, off_day, off_day2, can_deliver) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
+                [name, full_name || '', phone || null, pin, role, hourly_rate || 0, off_day ?? 7, off_day2 ?? 7, can_deliver || false]
             );
             res.json({ success: true, id: result.rows[0].id });
         } catch (err) {
@@ -1102,12 +1102,12 @@ async function startServer() {
     });
 
     app.put('/api/users/:id', async (req, res) => {
-        const { name, full_name, pin, role, hourly_rate, off_day, off_day2, can_deliver } = req.body;
+        const { name, full_name, phone, pin, role, hourly_rate, off_day, off_day2, can_deliver } = req.body;
         const { id } = req.params;
         try {
             await query(
-                "UPDATE users SET name = $1, full_name = $2, pin = $3, role = $4, hourly_rate = $5, off_day = $6, off_day2 = $7, can_deliver = $8 WHERE id = $9",
-                [name, full_name || '', pin, role, hourly_rate || 0, off_day ?? 7, off_day2 ?? 7, can_deliver || false, id]
+                "UPDATE users SET name = $1, full_name = $2, phone = $3, pin = $4, role = $5, hourly_rate = $6, off_day = $7, off_day2 = $8, can_deliver = $9 WHERE id = $10",
+                [name, full_name || '', phone || null, pin, role, hourly_rate || 0, off_day ?? 7, off_day2 ?? 7, can_deliver || false, id]
             );
             res.json({ success: true });
         } catch (err) {
@@ -1618,7 +1618,7 @@ async function startServer() {
     // PUBLIC: Get Menu for LINE Order Page
     app.get('/api/public/menu', async (req, res) => {
         try {
-            const productsRes = await query('SELECT * FROM products WHERE is_available = TRUE');
+            const productsRes = await query('SELECT * FROM products');
             const categoriesRes = await query('SELECT * FROM categories ORDER BY sort_order');
             res.json({ products: productsRes.rows, categories: categoriesRes.rows });
         } catch (err) {
@@ -1685,7 +1685,7 @@ async function startServer() {
     app.get('/api/public/menu', async (req, res) => {
         try {
             const categoriesRes = await query("SELECT * FROM categories ORDER BY id");
-            const productsRes = await query("SELECT * FROM products WHERE is_available = TRUE ORDER BY category_id, name");
+            const productsRes = await query("SELECT * FROM products ORDER BY category_id, name");
             res.json({
                 categories: categoriesRes.rows,
                 products: productsRes.rows
@@ -2553,7 +2553,7 @@ async function startServer() {
                     lo.rider_lat, lo.rider_lng, lo.customer_lat, lo.customer_lng,
                     lo.total_amount, lo.delivery_fee, lo.created_at, lo.updated_at,
                     lo.delivery_started_at, lo.delivered_at, lo.estimated_delivery_time,
-                    lo.queue_position, u.name as rider_name
+                    lo.queue_position, u.name as rider_name, u.phone as rider_phone
                 FROM line_orders lo
                 LEFT JOIN users u ON lo.rider_id = u.id
                 WHERE lo.tracking_token = $1

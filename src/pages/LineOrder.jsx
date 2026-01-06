@@ -591,15 +591,24 @@ const LineOrder = () => {
                                 return (
                                     <div
                                         key={item.id}
-                                        onClick={() => addToCart(item)}
-                                        className="tasty-card p-0 overflow-hidden group hover:scale-[1.02] active:scale-95 transition-all"
+                                        onClick={() => item.is_available && addToCart(item)}
+                                        className={`tasty-card p-0 overflow-hidden group transition-all ${!item.is_available ? 'opacity-80 cursor-not-allowed grayscale' : 'hover:scale-[1.02] active:scale-95'}`}
                                     >
                                         <div className="aspect-square bg-slate-100 relative overflow-hidden">
                                             {item.image ? (
-                                                <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                                <img src={item.image} alt={item.name} className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${!item.is_available ? 'opacity-40' : ''}`} />
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center text-5xl grayscale opacity-30">🍽️</div>
                                             )}
+
+                                            {!item.is_available && (
+                                                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                                    <span className="bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter shadow-xl animate-pulse">
+                                                        สินค้าหมด
+                                                    </span>
+                                                </div>
+                                            )}
+
                                             {inCart && (
                                                 <div className="absolute top-3 right-3 w-10 h-10 bg-orange-500 text-white rounded-2xl flex items-center justify-center font-black shadow-xl ring-4 ring-orange-500/20 animate-bounce-subtle">
                                                     {inCart.quantity}
@@ -610,7 +619,11 @@ const LineOrder = () => {
                                             <h3 className="font-heading font-black text-slate-800 text-sm leading-tight line-clamp-1">{item.name}</h3>
                                             <div className="flex items-center justify-between mt-2">
                                                 <p className="text-orange-500 font-black text-base">฿{item.price?.toLocaleString()}</p>
-                                                <div className="w-7 h-7 bg-slate-50 rounded-lg flex items-center justify-center text-slate-300 group-hover:bg-orange-500/10 group-hover:text-orange-500 transition-all">+</div>
+                                                {item.is_available ? (
+                                                    <div className="w-7 h-7 bg-slate-50 rounded-lg flex items-center justify-center text-slate-300 group-hover:bg-orange-500/10 group-hover:text-orange-500 transition-all">+</div>
+                                                ) : (
+                                                    <div className="w-7 h-7 bg-slate-200 rounded-lg flex items-center justify-center text-slate-400">✕</div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

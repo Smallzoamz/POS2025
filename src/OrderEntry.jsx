@@ -462,12 +462,20 @@ const OrderEntry = () => {
                 <section>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1.5 md:gap-4">
                         {menuItems.filter(i => !selectedCategory || i.category_id === selectedCategory).map(item => (
-                            <div key={item.id} className="tasty-card p-1.5 md:p-3 flex flex-col group relative">
-                                <div className="aspect-[4/3] rounded-lg md:rounded-xl overflow-hidden mb-1.5 bg-slate-50 ring-1 ring-slate-100 group-hover:ring-orange-100 transition-all">
+                            <div key={item.id} className={`tasty-card p-1.5 md:p-3 flex flex-col group relative ${!item.is_available ? 'opacity-80 cursor-not-allowed' : ''}`}>
+                                <div className="aspect-[4/3] rounded-lg md:rounded-xl overflow-hidden mb-1.5 bg-slate-50 ring-1 ring-slate-100 group-hover:ring-orange-100 transition-all relative">
                                     {item.image ? (
-                                        <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                        <img src={item.image} alt={item.name} className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${!item.is_available ? 'grayscale opacity-40' : ''}`} />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center text-xl md:text-3xl grayscale opacity-20">🥡</div>
+                                    )}
+
+                                    {!item.is_available && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                            <span className="bg-red-600 text-white text-[10px] md:text-xs font-black px-3 py-1 rounded-full uppercase tracking-tighter shadow-xl animate-pulse">
+                                                สินค้าหมด
+                                            </span>
+                                        </div>
                                     )}
                                 </div>
                                 <p className="text-[7px] md:text-[9px] font-bold text-slate-400 mb-0.5 uppercase tracking-wider line-clamp-1">{categories.find(c => c.id === item.category_id)?.name || 'Dish'}</p>
@@ -476,20 +484,25 @@ const OrderEntry = () => {
                                     <span className="text-[11px] md:text-sm font-bold text-slate-900 leading-none">฿{item.price.toLocaleString()}</span>
 
                                     <div className="flex items-center gap-1">
-                                        {/* Simple Logic: Check if in cart to show - 0 + or just + */}
-                                        {cart.find(c => c.id === item.id) ? (
-                                            <div className="flex items-center bg-orange-50 rounded-lg border border-orange-100 p-0.5">
-                                                <button onClick={() => updateQuantity(item.id, -1)} className="w-4 h-4 md:w-6 md:h-6 flex items-center justify-center text-orange-500 font-bold hover:bg-white rounded-md transition-colors text-xs">-</button>
-                                                <span className="w-4 md:w-6 text-center text-[9px] md:text-xs font-bold text-orange-600">{cart.find(c => c.id === item.id).quantity}</span>
-                                                <button onClick={() => updateQuantity(item.id, 1)} className="w-4 h-4 md:w-6 md:h-6 flex items-center justify-center text-orange-500 font-bold hover:bg-white rounded-md transition-colors text-xs">+</button>
-                                            </div>
+                                        {item.is_available ? (
+                                            cart.find(c => c.id === item.id) ? (
+                                                <div className="flex items-center bg-orange-50 rounded-lg border border-orange-100 p-0.5">
+                                                    <button onClick={() => updateQuantity(item.id, -1)} className="w-4 h-4 md:w-6 md:h-6 flex items-center justify-center text-orange-500 font-bold hover:bg-white rounded-md transition-colors text-xs">-</button>
+                                                    <span className="w-4 md:w-6 text-center text-[9px] md:text-xs font-bold text-orange-600">{cart.find(c => c.id === item.id).quantity}</span>
+                                                    <button onClick={() => updateQuantity(item.id, 1)} className="w-4 h-4 md:w-6 md:h-6 flex items-center justify-center text-orange-500 font-bold hover:bg-white rounded-md transition-colors text-xs">+</button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={() => addToCart(item)}
+                                                    className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-lg md:rounded-xl bg-[#00A099] text-white shadow-md shadow-[#00A099]/20 hover:scale-110 transition-all active:scale-95"
+                                                >
+                                                    <span className="text-sm md:text-lg font-bold">+</span>
+                                                </button>
+                                            )
                                         ) : (
-                                            <button
-                                                onClick={() => addToCart(item)}
-                                                className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-lg md:rounded-xl bg-[#00A099] text-white shadow-md shadow-[#00A099]/20 hover:scale-110 transition-all active:scale-95"
-                                            >
-                                                <span className="text-sm md:text-lg font-bold">+</span>
-                                            </button>
+                                            <div className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-lg md:rounded-xl bg-slate-200 text-slate-400 cursor-not-allowed">
+                                                <span className="text-sm md:text-lg font-bold">✕</span>
+                                            </div>
                                         )}
                                     </div>
                                 </div>

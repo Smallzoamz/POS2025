@@ -16,7 +16,7 @@ const MenuManagement = () => {
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
     const [activeModalTab, setActiveModalTab] = useState('info');
-    const [productForm, setProductForm] = useState({ name: '', price: 0, category_id: '', image: '', track_stock: 0, stock_quantity: 0 });
+    const [productForm, setProductForm] = useState({ name: '', price: 0, category_id: '', image: '', is_available: true, track_stock: 0, stock_quantity: 0 });
     const [categoryForm, setCategoryForm] = useState({ id: '', name: '', icon: '' });
     const [allIngredients, setAllIngredients] = useState([]);
     const [recipeItems, setRecipeItems] = useState([]);
@@ -66,6 +66,7 @@ const MenuManagement = () => {
                 price: 0,
                 category_id: categories[0]?.id || '',
                 image: '',
+                is_available: true,
                 track_stock: 0,
                 stock_quantity: 0
             });
@@ -354,6 +355,19 @@ const MenuManagement = () => {
                                                 >
                                                     {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
                                                 </select>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 border-l-4 border-l-orange-500 flex justify-between items-center transition-all hover:bg-white selection:bg-orange-100">
+                                            <div>
+                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Product Availability</label>
+                                                <span className="text-sm font-bold text-slate-700">{productForm.is_available ? '✔️ Available' : '❌ Sold Out'}</span>
+                                            </div>
+                                            <div
+                                                onClick={() => setProductForm({ ...productForm, is_available: !productForm.is_available })}
+                                                className={`w-14 h-8 rounded-full p-1 cursor-pointer transition-all duration-300 ${productForm.is_available ? 'bg-orange-500' : 'bg-slate-300'}`}
+                                            >
+                                                <div className={`w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-300 ${productForm.is_available ? 'translate-x-6' : 'translate-x-0'}`}></div>
                                             </div>
                                         </div>
 

@@ -130,8 +130,7 @@ const CustomerTracking = () => {
 
     // Map positions
     const riderPos = (order?.rider_lat && order?.rider_lng) ? [parseFloat(order.rider_lat), parseFloat(order.rider_lng)] : null;
-    const customerPos = (order?.latitude && order?.longitude) ? [parseFloat(order.latitude), parseFloat(order.longitude)] :
-        (order?.customer_lat && order?.customer_lng) ? [parseFloat(order.customer_lat), parseFloat(order.customer_lng)] : null;
+    const customerPos = (order?.latitude && order?.longitude) ? [parseFloat(order.latitude), parseFloat(order.longitude)] : null;
     const defaultCenter = riderPos || customerPos || [13.7563, 100.5018]; // Bangkok default
 
     if (loading) {
@@ -217,20 +216,25 @@ const CustomerTracking = () => {
                     {/* Overlay: Rider Info */}
                     {order.rider_name && (
                         <div className="absolute bottom-6 left-6 right-6 z-[1000] animate-fade-in-up">
-                            <div className="bg-white/90 backdrop-blur-xl rounded-[32px] p-5 border border-white shadow-[0_24px_48px_-12px_rgba(0,0,0,0.1)] flex items-center gap-5">
-                                <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-500 rounded-[24px] flex items-center justify-center text-3xl shadow-xl shadow-orange-500/30">
+                            <div className="bg-white/90 backdrop-blur-xl rounded-[32px] p-5 border border-white shadow-[0_24px_48px_-12px_rgba(0,0,0,0.1)] flex items-center gap-4">
+                                <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-amber-500 rounded-[22px] flex items-center justify-center text-2xl shadow-xl shadow-orange-500/30">
                                     🏍️
                                 </div>
                                 <div className="flex-1">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Delivery Partner</p>
-                                    <p className="text-2xl font-heading font-black text-slate-900 leading-tight">{order.rider_name}</p>
+                                    <p className="text-xl font-heading font-black text-slate-900 leading-tight">{order.rider_name}</p>
+                                    {order.rider_phone && (
+                                        <p className="text-[11px] font-bold text-slate-500 mt-0.5">📞 {order.rider_phone}</p>
+                                    )}
                                 </div>
-                                <div className="text-right">
-                                    <div className="px-3 py-1.5 bg-green-500/10 text-green-600 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
-                                        <span className="w-2 h-2 bg-green-500 rounded-full animate-ping" />
-                                        On the way
-                                    </div>
-                                </div>
+                                {order.rider_phone && (
+                                    <a
+                                        href={`tel:${order.rider_phone}`}
+                                        className="w-12 h-12 bg-green-500 text-white rounded-2xl flex items-center justify-center text-xl shadow-lg shadow-green-500/20 active:scale-90 transition-all"
+                                    >
+                                        📞
+                                    </a>
+                                )}
                             </div>
                         </div>
                     )}

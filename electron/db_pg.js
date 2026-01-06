@@ -182,11 +182,13 @@ const initDatabasePG = async () => {
                 id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
                 full_name TEXT,
+                phone TEXT,
                 pin TEXT NOT NULL,
                 role TEXT DEFAULT 'staff',
                 hourly_rate DECIMAL(12,2) DEFAULT 0,
                 off_day INTEGER DEFAULT 7,
-                off_day2 INTEGER DEFAULT 7
+                off_day2 INTEGER DEFAULT 7,
+                can_deliver BOOLEAN DEFAULT FALSE
             )
         `);
 
@@ -434,12 +436,13 @@ const initDatabasePG = async () => {
             console.log('Base columns migration note:', migrationErr2.message);
         }
 
-        // Migration 3: Add can_deliver column to users table (Multi-role system)
+        // Migration 3: Add base columns to users table
         try {
+            await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT`);
             await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS can_deliver BOOLEAN DEFAULT FALSE`);
-            console.log('✅ Users can_deliver migration completed');
+            console.log('✅ Users migration (phone, can_deliver) completed');
         } catch (migrationErr3) {
-            console.log('can_deliver migration note:', migrationErr3.message);
+            console.log('Users migration note:', migrationErr3.message);
         }
 
         // Migration 4: Convert TIMESTAMP columns to TIMESTAMPTZ for correct timezone handling

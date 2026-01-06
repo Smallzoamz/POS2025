@@ -124,8 +124,8 @@ const DeliveryOrderManagement = () => {
 
     // Open Google Maps with address
     const openGoogleMaps = (order) => {
-        if (order.customer_lat && order.customer_lng) {
-            window.open(`https://www.google.com/maps/dir/?api=1&destination=${order.customer_lat},${order.customer_lng}`, '_blank');
+        if (order.latitude && order.longitude) {
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${order.latitude},${order.longitude}`, '_blank');
         } else if (order.delivery_address) {
             window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.delivery_address)}`, '_blank');
         }
@@ -273,7 +273,7 @@ const DeliveryOrderManagement = () => {
                                                 ฿{order.total_amount?.toLocaleString()}
                                             </div>
                                         </div>
-                                        {order.customer_lat && order.customer_lng && (
+                                        {order.latitude && order.longitude && (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); openGoogleMaps(order); }}
                                                 className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-blue-500 hover:border-blue-200 shadow-sm transition-all"
