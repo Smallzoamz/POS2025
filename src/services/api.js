@@ -128,6 +128,22 @@ export const api = {
         return res.json();
     },
 
+    // Delete/Cancel Order
+    deleteOrder: async (id) => {
+        const res = await fetch(`${BASE_URL}/orders/${id}`, { method: 'DELETE' });
+        return res.json();
+    },
+
+    // Update Order Metadata
+    updateOrder: async (id, data) => {
+        const res = await fetch(`${BASE_URL}/orders/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        return res.json();
+    },
+
     // Pay bill
     payOrder: async (orderId, data = {}) => {
         const res = await fetch(`${BASE_URL}/orders/${orderId}/pay`, {
@@ -296,6 +312,46 @@ export const api = {
     },
     updateProductRecipe: async (productId, ingredients) => {
         const res = await fetch(`${BASE_URL}/products/${productId}/recipe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ingredients })
+        });
+        return res.json();
+    },
+
+    // --- PRODUCT OPTIONS ---
+    getProductOptions: async (productId) => {
+        const res = await fetch(`${BASE_URL}/products/${productId}/options`);
+        return res.json();
+    },
+    addProductOption: async (productId, option) => {
+        const res = await fetch(`${BASE_URL}/products/${productId}/options`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(option)
+        });
+        return res.json();
+    },
+    updateProductOption: async (optionId, option) => {
+        const res = await fetch(`${BASE_URL}/product-options/${optionId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(option)
+        });
+        return res.json();
+    },
+    deleteProductOption: async (optionId) => {
+        const res = await fetch(`${BASE_URL}/product-options/${optionId}`, { method: 'DELETE' });
+        return res.json();
+    },
+
+    // --- OPTION RECIPES ---
+    getOptionRecipe: async (optionId) => {
+        const res = await fetch(`${BASE_URL}/option-recipes/${optionId}`);
+        return res.json();
+    },
+    saveOptionRecipe: async (optionId, ingredients) => {
+        const res = await fetch(`${BASE_URL}/option-recipes/${optionId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ingredients })

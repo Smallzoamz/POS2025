@@ -609,6 +609,63 @@ const initDatabasePG = async () => {
             console.error('Migration 11 error:', migrationErr11.message);
         }
 
+        // --- MIGRATION 12: Product Options (Add-ons & Size Variants) ---
+        try {
+            console.log('📦 Running Migration 12: product_options...');
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS product_options (
+                    id SERIAL PRIMARY KEY,
+                    product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+                    name TEXT NOT NULL,
+                    price_modifier DECIMAL(12,2) DEFAULT 0,
+                    is_size_option BOOLEAN DEFAULT FALSE,
+                    stock_quantity INTEGER DEFAULT 0,
+                    is_available BOOLEAN DEFAULT TRUE,
+                    sort_order INTEGER DEFAULT 0,
+                    recipe_multiplier DECIMAL(5,2) DEFAULT 1.00
+                )
+            `);
+            // Also ensure column exists if table was already created
+            await client.query(`ALTER TABLE product_options ADD COLUMN IF NOT EXISTS recipe_multiplier DECIMAL(5,2) DEFAULT 1.00`);
+            console.log('✅ Migration 12: product_options completed');
+        } catch (migrationErr12) {
+            console.error('Migration 12 error:', migrationErr12.message);
+        }
+
+        // --- MIGRATION 13: Order Item Options ---
+        try {
+            console.log('📦 Running Migration 13: order_item_options...');
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS order_item_options (
+                    id SERIAL PRIMARY KEY,
+                    order_item_id INTEGER REFERENCES order_items(id) ON DELETE CASCADE,
+                    option_id INTEGER REFERENCES product_options(id),
+                    option_name TEXT,
+                    price_modifier DECIMAL(12,2) DEFAULT 0
+                )
+            `);
+            console.log('✅ Migration 13: order_item_options completed');
+        } catch (migrationErr13) {
+            console.error('Migration 13 error:', migrationErr13.message);
+        }
+
+        // --- MIGRATION 14: Option Recipes (Ingredient deduction for options) ---
+        try {
+            console.log('📦 Running Migration 14: option_recipes...');
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS option_recipes (
+                    id SERIAL PRIMARY KEY,
+                    option_id INTEGER REFERENCES product_options(id) ON DELETE CASCADE,
+                    ingredient_id INTEGER REFERENCES ingredients(id) ON DELETE CASCADE,
+                    quantity_used DECIMAL(12,3) NOT NULL,
+                    UNIQUE(option_id, ingredient_id)
+                )
+            `);
+            console.log('✅ Migration 14: option_recipes completed');
+        } catch (migrationErr14) {
+            console.error('Migration 14 error:', migrationErr14.message);
+        }
+
         await client.query('COMMIT');
     } catch (e) {
         await client.query('ROLLBACK');

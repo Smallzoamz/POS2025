@@ -46,6 +46,14 @@ const OrderEntry = () => {
     const [isVerifyingCoupon, setIsVerifyingCoupon] = useState(false);
     const [couponError, setCouponError] = useState('');
 
+    const [showOptionsModal, setShowOptionsModal] = useState(false);
+    const [selectedProductForOptions, setSelectedProductForOptions] = useState(null);
+    const [selectedOptions, setSelectedOptions] = useState([]);
+
+    // Edit Table Modal State
+    const [showEditTableModal, setShowEditTableModal] = useState(false);
+    const [newTableName, setNewTableName] = useState('');
+
     useEffect(() => {
         loadData();
     }, []);
@@ -179,26 +187,117 @@ const OrderEntry = () => {
         setCouponCode('');
     };
 
-    const addToCart = (item) => {
+    // Check if product has options before adding to cart
+    const handleProductClick = (item) => {
+        if (item.options && item.options.length > 0) {
+            // Has options - show options modal
+            setSelectedProductForOptions(item);
+            setSelectedOptions([]);
+            setShowOptionsModal(true);
+        } else {
+            // No options - add directly to cart
+            addToCart(item);
+        }
+    };
+
+    const addToCart = (item, options = []) => {
+        const optionsTotal = options.reduce((sum, opt) => sum + (parseFloat(opt.price_modifier) || 0), 0);
+        const itemWithOptions = {
+            ...item,
+            options: options, // Changed from selectedOptions to options for backend consistency
+            unitPrice: parseFloat(item.price) + optionsTotal,
+            optionsLabel: options.length > 0 ? options.map(o => o.name).join(', ') : ''
+        };
+
+        // Create unique key based on product ID + options
+        const cartKey = `${item.id}-${options.map(o => o.id).sort().join('-')}`;
+
         setCart(prev => {
-            const existing = prev.find(i => i.id === item.id);
+            const existing = prev.find(i => i.cartKey === cartKey);
             if (existing) {
-                return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+                return prev.map(i => i.cartKey === cartKey ? { ...i, quantity: i.quantity + 1 } : i);
             }
-            return [...prev, { ...item, quantity: 1 }];
+            return [...prev, { ...itemWithOptions, cartKey, quantity: 1 }];
         });
     };
 
-    const updateQuantity = (itemId, delta) => {
+    const handleAddWithOptions = () => {
+        if (!selectedProductForOptions) return;
+        addToCart(selectedProductForOptions, selectedOptions);
+        setShowOptionsModal(false);
+        setSelectedProductForOptions(null);
+        setSelectedOptions([]);
+    };
+
+    const toggleOption = (option) => {
+        setSelectedOptions(prev => {
+            const exists = prev.find(o => o.id === option.id);
+            if (exists) {
+                return prev.filter(o => o.id !== exists.id);
+            }
+            // For size options, replace existing size option
+            if (option.is_size_option) {
+                return [...prev.filter(o => !o.is_size_option), option];
+            }
+            return [...prev, option];
+        });
+    };
+
+    const updateQuantity = (cartKey, delta) => {
         setCart(prev => prev.map(item => {
-            if (item.id === itemId) {
+            if (item.cartKey === cartKey) {
                 return { ...item, quantity: Math.max(0, item.quantity + delta) };
             }
             return item;
         }).filter(item => item.quantity > 0));
     };
 
-    const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const handleDeleteOrder = async () => {
+        if (!activeOrderId) return;
+        if (window.confirm('คุณต้องการยกเลิกและลบออเดอร์นี้ใช่หรือไม่? ออเดอร์และรายการอาหารทั้งหมดจะถูกลบออกจากระบบ')) {
+            try {
+                const res = await api.deleteOrder(activeOrderId);
+                if (res.success) {
+                    alert('ลบออเดอร์เรียบร้อยแล้ว');
+                    navigate('/'); // Go back to table plan
+                } else {
+                    alert('Error: ' + res.error);
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Failed to delete order');
+            }
+        }
+    };
+
+    const handleEditOrder = () => {
+        if (!activeOrderId) return;
+        setNewTableName(tableId);
+        setShowEditTableModal(true);
+    };
+
+    const confirmTableChange = async () => {
+        if (!newTableName || newTableName === tableId) {
+            setShowEditTableModal(false);
+            return;
+        }
+
+        try {
+            const res = await api.updateOrder(activeOrderId, { table_name: newTableName });
+            if (res.success) {
+                alert(`ย้ายออเดอร์ไปโต๊ะ ${newTableName} เรียบร้อยแล้ว`);
+                setShowEditTableModal(false);
+                navigate(`/order-entry/${newTableName}`); // Switch to new table view
+            } else {
+                alert('Error: ' + res.error);
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Failed to update order');
+        }
+    };
+
+    const cartTotal = cart.reduce((sum, item) => sum + ((item.unitPrice || item.price) * item.quantity), 0);
     const orderedTotal = orderedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const totalAmount = cartTotal + orderedTotal;
 
@@ -469,53 +568,54 @@ const OrderEntry = () => {
                 {/* 3. Product Grid */}
                 <section>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1.5 md:gap-4">
-                        {menuItems.filter(i => !selectedCategory || i.category_id === selectedCategory).map(item => (
-                            <div key={item.id} className={`tasty-card p-1.5 md:p-3 flex flex-col group relative ${!item.is_available ? 'opacity-80 cursor-not-allowed' : ''}`}>
-                                <div className="aspect-[4/3] rounded-lg md:rounded-xl overflow-hidden mb-1.5 bg-slate-50 ring-1 ring-slate-100 group-hover:ring-orange-100 transition-all relative">
-                                    {item.image ? (
-                                        <img src={item.image} alt={item.name} className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${!item.is_available ? 'grayscale opacity-40' : ''}`} />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-xl md:text-3xl grayscale opacity-20">🥡</div>
-                                    )}
+                        {menuItems.filter(i => !selectedCategory || i.category_id === selectedCategory).map(item => {
+                            // Use computed_available which includes recipe + stock logic
+                            const isAvailable = item.computed_available !== undefined ? item.computed_available : item.is_available;
+                            return (
+                                <div key={item.id} className={`tasty-card p-1.5 md:p-3 flex flex-col group relative ${!isAvailable ? 'opacity-80 cursor-not-allowed' : ''}`}>
+                                    <div className="aspect-[4/3] rounded-lg md:rounded-xl overflow-hidden mb-1.5 bg-slate-50 ring-1 ring-slate-100 group-hover:ring-orange-100 transition-all relative">
+                                        {item.image ? (
+                                            <img src={item.image} alt={item.name} className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${!isAvailable ? 'grayscale opacity-40' : ''}`} />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-xl md:text-3xl grayscale opacity-20">🥡</div>
+                                        )}
 
-                                    {!item.is_available && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                                            <span className="bg-red-600 text-white text-[10px] md:text-xs font-black px-3 py-1 rounded-full uppercase tracking-tighter shadow-xl animate-pulse">
-                                                สินค้าหมด
-                                            </span>
+                                        {!isAvailable && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                                <span className="bg-red-600 text-white text-[10px] md:text-xs font-black px-3 py-1 rounded-full uppercase tracking-tighter shadow-xl animate-pulse">
+                                                    สินค้าหมด
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="text-[7px] md:text-[9px] font-bold text-slate-400 mb-0.5 uppercase tracking-wider line-clamp-1">{categories.find(c => c.id === item.category_id)?.name || 'Dish'}</p>
+                                    <h4 className="text-[10px] md:text-xs font-bold text-slate-800 mb-1 line-clamp-1">{item.name}</h4>
+                                    <div className="mt-auto flex items-center justify-between">
+                                        <div>
+                                            <span className="text-[11px] md:text-sm font-bold text-slate-900 leading-none">฿{item.price.toLocaleString()}</span>
+                                            {item.options && item.options.length > 0 && (
+                                                <span className="ml-1 text-[8px] text-orange-500 font-bold">+Options</span>
+                                            )}
                                         </div>
-                                    )}
-                                </div>
-                                <p className="text-[7px] md:text-[9px] font-bold text-slate-400 mb-0.5 uppercase tracking-wider line-clamp-1">{categories.find(c => c.id === item.category_id)?.name || 'Dish'}</p>
-                                <h4 className="text-[10px] md:text-xs font-bold text-slate-800 mb-1 line-clamp-1">{item.name}</h4>
-                                <div className="mt-auto flex items-center justify-between">
-                                    <span className="text-[11px] md:text-sm font-bold text-slate-900 leading-none">฿{item.price.toLocaleString()}</span>
 
-                                    <div className="flex items-center gap-1">
-                                        {item.is_available ? (
-                                            cart.find(c => c.id === item.id) ? (
-                                                <div className="flex items-center bg-orange-50 rounded-lg border border-orange-100 p-0.5">
-                                                    <button onClick={() => updateQuantity(item.id, -1)} className="w-4 h-4 md:w-6 md:h-6 flex items-center justify-center text-orange-500 font-bold hover:bg-white rounded-md transition-colors text-xs">-</button>
-                                                    <span className="w-4 md:w-6 text-center text-[9px] md:text-xs font-bold text-orange-600">{cart.find(c => c.id === item.id).quantity}</span>
-                                                    <button onClick={() => updateQuantity(item.id, 1)} className="w-4 h-4 md:w-6 md:h-6 flex items-center justify-center text-orange-500 font-bold hover:bg-white rounded-md transition-colors text-xs">+</button>
-                                                </div>
-                                            ) : (
+                                        <div className="flex items-center gap-1">
+                                            {isAvailable ? (
                                                 <button
-                                                    onClick={() => addToCart(item)}
+                                                    onClick={() => handleProductClick(item)}
                                                     className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-lg md:rounded-xl bg-[#00A099] text-white shadow-md shadow-[#00A099]/20 hover:scale-110 transition-all active:scale-95"
                                                 >
                                                     <span className="text-sm md:text-lg font-bold">+</span>
                                                 </button>
-                                            )
-                                        ) : (
-                                            <div className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-lg md:rounded-xl bg-slate-200 text-slate-400 cursor-not-allowed">
-                                                <span className="text-sm md:text-lg font-bold">✕</span>
-                                            </div>
-                                        )}
+                                            ) : (
+                                                <div className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-lg md:rounded-xl bg-slate-200 text-slate-400 cursor-not-allowed">
+                                                    <span className="text-sm md:text-lg font-bold">✕</span>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </section>
             </div>
@@ -534,8 +634,8 @@ const OrderEntry = () => {
                             <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Order #{activeOrderId || 'NEW'}</p>
                         </div>
                         <div className="flex gap-2">
-                            <button className="p-2 text-slate-400 hover:text-orange-500 transition-colors"><span className="text-xl">✏️</span></button>
-                            <button className="p-2 text-slate-400 hover:text-red-500 transition-colors"><span className="text-xl">🗑️</span></button>
+                            <button onClick={handleEditOrder} className="p-2 text-slate-400 hover:text-orange-500 transition-colors" title="แก้ไขโต๊ะ"><span className="text-xl">✏️</span></button>
+                            <button onClick={handleDeleteOrder} className="p-2 text-slate-400 hover:text-red-500 transition-colors" title="ลบออเดอร์"><span className="text-xl">🗑️</span></button>
                         </div>
                     </div>
 
@@ -595,12 +695,24 @@ const OrderEntry = () => {
                             <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Ordered Items</h4>
                             <div className="space-y-4">
                                 {orderedItems.length > 0 ? orderedItems.map((item, idx) => (
-                                    <div key={`ord-${idx}`} className="flex items-center justify-between group">
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-xs font-bold text-slate-400 w-6">{item.quantity}x</span>
-                                            <span className="text-sm font-bold text-slate-700 line-clamp-1 group-hover:text-orange-600 transition-colors">{item.product_name}</span>
+                                    <div key={idx} className="flex flex-col gap-0.5 group py-1">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs font-bold text-slate-400 w-6">{item.quantity}x</span>
+                                                <span className="text-sm font-bold text-slate-700 line-clamp-1 group-hover:text-orange-600 transition-colors">{item.product_name}</span>
+                                            </div>
+                                            <span className="text-sm font-bold text-slate-900">฿{(item.price * item.quantity).toLocaleString()}</span>
                                         </div>
-                                        <span className="text-sm font-bold text-slate-900">฿{(item.price * item.quantity).toLocaleString()}</span>
+                                        {item.options && item.options.length > 0 && (
+                                            <div className="pl-9 space-y-0.5">
+                                                {item.options.map((opt, oIdx) => (
+                                                    <p key={oIdx} className="text-[10px] text-orange-500 font-medium flex items-center gap-1">
+                                                        <span className="w-1 h-1 rounded-full bg-orange-400"></span>
+                                                        {opt.option_name || opt.name}
+                                                    </p>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 )) : (
                                     <p className="text-xs text-slate-300 italic">No items served yet...</p>
@@ -613,12 +725,20 @@ const OrderEntry = () => {
                                 <h4 className="text-[10px] font-bold text-orange-500 uppercase tracking-[0.2em] mb-4">Draft Order</h4>
                                 <div className="space-y-4">
                                     {cart.map((item) => (
-                                        <div key={item.id} className="flex items-center justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <span className="text-xs font-bold text-orange-400 w-6">{item.quantity}x</span>
-                                                <span className="text-sm font-bold text-slate-700 line-clamp-1">{item.name}</span>
+                                        <div key={item.cartKey} className="flex items-center justify-between">
+                                            <div className="flex items-center gap-4 flex-1 min-w-0">
+                                                <span className="text-xs font-bold text-orange-400 w-6 flex-shrink-0">{item.quantity}x</span>
+                                                <div className="min-w-0">
+                                                    <span className="text-sm font-bold text-slate-700 line-clamp-1">{item.name}</span>
+                                                    {item.optionsLabel && (
+                                                        <p className="text-[10px] text-orange-500 font-medium truncate">+ {item.optionsLabel}</p>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <span className="text-sm font-bold text-slate-900">฿{(item.price * item.quantity).toLocaleString()}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-bold text-slate-900">฿{((item.unitPrice || item.price) * item.quantity).toLocaleString()}</span>
+                                                <button onClick={() => updateQuantity(item.cartKey, -1)} className="w-6 h-6 rounded-full bg-slate-100 text-slate-400 text-xs hover:bg-red-100 hover:text-red-500 transition-colors">-</button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -1038,6 +1158,119 @@ const OrderEntry = () => {
                                     )}
                                 </>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Options Selection Modal */}
+            {showOptionsModal && selectedProductForOptions && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={() => setShowOptionsModal(false)}>
+                    <div className="bg-white rounded-[32px] w-full max-w-md max-h-[80vh] overflow-hidden shadow-2xl animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                        {/* Header */}
+                        <div className="p-6 bg-gradient-to-r from-orange-500 to-orange-600 text-white">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h3 className="text-xl font-black">{selectedProductForOptions.name}</h3>
+                                    <p className="text-orange-100 text-sm mt-1">เลือก Options เพิ่มเติม</p>
+                                </div>
+                                <button onClick={() => setShowOptionsModal(false)} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors">✕</button>
+                            </div>
+                        </div>
+
+                        {/* Options List */}
+                        <div className="p-6 overflow-y-auto max-h-[50vh] space-y-3">
+                            {selectedProductForOptions.options?.filter(opt => !opt.is_size_option).length > 0 && (
+                                <div>
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">➕ Add-ons (เลือกได้หลายอย่าง)</h4>
+                                    {selectedProductForOptions.options.filter(opt => !opt.is_size_option).map(opt => {
+                                        const isSelected = selectedOptions.find(o => o.id === opt.id);
+                                        return (
+                                            <button key={opt.id} onClick={() => toggleOption(opt)} className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all mb-2 ${isSelected ? 'border-orange-500 bg-orange-50' : 'border-slate-100 hover:border-orange-200'}`}>
+                                                <span className={`font-bold ${isSelected ? 'text-orange-600' : 'text-slate-700'}`}>{opt.name}</span>
+                                                <span className="text-orange-500 font-bold">+฿{opt.price_modifier}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {selectedProductForOptions.options?.filter(opt => opt.is_size_option).length > 0 && (
+                                <div>
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">📏 Size Options (เลือก 1 อย่าง)</h4>
+                                    {selectedProductForOptions.options.filter(opt => opt.is_size_option).map(opt => {
+                                        const isSelected = selectedOptions.find(o => o.id === opt.id);
+                                        const outOfStock = opt.stock_quantity <= 0;
+                                        return (
+                                            <button key={opt.id} onClick={() => !outOfStock && toggleOption(opt)} disabled={outOfStock} className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all mb-2 ${outOfStock ? 'opacity-50 cursor-not-allowed border-slate-100' : isSelected ? 'border-blue-500 bg-blue-50' : 'border-slate-100 hover:border-blue-200'}`}>
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`font-bold ${isSelected ? 'text-blue-600' : 'text-slate-700'}`}>{opt.name}</span>
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${outOfStock ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                                                        {outOfStock ? 'หมด' : `เหลือ ${opt.stock_quantity}`}
+                                                    </span>
+                                                </div>
+                                                <span className="text-blue-500 font-bold">+฿{opt.price_modifier}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 border-t border-slate-100 bg-slate-50">
+                            <div className="flex items-center justify-between mb-4">
+                                <span className="text-sm font-bold text-slate-500">ราคารวม</span>
+                                <span className="text-2xl font-black text-orange-600">
+                                    ฿{(parseFloat(selectedProductForOptions.price) + selectedOptions.reduce((sum, o) => sum + parseFloat(o.price_modifier || 0), 0)).toLocaleString()}
+                                </span>
+                            </div>
+                            <button onClick={handleAddWithOptions} className="w-full py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-orange-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all">
+                                เพิ่มลงตะกร้า
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Table Modal */}
+            {showEditTableModal && (
+                <div className="fixed inset-0 bg-black/60 z-[110] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowEditTableModal(false)}>
+                    <div className="bg-white rounded-3xl w-full max-w-sm p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="text-center mb-6">
+                            <span className="text-4xl mb-4 block">✏️</span>
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">ย้ายโต๊ะ / เปลี่ยนหมายเลข</h3>
+                            <p className="text-sm text-slate-500 font-medium">ระบุหมายเลขโต๊ะใหม่ที่ต้องการย้ายออเดอร์นี้ไป</p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block px-1">หมายเลขโต๊ะใหม่</label>
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={newTableName}
+                                    onChange={(e) => setNewTableName(e.target.value)}
+                                    className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-xl font-bold text-center focus:border-orange-500 focus:bg-white outline-none transition-all"
+                                    placeholder="เช่น T-02"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 pt-4">
+                                <button
+                                    onClick={() => setShowEditTableModal(false)}
+                                    className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-colors"
+                                >
+                                    ยกเลิก
+                                </button>
+                                <button
+                                    onClick={confirmTableChange}
+                                    disabled={!newTableName || newTableName === tableId}
+                                    className="py-4 bg-[#00A099] text-white rounded-2xl font-bold hover:bg-[#009088] disabled:bg-slate-300 disabled:shadow-none transition-all shadow-lg shadow-[#00A099]/30"
+                                >
+                                    ย้ายโต๊ะ
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

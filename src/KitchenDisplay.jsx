@@ -69,7 +69,29 @@ const KitchenDisplay = () => {
         try {
             // Fetch recipe for each item in the order
             const itemsWithRecipes = await Promise.all(order.items.map(async (item) => {
-                const ingredients = await api.getProductRecipe(item.product_id);
+                const baseIngredients = await api.getProductRecipe(item.product_id);
+                let ingredients = [...(Array.isArray(baseIngredients) ? baseIngredients : [])];
+
+                // Fetch ingredients for each option
+                if (item.options && item.options.length > 0) {
+                    const optionsIngredients = await Promise.all(item.options.map(opt => api.getOptionRecipe(opt.option_id || opt.id)));
+                    optionsIngredients.forEach(optRecipe => {
+                        if (Array.isArray(optRecipe)) {
+                            optRecipe.forEach(oi => {
+                                const existing = ingredients.find(ing => ing.ingredient_id === oi.ingredient_id);
+                                if (existing) {
+                                    existing.quantity_used += parseFloat(oi.quantity_used);
+                                } else {
+                                    ingredients.push({
+                                        ...oi,
+                                        name: oi.ingredient_name || oi.name // Ensure name property exists
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+
                 return { ...item, ingredients };
             }));
 
@@ -89,7 +111,28 @@ const KitchenDisplay = () => {
 
         try {
             const itemsWithRecipes = await Promise.all(order.items.map(async (item) => {
-                const ingredients = await api.getProductRecipe(item.product_id);
+                const baseIngredients = await api.getProductRecipe(item.product_id);
+                let ingredients = [...(Array.isArray(baseIngredients) ? baseIngredients : [])];
+
+                // Fetch ingredients for each option (LINE orders store options in the item object)
+                if (item.options && item.options.length > 0) {
+                    const optionsIngredients = await Promise.all(item.options.map(opt => api.getOptionRecipe(opt.option_id || opt.id)));
+                    optionsIngredients.forEach(optRecipe => {
+                        if (Array.isArray(optRecipe)) {
+                            optRecipe.forEach(oi => {
+                                const existing = ingredients.find(ing => ing.ingredient_id === oi.ingredient_id);
+                                if (existing) {
+                                    existing.quantity_used += parseFloat(oi.quantity_used);
+                                } else {
+                                    ingredients.push({
+                                        ...oi,
+                                        name: oi.ingredient_name || oi.name
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
                 return { ...item, ingredients };
             }));
 
@@ -338,13 +381,25 @@ const KitchenDisplay = () => {
 
                                             <div className="px-4 flex-1 space-y-1.5 mb-4">
                                                 {order.items.map((item, idx) => (
-                                                    <div key={idx} className="flex gap-2 items-start">
-                                                        <span className="flex-shrink-0 w-5 h-5 bg-slate-800 rounded-md flex items-center justify-center text-[10px] font-bold text-white">
-                                                            {item.quantity}
-                                                        </span>
-                                                        <span className="text-sm font-medium text-slate-300 leading-tight">
-                                                            {item.product_name}
-                                                        </span>
+                                                    <div key={idx} className="space-y-1">
+                                                        <div className="flex gap-2 items-start">
+                                                            <span className="flex-shrink-0 w-5 h-5 bg-slate-800 rounded-md flex items-center justify-center text-[10px] font-bold text-white">
+                                                                {item.quantity}
+                                                            </span>
+                                                            <span className="text-sm font-black text-white leading-tight">
+                                                                {item.product_name}
+                                                            </span>
+                                                        </div>
+                                                        {item.options && item.options.length > 0 && (
+                                                            <div className="pl-7 space-y-0.5">
+                                                                {item.options.map((opt, oIdx) => (
+                                                                    <div key={oIdx} className="text-[10px] text-orange-400 font-bold flex items-center gap-1.5 uppercase tracking-wide">
+                                                                        <span className="w-1 h-1 rounded-full bg-orange-500/50"></span>
+                                                                        {opt.option_name || opt.name}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>
@@ -411,11 +466,29 @@ const KitchenDisplay = () => {
                                                 {order.order_type === 'reservation' && <span className="text-[8px] text-slate-400 font-bold">{order.reservation_time}</span>}
                                             </div>
 
-                                            <div className="px-4 flex-1 space-y-1.5 mb-4">
+                                            <div className="px-4 flex-1 space-y-2 mb-4">
                                                 {(order.items || []).map((item, idx) => (
-                                                    <div key={idx} className="flex justify-between items-center text-sm md:text-base">
-                                                        <span className="font-bold text-slate-300">{item.quantity} x {item.product_name}</span>
-                                                        <button onClick={() => handleViewLineRecipe(item)} className="p-1 px-2 bg-slate-800 text-[10px] font-bold text-slate-400 rounded hover:bg-orange-500 hover:text-white transition-all uppercase">Manual</button>
+                                                    <div key={idx} className="space-y-1">
+                                                        <div className="flex justify-between items-start">
+                                                            <div className="flex gap-2 items-start">
+                                                                <span className="flex-shrink-0 w-5 h-5 bg-blue-500/20 rounded-md flex items-center justify-center text-[10px] font-bold text-blue-400">
+                                                                    {item.quantity}
+                                                                </span>
+                                                                <span className="text-sm font-black text-white leading-tight">
+                                                                    {item.product_name}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        {item.options && item.options.length > 0 && (
+                                                            <div className="pl-7 space-y-0.5">
+                                                                {item.options.map((opt, oIdx) => (
+                                                                    <div key={oIdx} className="text-[10px] text-blue-400 font-bold flex items-center gap-1.5 uppercase tracking-wide">
+                                                                        <span className="w-1 h-1 rounded-full bg-blue-500/50"></span>
+                                                                        {opt.name}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>

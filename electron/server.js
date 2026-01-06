@@ -277,12 +277,62 @@ async function startServer() {
         }
     });
 
-    // Get All Products (Menu)
+    // Get All Products (Menu) with computed availability
     app.get('/api/products', async (req, res) => {
         try {
             const productsRes = await query('SELECT * FROM products');
             const categoriesRes = await query('SELECT * FROM categories ORDER BY sort_order');
-            res.json({ products: productsRes.rows, categories: categoriesRes.rows });
+
+            // Get all product ingredients (recipes)
+            const recipesRes = await query('SELECT pi.product_id, pi.ingredient_id, pi.quantity_used, i.total_quantity, i.name as ingredient_name FROM product_ingredients pi JOIN ingredients i ON pi.ingredient_id = i.id');
+
+            // Get all product options
+            const optionsRes = await query('SELECT * FROM product_options ORDER BY product_id, sort_order, id');
+
+            // Group recipes by product_id
+            const recipesByProduct = {};
+            recipesRes.rows.forEach(r => {
+                if (!recipesByProduct[r.product_id]) recipesByProduct[r.product_id] = [];
+                recipesByProduct[r.product_id].push(r);
+            });
+
+            // Group options by product_id
+            const optionsByProduct = {};
+            optionsRes.rows.forEach(o => {
+                if (!optionsByProduct[o.product_id]) optionsByProduct[o.product_id] = [];
+                optionsByProduct[o.product_id].push(o);
+            });
+
+            // Compute has_recipe and can_make for each product
+            const products = productsRes.rows.map(product => {
+                const recipe = recipesByProduct[product.id] || [];
+                const options = optionsByProduct[product.id] || [];
+                const has_recipe = recipe.length > 0;
+
+                // Check if all ingredients are sufficient
+                let can_make = has_recipe;
+                if (has_recipe) {
+                    for (const ing of recipe) {
+                        if (parseFloat(ing.total_quantity) < parseFloat(ing.quantity_used)) {
+                            can_make = false;
+                            break;
+                        }
+                    }
+                }
+
+                // Compute effective availability: manual toggle + recipe + ingredients
+                const computed_available = product.is_available && has_recipe && can_make;
+
+                return {
+                    ...product,
+                    has_recipe,
+                    can_make,
+                    computed_available,
+                    options
+                };
+            });
+
+            res.json({ products, categories: categoriesRes.rows });
         } catch (err) {
             console.error(err);
             res.status(500).json({ error: err.message });
@@ -356,6 +406,115 @@ async function startServer() {
         }
     });
 
+    // =====================================================
+    // PRODUCT OPTIONS (Add-ons & Size Variants)
+    // =====================================================
+
+    // Get Options for a Product
+    app.get('/api/products/:id/options', async (req, res) => {
+        const { id } = req.params;
+        try {
+            const result = await query('SELECT * FROM product_options WHERE product_id = $1 ORDER BY sort_order, id', [id]);
+            res.json(result.rows);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Add Option to Product
+    app.post('/api/products/:id/options', async (req, res) => {
+        const { id } = req.params;
+        const { name, price_modifier, is_size_option, stock_quantity, is_available, sort_order, recipe_multiplier } = req.body;
+        try {
+            const result = await query(
+                `INSERT INTO product_options (product_id, name, price_modifier, is_size_option, stock_quantity, is_available, sort_order, recipe_multiplier) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+                [id, name, price_modifier || 0, is_size_option || false, stock_quantity || 0, is_available !== false, sort_order || 0, recipe_multiplier || 1.00]
+            );
+            res.json({ success: true, id: result.rows[0].id });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Update Option
+    app.put('/api/product-options/:id', async (req, res) => {
+        const { id } = req.params;
+        const { name, price_modifier, is_size_option, stock_quantity, is_available, sort_order, recipe_multiplier } = req.body;
+        try {
+            await query(
+                `UPDATE product_options SET name = $1, price_modifier = $2, is_size_option = $3, stock_quantity = $4, is_available = $5, sort_order = $6, recipe_multiplier = $7 WHERE id = $8`,
+                [name, price_modifier || 0, is_size_option || false, stock_quantity || 0, is_available !== false, sort_order || 0, recipe_multiplier || 1.00, id]
+            );
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Delete Option
+    app.delete('/api/product-options/:id', async (req, res) => {
+        const { id } = req.params;
+        try {
+            await query('DELETE FROM product_options WHERE id = $1', [id]);
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // =====================================================
+    // OPTION RECIPES (Ingredient deduction for options)
+    // =====================================================
+
+    // Get Recipe for an Option
+    app.get('/api/option-recipes/:optionId', async (req, res) => {
+        const { optionId } = req.params;
+        try {
+            const result = await query(`
+                SELECT orr.*, i.name as ingredient_name, i.unit 
+                FROM option_recipes orr
+                JOIN ingredients i ON orr.ingredient_id = i.id
+                WHERE orr.option_id = $1
+            `, [optionId]);
+            res.json(result.rows);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Save/Update Recipe for an Option
+    app.post('/api/option-recipes/:optionId', async (req, res) => {
+        const { optionId } = req.params;
+        const { ingredients } = req.body; // Array of { ingredient_id, quantity_used }
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            // Clear existing recipes
+            await client.query('DELETE FROM option_recipes WHERE option_id = $1', [optionId]);
+            // Insert new recipes
+            for (const ing of ingredients) {
+                await client.query(
+                    'INSERT INTO option_recipes (option_id, ingredient_id, quantity_used) VALUES ($1, $2, $3)',
+                    [optionId, ing.ingredient_id, ing.quantity_used]
+                );
+            }
+            await client.query('COMMIT');
+            res.json({ success: true });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
+
     // Create New Order (or Append to Existing)
     app.post('/api/orders', async (req, res) => {
         const { tableName, items, total, orderType } = req.body;
@@ -393,27 +552,62 @@ async function startServer() {
             // Always Update Table Status to 'occupied'
             await client.query("UPDATE tables SET status = 'occupied' WHERE name = $1", [tableName]);
 
-            // 1.5 CHECK STOCK and DECREMENT (INGREDIENTS)
+            // 1.5 CHECK STOCK and DECREMENT (INGREDIENTS & OPTIONS)
             const ingredientsNeeded = new Map(); // ingredient_id -> total_needed
+            const optionsToDeductStock = []; // { option_id, quantity }
 
             for (const item of items) {
+                const orderQty = item.quantity || 1;
+
+                // A. Base Product Recipe
                 const recipeRes = await client.query(
                     "SELECT ingredient_id, quantity_used FROM product_ingredients WHERE product_id = $1",
                     [item.id]
                 );
-                const recipe = recipeRes.rows;
+                for (const r of recipeRes.rows) {
+                    const totalForThisItem = parseFloat(r.quantity_used) * orderQty;
+                    const current = ingredientsNeeded.get(r.ingredient_id) || 0;
+                    ingredientsNeeded.set(r.ingredient_id, current + totalForThisItem);
+                }
 
-                if (recipe.length > 0) {
-                    const orderQty = item.quantity || 1;
-                    for (const r of recipe) {
-                        const totalForThisItem = parseFloat(r.quantity_used) * orderQty;
-                        const current = ingredientsNeeded.get(r.ingredient_id) || 0;
-                        ingredientsNeeded.set(r.ingredient_id, current + totalForThisItem);
+                // B. Options Recipes (Add-ons like Fried Egg)
+                const selectedOptions = item.options || item.selectedOptions || [];
+                if (selectedOptions.length > 0) {
+                    for (const opt of selectedOptions) {
+                        // B0. Handle Multiplier (e.g. "Special" menu adds 3% to all ingredients)
+                        // Fetch the actual option to get its recipe_multiplier
+                        const optDataRes = await client.query("SELECT recipe_multiplier FROM product_options WHERE id = $1", [opt.id]);
+                        const optMultiplier = parseFloat(optDataRes.rows[0]?.recipe_multiplier || 1.00);
+
+                        if (optMultiplier > 1.0) {
+                            const extraMultiplier = optMultiplier - 1.0;
+                            // Add extra ingredient consumption based on base recipe
+                            for (const r of recipeRes.rows) {
+                                const extraForThisOption = (parseFloat(r.quantity_used) * extraMultiplier) * orderQty;
+                                const current = ingredientsNeeded.get(r.ingredient_id) || 0;
+                                ingredientsNeeded.set(r.ingredient_id, current + extraForThisOption);
+                            }
+                        }
+
+                        // B1. Ingredient Recipe for Option (Specific added items like Fried Egg)
+                        const optRecipeRes = await client.query(
+                            "SELECT ingredient_id, quantity_used FROM option_recipes WHERE option_id = $1",
+                            [opt.id]
+                        );
+                        for (const r of optRecipeRes.rows) {
+                            const totalForThisOption = parseFloat(r.quantity_used) * orderQty;
+                            const current = ingredientsNeeded.get(r.ingredient_id) || 0;
+                            ingredientsNeeded.set(r.ingredient_id, current + totalForThisOption);
+                        }
+
+                        // B2. Stock Deduction for Size Options (Direct stock tracking on the option itself)
+                        // If it's a size option, we might want to deduct its specific stock
+                        optionsToDeductStock.push({ id: opt.id, quantity: orderQty });
                     }
                 }
             }
 
-            // Verify stock availability
+            // Verify stock availability (Ingredients)
             for (const [ingId, needed] of ingredientsNeeded.entries()) {
                 const ingRes = await client.query("SELECT name, total_quantity, unit FROM ingredients WHERE id = $1", [ingId]);
                 const ing = ingRes.rows[0];
@@ -425,17 +619,43 @@ async function startServer() {
                 }
             }
 
-            // Deduct stock
+            // Verify stock availability (Options - specifically Size Options with stock)
+            for (const optToDeduct of optionsToDeductStock) {
+                const optRes = await client.query("SELECT name, stock_quantity, is_size_option FROM product_options WHERE id = $1", [optToDeduct.id]);
+                const opt = optRes.rows[0];
+                if (opt && opt.is_size_option && opt.stock_quantity < optToDeduct.quantity) {
+                    throw new Error(`สินค้า '${opt.name}' ไม่พอ (มีเพียง ${opt.stock_quantity} ชิ้น)`);
+                }
+            }
+
+            // Deduct stock (Ingredients)
             for (const [ingId, needed] of ingredientsNeeded.entries()) {
                 await client.query("UPDATE ingredients SET total_quantity = total_quantity - $1 WHERE id = $2", [needed, ingId]);
             }
 
+            // Deduct stock (Options)
+            for (const optToDeduct of optionsToDeductStock) {
+                await client.query("UPDATE product_options SET stock_quantity = stock_quantity - $1 WHERE id = $2 AND is_size_option = TRUE", [optToDeduct.quantity, optToDeduct.id]);
+            }
+
             // 2. Insert Items
             for (const item of items) {
-                await client.query(
-                    'INSERT INTO order_items (order_id, product_id, product_name, price, quantity, status) VALUES ($1, $2, $3, $4, $5, $6)',
-                    [orderId, item.id, item.name, item.price, item.quantity || 1, 'cooking']
+                // Use unitPrice (includes options) if available, otherwise base price
+                const finalPrice = item.unitPrice || item.price;
+                const itemResult = await client.query(
+                    'INSERT INTO order_items (order_id, product_id, product_name, price, quantity, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+                    [orderId, item.id, item.name, finalPrice, item.quantity || 1, 'cooking']
                 );
+                const orderItemId = itemResult.rows[0].id;
+
+                // 2.1 Insert Item Options
+                const selectedOptions = item.options || item.selectedOptions || [];
+                for (const opt of selectedOptions) {
+                    await client.query(
+                        'INSERT INTO order_item_options (order_item_id, option_id, option_name, price_modifier) VALUES ($1, $2, $3, $4)',
+                        [orderItemId, opt.id, opt.name, opt.price_modifier || 0]
+                    );
+                }
             }
 
             await client.query('COMMIT');
@@ -462,6 +682,79 @@ async function startServer() {
         }
     });
 
+    // DELETE /api/orders/:id - Cancel/Delete Order
+    app.delete('/api/orders/:id', async (req, res) => {
+        const { id } = req.params;
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Get table name before deletion to free it up
+            const orderRes = await client.query("SELECT table_name FROM orders WHERE id = $1", [id]);
+            const tableName = orderRes.rows[0]?.table_name;
+
+            // Delete order items first (due to foreign keys if any, though here it's likely CASCADE)
+            await client.query("DELETE FROM order_items WHERE order_id = $1", [id]);
+            await client.query("DELETE FROM orders WHERE id = $1", [id]);
+
+            // If it was a table order, check if any other active orders exist for this table
+            if (tableName) {
+                const activeRes = await client.query("SELECT id FROM orders WHERE table_name = $1 AND status != 'paid'", [tableName]);
+                if (activeRes.rows.length === 0) {
+                    await client.query("UPDATE tables SET status = 'available' WHERE name = $1", [tableName]);
+                }
+            }
+
+            await client.query('COMMIT');
+            io.emit('table-update', { id: null, status: 'refresh' });
+            res.json({ success: true });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
+
+    // PATCH /api/orders/:id - Update Order Metadata (e.g. Change Table)
+    app.patch('/api/orders/:id', async (req, res) => {
+        const { id } = req.params;
+        const { table_name } = req.body;
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Get old table name
+            const orderRes = await client.query("SELECT table_name FROM orders WHERE id = $1", [id]);
+            const oldTable = orderRes.rows[0]?.table_name;
+
+            if (table_name && table_name !== oldTable) {
+                // Update order to new table
+                await client.query("UPDATE orders SET table_name = $1 WHERE id = $2", [table_name, id]);
+
+                // Set new table to occupied
+                await client.query("UPDATE tables SET status = 'occupied' WHERE name = $1", [table_name]);
+
+                // Check if old table is now empty
+                const activeOldRes = await client.query("SELECT id FROM orders WHERE table_name = $1 AND status != 'paid'", [oldTable]);
+                if (activeOldRes.rows.length === 0) {
+                    await client.query("UPDATE tables SET status = 'available' WHERE name = $1", [oldTable]);
+                }
+            }
+
+            await client.query('COMMIT');
+            io.emit('table-update', { id: null, status: 'refresh' });
+            res.json({ success: true });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
+
     // Get Active Order by Table Name
     app.get('/api/orders/:tableName', async (req, res) => {
         const { tableName } = req.params;
@@ -478,6 +771,13 @@ async function startServer() {
 
             if (order) {
                 const itemsRes = await query("SELECT * FROM order_items WHERE order_id = $1", [order.id]);
+                const items = itemsRes.rows;
+
+                // Fetch options for each item
+                for (let item of items) {
+                    const optionsRes = await query("SELECT * FROM order_item_options WHERE order_item_id = $1", [item.id]);
+                    item.options = optionsRes.rows;
+                }
 
                 // Fetch linked reservation info for deposit
                 let reservation = null;
@@ -492,7 +792,7 @@ async function startServer() {
                         deposit_amount: reservation?.deposit_amount || 0,
                         is_deposit_paid: reservation?.is_deposit_paid || false
                     },
-                    items: itemsRes.rows
+                    items: items
                 });
             } else {
                 res.json({ order: null, items: [] });
@@ -666,7 +966,15 @@ async function startServer() {
             const fullOrders = [];
             for (const order of orders) {
                 const itemsRes = await query("SELECT * FROM order_items WHERE order_id = $1 AND status != 'served'", [order.id]);
-                fullOrders.push({ ...order, items: itemsRes.rows });
+                const items = itemsRes.rows;
+
+                // For each item, fetch its options
+                for (const item of items) {
+                    const optionsRes = await query("SELECT * FROM order_item_options WHERE order_item_id = $1", [item.id]);
+                    item.options = optionsRes.rows;
+                }
+
+                fullOrders.push({ ...order, items });
             }
 
             // Filter out orders with no active items
@@ -707,9 +1015,19 @@ async function startServer() {
 
             const lineOrders = ordersRes.rows;
             for (let order of lineOrders) {
-                const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
-                order.items = itemsRes.rows;
+                if (order.items_json) {
+                    try {
+                        order.items = JSON.parse(order.items_json);
+                    } catch (e) {
+                        const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
+                        order.items = itemsRes.rows;
+                    }
+                } else {
+                    const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
+                    order.items = itemsRes.rows;
+                }
             }
+
 
             res.json(lineOrders);
         } catch (err) {

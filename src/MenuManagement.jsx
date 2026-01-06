@@ -20,6 +20,11 @@ const MenuManagement = () => {
     const [categoryForm, setCategoryForm] = useState({ id: '', name: '', icon: '' });
     const [allIngredients, setAllIngredients] = useState([]);
     const [recipeItems, setRecipeItems] = useState([]);
+    const [productOptions, setProductOptions] = useState([]);
+    const [optionForm, setOptionForm] = useState({ name: '', price_modifier: 0, is_size_option: false, stock_quantity: 0, recipe_multiplier: 1.00 });
+    const [showOptionRecipeModal, setShowOptionRecipeModal] = useState(false);
+    const [editingOptionRecipe, setEditingOptionRecipe] = useState(null);
+    const [optionRecipeItems, setOptionRecipeItems] = useState([]);
 
     useEffect(() => {
         loadData();
@@ -52,13 +57,18 @@ const MenuManagement = () => {
         setActiveModalTab('info');
         if (product) {
             setProductForm({ ...product });
-            // Fetch recipe if editing
+            // Fetch recipe and options if editing
             try {
-                const recipe = await api.getProductRecipe(product.id);
-                setRecipeItems(recipe);
+                const [recipe, options] = await Promise.all([
+                    api.getProductRecipe(product.id),
+                    api.getProductOptions(product.id)
+                ]);
+                setRecipeItems(Array.isArray(recipe) ? recipe : []);
+                setProductOptions(Array.isArray(options) ? options : []);
             } catch (e) {
-                console.error("Error loading recipe:", e);
+                console.error("Error loading recipe/options:", e);
                 setRecipeItems([]);
+                setProductOptions([]);
             }
         } else {
             setProductForm({
@@ -71,7 +81,9 @@ const MenuManagement = () => {
                 stock_quantity: 0
             });
             setRecipeItems([]);
+            setProductOptions([]);
         }
+        setOptionForm({ name: '', price_modifier: 0, is_size_option: false, stock_quantity: 0 });
         setShowProductModal(true);
     };
 
@@ -151,6 +163,65 @@ const MenuManagement = () => {
             console.error("Error saving recipe:", error);
             alert("❌ เกิดข้อผิดพลาดในการบันทึกสูตร");
         }
+    };
+
+    const handleSaveOptionRecipe = async () => {
+        if (!editingOptionRecipe) return;
+        try {
+            await api.saveOptionRecipe(editingOptionRecipe.id, optionRecipeItems);
+            setShowOptionRecipeModal(false);
+            setEditingOptionRecipe(null);
+            alert("✅ บันทึกสูตรสำหรับ Option เรียบร้อยแล้ว");
+        } catch (error) {
+            console.error("Error saving option recipe:", error);
+            alert("❌ เกิดข้อผิดพลาดในการบันทึกสูตร");
+        }
+    };
+
+    const updateOptionRecipeItem = (ingredientId, quantity, unit) => {
+        setOptionRecipeItems(prev => prev.map(item => {
+            if (item.ingredient_id === ingredientId) {
+                let finalQty = quantity;
+                // If the display unit is a sub-unit, convert to base unit
+                if (item.unit === 'kg' && unit === 'g') finalQty = quantity / 1000;
+                else if (item.unit === 'l' && unit === 'ml') finalQty = quantity / 1000;
+
+                return { ...item, quantity_used: finalQty, displayUnit: unit };
+            }
+            return item;
+        }));
+    };
+
+    const toggleOptionRecipeUnit = (ingredientId) => {
+        setOptionRecipeItems(prev => prev.map(item => {
+            if (item.ingredient_id === ingredientId) {
+                const currentUnit = item.displayUnit || item.unit;
+                let nextUnit = currentUnit;
+                let nextQty = item.quantity_used;
+
+                if (item.unit === 'kg') {
+                    nextUnit = currentUnit === 'kg' ? 'g' : 'kg';
+                    nextQty = nextUnit === 'g' ? item.quantity_used * 1000 : item.quantity_used;
+                } else if (item.unit === 'l') {
+                    nextUnit = currentUnit === 'l' ? 'ml' : 'l';
+                    nextQty = nextUnit === 'ml' ? item.quantity_used * 1000 : item.quantity_used;
+                }
+
+                return { ...item, displayUnit: nextUnit };
+            }
+            return item;
+        }));
+    };
+
+    const addIngredientToOptionRecipe = (ingredient) => {
+        if (optionRecipeItems.find(i => i.ingredient_id === ingredient.id)) return;
+        setOptionRecipeItems([...optionRecipeItems, {
+            ingredient_id: ingredient.id,
+            ingredient_name: ingredient.name,
+            quantity_used: 1,
+            unit: ingredient.unit,
+            displayUnit: ingredient.unit // Default to base unit
+        }]);
     };
 
     return (
@@ -246,13 +317,20 @@ const MenuManagement = () => {
                                                                 >
                                                                     <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${p.is_available ? 'translate-x-6' : 'translate-x-0'}`}></div>
                                                                 </div>
-                                                                <span className={`text-[9px] font-black uppercase tracking-tighter ${p.is_available ? 'text-orange-600' : 'text-slate-400'}`}>
-                                                                    {p.is_available ? 'Available' : 'Sold Out'}
-                                                                </span>
+                                                                {/* Show computed status with reason */}
+                                                                {p.computed_available === false && p.is_available ? (
+                                                                    <span className="text-[9px] font-black uppercase tracking-tighter text-red-500">
+                                                                        {!p.has_recipe ? '⚠️ No Recipe' : !p.can_make ? '⚠️ Low Stock' : 'Sold Out'}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className={`text-[9px] font-black uppercase tracking-tighter ${p.is_available ? 'text-orange-600' : 'text-slate-400'}`}>
+                                                                        {p.is_available ? 'Available' : 'Sold Out'}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </td>
                                                         <td className="px-8 py-6 text-right">
-                                                            <div className={`text-xl font-black tabular-nums tracking-tighter ${p.is_available ? 'text-orange-600' : 'text-slate-300'}`}>
+                                                            <div className={`text-xl font-black tabular-nums tracking-tighter ${p.computed_available !== false ? 'text-orange-600' : 'text-slate-300'}`}>
                                                                 ฿{p.price.toLocaleString()}
                                                             </div>
                                                         </td>
@@ -347,7 +425,13 @@ const MenuManagement = () => {
                                         className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeModalTab === 'recipe' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-400'}`}
                                         onClick={() => setActiveModalTab('recipe')}
                                     >
-                                        Culinary Blueprint
+                                        Recipe
+                                    </button>
+                                    <button
+                                        className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeModalTab === 'options' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-400'}`}
+                                        onClick={() => setActiveModalTab('options')}
+                                    >
+                                        Options
                                     </button>
                                 </div>
                             </div>
@@ -397,8 +481,7 @@ const MenuManagement = () => {
                                             />
                                         </div>
                                     </form>
-                                ) : (
-
+                                ) : activeModalTab === 'recipe' ? (
                                     <div className="space-y-8 animate-fade-in">
                                         <div className="flex items-center gap-4 p-4 bg-orange-50 rounded-2xl border border-orange-100 text-orange-800 text-[11px] font-bold">
                                             <span className="text-lg">ℹ️</span> Define ingredient ratios for automated stock depletion upon transaction.
@@ -492,7 +575,85 @@ const MenuManagement = () => {
                                             </div>
                                         </div>
                                     </div>
-                                )}
+                                ) : activeModalTab === 'options' ? (
+                                    <div className="space-y-6 animate-fade-in">
+                                        <div className="flex items-center gap-4 p-4 bg-blue-50 rounded-2xl border border-blue-100 text-blue-800 text-[11px] font-bold">
+                                            <span className="text-lg">💎</span> Add-ons หรือ Size Options
+                                        </div>
+
+                                        {/* Add Option Form */}
+                                        <div className="p-6 bg-slate-900 rounded-[24px] text-white shadow-xl">
+                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Add New Option</label>
+                                            <div className="space-y-4">
+                                                <div className="flex gap-3">
+                                                    <input type="text" placeholder="ชื่อ Option" className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white outline-none" value={optionForm.name} onChange={e => setOptionForm({ ...optionForm, name: e.target.value })} />
+                                                    <input type="number" placeholder="+฿" className="w-24 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white outline-none" value={optionForm.price_modifier} onChange={e => setOptionForm({ ...optionForm, price_modifier: Number(e.target.value) })} />
+                                                </div>
+                                                <div className="flex gap-4 items-center flex-wrap">
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <input type="checkbox" checked={optionForm.is_size_option} onChange={e => setOptionForm({ ...optionForm, is_size_option: e.target.checked })} className="w-4 h-4 rounded accent-orange-500" />
+                                                        <span className="text-sm text-slate-300">Size Option (มี Stock)</span>
+                                                    </label>
+                                                    {optionForm.is_size_option && (
+                                                        <input type="number" placeholder="Stock" className="w-24 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white outline-none" value={optionForm.stock_quantity} onChange={e => setOptionForm({ ...optionForm, stock_quantity: Number(e.target.value) })} />
+                                                    )}
+                                                    <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2">
+                                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Recipe x</span>
+                                                        <input
+                                                            type="number" step="0.01" placeholder="1.00"
+                                                            className="w-16 bg-transparent text-sm text-white outline-none"
+                                                            value={optionForm.recipe_multiplier}
+                                                            onChange={e => setOptionForm({ ...optionForm, recipe_multiplier: Number(e.target.value) })}
+                                                        />
+                                                    </div>
+                                                    <p className="text-[9px] text-slate-500 italic w-full">* ใช้สำหรับสั่ง 'พิเศษ' เพื่อเพิ่มปริมาณวัตถุดิบในสูตร (เช่น 1.03 = +3%)</p>
+                                                </div>
+                                                <button onClick={async () => { if (!optionForm.name || !editingProduct) return; try { await api.addProductOption(editingProduct.id, optionForm); const options = await api.getProductOptions(editingProduct.id); setProductOptions(options || []); setOptionForm({ name: '', price_modifier: 0, is_size_option: false, stock_quantity: 0, recipe_multiplier: 1.00 }); } catch (e) { console.error(e); } }} disabled={!optionForm.name} className="w-full py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-700 text-[10px] font-black uppercase rounded-xl">+ Add Option</button>
+                                            </div>
+                                        </div>
+
+                                        {/* Options List */}
+                                        <div className="space-y-3">
+                                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Current Options</h4>
+                                            <div className="bg-slate-50 border border-slate-100 rounded-[24px] overflow-hidden">
+                                                {productOptions.length > 0 ? productOptions.map(opt => (
+                                                    <div key={opt.id} className="flex items-center justify-between p-5 border-b border-slate-100 last:border-0 hover:bg-white">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${opt.is_size_option ? 'bg-blue-100' : 'bg-orange-100'}`}>{opt.is_size_option ? '📏' : '➕'}</div>
+                                                            <div>
+                                                                <span className="font-bold text-slate-800">{opt.name}</span>
+                                                                {opt.is_size_option && <span className={`ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${opt.stock_quantity > 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>Stock: {opt.stock_quantity}</span>}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-orange-600 font-bold">+฿{opt.price_modifier}</span>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    setEditingOptionRecipe(opt);
+                                                                    try {
+                                                                        const recipe = await api.getOptionRecipe(opt.id);
+                                                                        setOptionRecipeItems(Array.isArray(recipe) ? recipe : []);
+                                                                    } catch (e) {
+                                                                        setOptionRecipeItems([]);
+                                                                    }
+                                                                    setShowOptionRecipeModal(true);
+                                                                }}
+                                                                className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                                                                title="Set Recipe"
+                                                            >📋</button>
+                                                            <button onClick={async () => { if (window.confirm('ลบ Option นี้?')) { await api.deleteProductOption(opt.id); const options = await api.getProductOptions(editingProduct.id); setProductOptions(options || []); } }} className="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500">✕</button>
+                                                        </div>
+                                                    </div>
+                                                )) : (
+                                                    <div className="py-16 text-center text-slate-300">
+                                                        <span className="text-4xl block mb-4 grayscale opacity-20">💎</span>
+                                                        <p className="text-[10px] font-black uppercase">No Options Yet</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : null}
                             </div>
 
                             <div className="px-10 py-8 bg-[#f8fafc] border-t border-slate-100 flex gap-4">
@@ -500,17 +661,123 @@ const MenuManagement = () => {
                                     Abort
                                 </button>
                                 <button
-                                    onClick={activeModalTab === 'recipe' ? handleSaveRecipe : () => document.getElementById('product-form').requestSubmit()}
+                                    onClick={() => {
+                                        if (activeModalTab === 'info') {
+                                            document.getElementById('product-form')?.requestSubmit();
+                                        } else if (activeModalTab === 'recipe') {
+                                            handleSaveRecipe();
+                                        } else {
+                                            // Options are saved immediately, just close
+                                            setShowProductModal(false);
+                                        }
+                                    }}
                                     className="px-8 py-5 bg-slate-900 text-white rounded-[28px] font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all flex-1 shadow-xl relative overflow-hidden group"
                                 >
                                     <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-orange-600 opacity-0 group-hover:opacity-10 transition-opacity"></div>
-                                    {activeModalTab === 'recipe' ? 'Commit Blueprint' : 'Authorize Records'}
+                                    {activeModalTab === 'info' ? 'Save Product' : activeModalTab === 'recipe' ? 'Save Recipe' : 'Done'}
                                 </button>
                             </div>
                         </div>
                     </div>
                 )
                 }
+
+                {/* Option Recipe Modal */}
+                {showOptionRecipeModal && editingOptionRecipe && (
+                    <div className="fixed inset-0 backdrop-blur-md bg-slate-900/60 z-[110] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowOptionRecipeModal(false)}>
+                        <div className="bg-white rounded-[48px] w-full max-w-xl shadow-2xl animate-fade-in-up relative border border-white overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                            <div className="h-2 bg-gradient-to-r from-blue-400 to-indigo-600"></div>
+
+                            <div className="px-8 py-8 border-b border-slate-100 bg-[#f8fafc]">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <h3 className="text-2xl font-black text-slate-900 tracking-tighter">Configure <span className="text-blue-600">Option Recipe</span></h3>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Option: {editingOptionRecipe.name}</p>
+                                    </div>
+                                    <button onClick={() => setShowOptionRecipeModal(false)} className="w-10 h-10 bg-white shadow-sm border border-slate-100 rounded-2xl text-slate-300 hover:text-slate-600 flex items-center justify-center transition-all">✕</button>
+                                </div>
+                            </div>
+
+                            <div className="p-8 overflow-y-auto space-y-6 custom-scrollbar flex-1">
+                                {/* Ingredient Search & Selection */}
+                                <div className="space-y-4">
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Components Required</label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {allIngredients.slice(0, 10).map(ing => (
+                                            <button
+                                                key={ing.id}
+                                                onClick={() => addIngredientToOptionRecipe(ing)}
+                                                className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-2xl hover:border-blue-300 hover:bg-blue-50 transition-all text-left group"
+                                            >
+                                                <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-xs group-hover:scale-110 transition-transform">📦</div>
+                                                <div className="min-w-0">
+                                                    <p className="text-[11px] font-bold text-slate-700 truncate">{ing.name}</p>
+                                                    <p className="text-[9px] text-slate-400 uppercase font-black">{ing.unit}</p>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Active Recipe Table */}
+                                <div className="space-y-4">
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Recipe Configuration</label>
+                                    <div className="bg-slate-50 border border-slate-100 rounded-3xl overflow-hidden shadow-inner">
+                                        {optionRecipeItems.length > 0 ? optionRecipeItems.map(item => {
+                                            const displayUnit = item.displayUnit || item.unit;
+                                            let displayQty = item.quantity_used;
+                                            if (item.unit === 'kg' && displayUnit === 'g') displayQty = item.quantity_used * 1000;
+                                            else if (item.unit === 'l' && displayUnit === 'ml') displayQty = item.quantity_used * 1000;
+
+                                            return (
+                                                <div key={item.ingredient_id} className="flex items-center justify-between p-5 border-b border-slate-100 last:border-0 bg-white/50 hover:bg-white transition-colors">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-lg">🥣</span>
+                                                        <div>
+                                                            <p className="text-[12px] font-black text-slate-800">{item.ingredient_name}</p>
+                                                            <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{item.unit}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
+                                                            <input
+                                                                type="number" step="0.001"
+                                                                className="w-16 bg-transparent text-center text-xs font-black text-slate-900 outline-none"
+                                                                value={displayQty}
+                                                                onChange={e => updateOptionRecipeItem(item.ingredient_id, parseFloat(e.target.value), displayUnit)}
+                                                            />
+                                                            <button
+                                                                onClick={() => toggleOptionRecipeUnit(item.ingredient_id)}
+                                                                className={`text-[9px] font-black px-2 py-1 rounded-lg transition-all ${['kg', 'l'].includes(item.unit) ? 'bg-orange-100 text-orange-600 hover:bg-orange-200' : 'text-slate-400'}`}
+                                                                disabled={!['kg', 'l'].includes(item.unit)}
+                                                            >
+                                                                {displayUnit}
+                                                            </button>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setOptionRecipeItems(optionRecipeItems.filter(i => i.ingredient_id !== item.ingredient_id))}
+                                                            className="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                        >✕</button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }) : (
+                                            <div className="py-12 text-center">
+                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest italic">Recipe Matrix Empty</p>
+                                                <p className="text-[9px] text-slate-300 mt-1">Add components to track stock consumption</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="px-8 py-8 bg-[#f8fafc] border-t border-slate-100 flex gap-4">
+                                <button type="button" onClick={() => setShowOptionRecipeModal(false)} className="flex-1 px-8 py-4 bg-white border border-slate-200 text-slate-900 rounded-[28px] font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm">Discard</button>
+                                <button onClick={handleSaveOptionRecipe} className="flex-1 px-8 py-4 bg-blue-600 text-white rounded-[28px] font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all">Authorize Recipe</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Category Modal */}
                 {
