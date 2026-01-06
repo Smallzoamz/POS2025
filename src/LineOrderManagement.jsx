@@ -209,13 +209,18 @@ const LineOrderManagement = () => {
     // Calculate Discount Amount
     const getCouponDiscount = () => {
         if (!appliedCoupon) return 0;
+        // Try multiple patterns to extract discount value
+        const title = appliedCoupon.title || '';
         const patterns = [
-            /-฿(\d+)/,
-            /(\d+)\s*บาท/,
-            /ลด\s*(\d+)/
+            /-฿(\d+)/,        // "-฿50"
+            /-(\d+)\s*บาท/,   // "-50 บาท"
+            /(\d+)\s*บาท/,    // "50 บาท"
+            /ลด\s*(\d+)/,     // "ลด 50"
+            /฿(\d+)/,         // "฿50"
+            /(\d+)/           // Fallback: any number
         ];
         for (const p of patterns) {
-            const match = appliedCoupon.title.match(p);
+            const match = title.match(p);
             if (match) return parseInt(match[1]);
         }
         return 0;
@@ -654,8 +659,8 @@ const LineOrderManagement = () => {
                                 </button>
                                 <button
                                     onClick={handleConfirmPayment}
-                                    disabled={paymentMethod === 'cash' && (parseFloat(cashReceived) || 0) < selectedOrder.total_amount}
-                                    className={`flex-1 py-3 rounded-xl font-bold text-white transition ${paymentMethod === 'cash' && (parseFloat(cashReceived) || 0) < selectedOrder.total_amount ? 'bg-gray-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-500'}`}
+                                    disabled={paymentMethod === 'cash' && (parseFloat(cashReceived) || 0) < finalAmount}
+                                    className={`flex-1 py-3 rounded-xl font-bold text-white transition ${paymentMethod === 'cash' && (parseFloat(cashReceived) || 0) < finalAmount ? 'bg-gray-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-500'}`}
                                 >
                                     ✅ ยืนยันชำระเงิน
                                 </button>

@@ -405,36 +405,37 @@ const MenuManagement = () => {
                                         </div>
 
                                         {/* Precision Entry */}
-                                        <div className="p-8 bg-slate-900 rounded-[32px] text-white shadow-xl relative overflow-hidden group">
+                                        <div className="p-6 bg-slate-900 rounded-[24px] text-white shadow-xl relative overflow-hidden group">
                                             <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent"></div>
-                                            <div className="relative z-10 space-y-6">
-                                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Precision Entry Mechanism</label>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <select
-                                                        className="w-full bg-white/10 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:ring-2 ring-orange-500/50 backdrop-blur-sm"
-                                                        id="ing-select"
-                                                        onChange={(e) => {
-                                                            const ingId = Number(e.target.value);
-                                                            const ing = allIngredients.find(i => i.id === ingId);
-                                                            const unitSelect = document.getElementById('unit-select');
-                                                            if (ing) {
-                                                                if (ing.unit === 'kg') unitSelect.innerHTML = '<option value="kg">kg</option><option value="g">g</option>';
-                                                                else if (ing.unit === 'l') unitSelect.innerHTML = '<option value="l">l</option><option value="ml">ml</option>';
-                                                                else unitSelect.innerHTML = `<option value="${ing.unit}">${ing.unit}</option>`;
-                                                            } else unitSelect.innerHTML = '<option value="units">-</option>';
-                                                        }}
-                                                    >
-                                                        <option value="">-- Select Key Ingredient --</option>
-                                                        {allIngredients.map(ing => (
-                                                            <option key={ing.id} value={ing.id}>{ing.name} ({ing.total_quantity} {ing.unit})</option>
-                                                        ))}
+                                            <div className="relative z-10 space-y-4">
+                                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Add Ingredient</label>
+                                                {/* Ingredient Selector */}
+                                                <select
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm font-medium text-white outline-none focus:ring-2 ring-orange-500/50 appearance-none"
+                                                    style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%23999\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'m6 8 4 4 4-4\'/%3E%3C/svg%3E")', backgroundPosition: 'right 12px center', backgroundRepeat: 'no-repeat', backgroundSize: '20px' }}
+                                                    id="ing-select"
+                                                    onChange={(e) => {
+                                                        const ingId = Number(e.target.value);
+                                                        const ing = allIngredients.find(i => i.id === ingId);
+                                                        const unitSelect = document.getElementById('unit-select');
+                                                        if (ing) {
+                                                            if (ing.unit === 'kg') unitSelect.innerHTML = '<option value="kg">kg</option><option value="g">g</option>';
+                                                            else if (ing.unit === 'l') unitSelect.innerHTML = '<option value="l">l</option><option value="ml">ml</option>';
+                                                            else unitSelect.innerHTML = `<option value="${ing.unit}">${ing.unit}</option>`;
+                                                        } else unitSelect.innerHTML = '<option value="units">-</option>';
+                                                    }}
+                                                >
+                                                    <option value="">-- Select Ingredient --</option>
+                                                    {allIngredients.map(ing => (
+                                                        <option key={ing.id} value={ing.id}>{ing.name} ({ing.total_quantity} {ing.unit})</option>
+                                                    ))}
+                                                </select>
+                                                {/* Quantity + Unit Row */}
+                                                <div className="flex gap-3">
+                                                    <input type="number" step="any" className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm font-medium text-white outline-none focus:ring-2 ring-orange-500/50" id="ing-qty" placeholder="Quantity..." />
+                                                    <select id="unit-select" className="w-20 bg-slate-800 border border-slate-700 rounded-xl px-3 py-3 text-sm font-bold text-white outline-none focus:ring-2 ring-orange-500/50">
+                                                        <option value="units">-</option>
                                                     </select>
-                                                    <div className="flex gap-2">
-                                                        <input type="number" step="any" className="flex-1 bg-white/10 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:ring-2 ring-orange-500/50" id="ing-qty" placeholder="Quantity..." />
-                                                        <select id="unit-select" className="w-24 bg-white/20 border border-white/10 rounded-2xl text-xs font-black uppercase tracking-widest outline-none">
-                                                            <option value="units">-</option>
-                                                        </select>
-                                                    </div>
                                                 </div>
                                                 <button
                                                     onClick={() => {
@@ -453,9 +454,9 @@ const MenuManagement = () => {
                                                             select.value = ""; qtyInput.value = ""; unitSelect.innerHTML = '<option value="units">-</option>';
                                                         }
                                                     }}
-                                                    className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-[10px] font-black uppercase tracking-[0.3em] rounded-2xl transition-all shadow-xl shadow-orange-500/20 active:scale-[0.98]"
+                                                    className="w-full py-3 mt-2 bg-orange-600 hover:bg-orange-500 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-lg shadow-orange-500/20 active:scale-[0.98]"
                                                 >
-                                                    Integrate Component +
+                                                    + Add Ingredient
                                                 </button>
                                             </div>
                                         </div>
@@ -508,55 +509,58 @@ const MenuManagement = () => {
                             </div>
                         </div>
                     </div>
-                )}
+                )
+                }
 
                 {/* Category Modal */}
-                {showCategoryModal && (
-                    <div className="fixed inset-0 backdrop-blur-md bg-slate-900/60 z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowCategoryModal(false)}>
-                        <div className="bg-white rounded-[48px] w-full max-w-sm shadow-2xl animate-fade-in-up relative border border-white overflow-hidden" onClick={e => e.stopPropagation()}>
-                            <div className="h-2 bg-gradient-to-r from-slate-700 to-slate-900"></div>
-                            <div className="px-10 py-10">
-                                <h3 className="text-2xl font-black text-slate-900 tracking-tighter mb-8">Define <span className="text-orange-600">New Matrix</span></h3>
-                                <form onSubmit={handleCategorySubmit} className="space-y-8">
-                                    <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner">
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Matrix Identifier (ID)</label>
-                                        <input
-                                            type="text" required placeholder="DEPT_CODE"
-                                            className="w-full bg-transparent text-xl font-black text-slate-900 outline-none placeholder:text-slate-300 uppercase tracking-widest"
-                                            value={categoryForm.id}
-                                            onChange={e => setCategoryForm({ ...categoryForm, id: e.target.value.toUpperCase() })}
-                                        />
-                                    </div>
-                                    <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner">
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Display Designation</label>
-                                        <input
-                                            type="text" required placeholder="Human readable title..."
-                                            className="w-full bg-transparent text-xl font-black text-slate-900 outline-none placeholder:text-slate-300"
-                                            value={categoryForm.name}
-                                            onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner flex flex-col items-center">
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Visual Iconography</label>
-                                        <input
-                                            type="text" required placeholder="📁"
-                                            className="w-20 h-20 bg-white shadow-md border border-slate-100 rounded-[28px] text-center text-4xl outline-none focus:ring-4 ring-orange-500/10"
-                                            value={categoryForm.icon}
-                                            onChange={e => setCategoryForm({ ...categoryForm, icon: e.target.value })}
-                                        />
-                                    </div>
+                {
+                    showCategoryModal && (
+                        <div className="fixed inset-0 backdrop-blur-md bg-slate-900/60 z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowCategoryModal(false)}>
+                            <div className="bg-white rounded-[48px] w-full max-w-sm shadow-2xl animate-fade-in-up relative border border-white overflow-hidden" onClick={e => e.stopPropagation()}>
+                                <div className="h-2 bg-gradient-to-r from-slate-700 to-slate-900"></div>
+                                <div className="px-10 py-10">
+                                    <h3 className="text-2xl font-black text-slate-900 tracking-tighter mb-8">Define <span className="text-orange-600">New Matrix</span></h3>
+                                    <form onSubmit={handleCategorySubmit} className="space-y-8">
+                                        <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner">
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Matrix Identifier (ID)</label>
+                                            <input
+                                                type="text" required placeholder="DEPT_CODE"
+                                                className="w-full bg-transparent text-xl font-black text-slate-900 outline-none placeholder:text-slate-300 uppercase tracking-widest"
+                                                value={categoryForm.id}
+                                                onChange={e => setCategoryForm({ ...categoryForm, id: e.target.value.toUpperCase() })}
+                                            />
+                                        </div>
+                                        <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner">
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Display Designation</label>
+                                            <input
+                                                type="text" required placeholder="Human readable title..."
+                                                className="w-full bg-transparent text-xl font-black text-slate-900 outline-none placeholder:text-slate-300"
+                                                value={categoryForm.name}
+                                                onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner flex flex-col items-center">
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Visual Iconography</label>
+                                            <input
+                                                type="text" required placeholder="📁"
+                                                className="w-20 h-20 bg-white shadow-md border border-slate-100 rounded-[28px] text-center text-4xl outline-none focus:ring-4 ring-orange-500/10"
+                                                value={categoryForm.icon}
+                                                onChange={e => setCategoryForm({ ...categoryForm, icon: e.target.value })}
+                                            />
+                                        </div>
 
-                                    <div className="flex gap-4 pt-4">
-                                        <button type="button" onClick={() => setShowCategoryModal(false)} className="flex-1 px-4 py-4 bg-white border border-slate-200 text-slate-900 rounded-[24px] font-black text-[10px] uppercase tracking-widest shadow-sm">Cancel</button>
-                                        <button type="submit" className="flex-1 px-4 py-4 bg-slate-900 text-white rounded-[24px] font-black text-[10px] uppercase tracking-widest shadow-xl hover:scale-[1.05] transition-all">Establish</button>
-                                    </div>
-                                </form>
+                                        <div className="flex gap-4 pt-4">
+                                            <button type="button" onClick={() => setShowCategoryModal(false)} className="flex-1 px-4 py-4 bg-white border border-slate-200 text-slate-900 rounded-[24px] font-black text-[10px] uppercase tracking-widest shadow-sm">Cancel</button>
+                                            <button type="submit" className="flex-1 px-4 py-4 bg-slate-900 text-white rounded-[24px] font-black text-[10px] uppercase tracking-widest shadow-xl hover:scale-[1.05] transition-all">Establish</button>
+                                        </div>
+                                    </form>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
-            </div>
-        </MasterLayout>
+                    )
+                }
+            </div >
+        </MasterLayout >
     );
 };
 
