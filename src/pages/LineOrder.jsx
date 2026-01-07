@@ -460,9 +460,9 @@ const LineOrder = () => {
                 {/* Step 1: Select Order Type */}
                 {step === 1 && (
                     <div className="animate-fade-in-up">
-                        <div className="text-center mb-8">
-                            <h2 className="text-3xl font-heading font-black text-slate-900 mb-2">เลือกประเภทการสั่ง</h2>
-                            <p className="text-slate-400 font-medium">Select your preferred service</p>
+                        <div className="text-center mb-6">
+                            <h2 className="text-xl font-bold text-slate-900 mb-1">เลือกประเภทการสั่ง</h2>
+                            <p className="text-xs text-slate-400">Select your preferred service</p>
                         </div>
 
                         <div className="grid gap-4">
@@ -470,17 +470,17 @@ const LineOrder = () => {
                                 <button
                                     key={type}
                                     onClick={() => { setOrderType(type); setStep(2); }}
-                                    className="tasty-card p-6 text-left group hover:scale-[1.02] active:scale-95"
+                                    className="bg-white rounded-2xl p-4 shadow-sm text-left group hover:shadow-md border border-slate-100 transition-all"
                                 >
-                                    <div className="flex items-center gap-5">
-                                        <div className={`w-16 h-16 rounded-[24px] ${info.color.split(' ')[0]} ${info.color.split(' ')[2]} border flex items-center justify-center text-3xl shadow-sm group-hover:shadow-md transition-all`}>
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-12 h-12 rounded-xl ${info.color.split(' ')[0]} ${info.color.split(' ')[2]} border flex items-center justify-center text-2xl`}>
                                             {info.icon}
                                         </div>
                                         <div className="flex-1">
-                                            <h3 className="text-xl font-heading font-black text-slate-900 leading-tight">{info.name}</h3>
-                                            <p className="text-sm text-slate-500 mt-1">{info.desc}</p>
+                                            <h3 className="text-base font-bold text-slate-900 leading-tight">{info.name}</h3>
+                                            <p className="text-xs text-slate-500 mt-0.5">{info.desc}</p>
                                         </div>
-                                        <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-orange-500 group-hover:text-white transition-all">
+                                        <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-orange-500 group-hover:text-white transition-all text-sm">
                                             →
                                         </div>
                                     </div>
@@ -493,35 +493,35 @@ const LineOrder = () => {
                 {/* Step 2: Customer Info */}
                 {step === 2 && (
                     <div className="animate-fade-in-up">
-                        <div className="text-center mb-10">
-                            <div className={`inline-flex items-center justify-center w-20 h-20 rounded-[32px] ${orderTypeLabels[orderType]?.color} border mb-4 text-4xl shadow-lg`}>
+                        <div className="text-center mb-6">
+                            <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl ${orderTypeLabels[orderType]?.color} border mb-3 text-2xl`}>
                                 {orderTypeLabels[orderType]?.icon}
                             </div>
-                            <h2 className="text-3xl font-heading font-black text-slate-900">{orderTypeLabels[orderType]?.name}</h2>
-                            <p className="text-slate-400 font-medium mt-1">Please provide your details</p>
+                            <h2 className="text-xl font-bold text-slate-900">{orderTypeLabels[orderType]?.name}</h2>
+                            <p className="text-xs text-slate-400 mt-1">Please provide your details</p>
                         </div>
 
                         <div className="space-y-6">
-                            <div className="tasty-card p-6 space-y-5">
+                            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-4">
                                 <div>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">ชื่อ-นามสกุลของคุณ Name</label>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">ชื่อลูกค้า *</label>
                                     <input
                                         type="text"
                                         value={customerInfo.name}
                                         onChange={e => setCustomerInfo({ ...customerInfo, name: e.target.value })}
-                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all font-medium text-slate-900"
-                                        placeholder="Full Name"
+                                        className="w-full px-4 py-2.5 border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 outline-none text-base font-medium"
+                                        placeholder="กรอกชื่อของคุณ"
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">เบอร์โทรศัพท์ Phone Number</label>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">เบอร์โทร *</label>
                                     <input
                                         type="tel"
                                         value={customerInfo.phone}
                                         onChange={e => setCustomerInfo({ ...customerInfo, phone: e.target.value })}
-                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all font-medium text-slate-900"
-                                        placeholder="08X-XXX-XXXX"
+                                        className="w-full px-4 py-2.5 border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 outline-none text-base font-medium"
+                                        placeholder="0xx-xxx-xxxx"
                                     />
                                 </div>
 
@@ -663,9 +663,9 @@ const LineOrder = () => {
                                     if (orderType === 'reservation') loadAvailableTables();
                                     setStep(customerInfo.preOrderFood ? 3 : 4);
                                 }}
-                                className="w-full py-5 bg-orange-500 hover:bg-orange-600 text-white rounded-[32px] font-heading font-black text-xl shadow-xl shadow-orange-500/30 transition-all active:scale-95"
+                                className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-bold text-base shadow-lg shadow-orange-500/30 transition-all"
                             >
-                                Continue {customerInfo.preOrderFood ? 'to Menu →' : 'to Summary →'}
+                                ไปหน้าถัดไป →
                             </button>
                         </div>
                     </div>
@@ -713,73 +713,80 @@ const LineOrder = () => {
 
                 {/* Step 3: Menu Selection */}
                 {step === 3 && (
-                    <div className="animate-fade-in-up">
-                        <div className="text-center mb-8">
-                            <h2 className="text-3xl font-heading font-black text-slate-900 mb-2">เลือกเมนูอาหาร</h2>
-                            <p className="text-slate-400 font-medium">Add yummy items to your cart</p>
-                        </div>
-
-                        {/* Categories */}
-                        <div className="flex gap-3 overflow-x-auto pb-5 mb-4 no-scrollbar">
-                            {categories.map(cat => (
-                                <button
-                                    key={cat.id}
-                                    onClick={() => setSelectedCategory(cat.id)}
-                                    className={`px-6 py-3 rounded-[24px] text-xs font-black uppercase tracking-widest transition-all duration-300 border ${selectedCategory === cat.id
-                                        ? 'bg-orange-500 text-white border-orange-500 shadow-lg shadow-orange-500/20 active:scale-95'
-                                        : 'bg-white text-slate-500 border-slate-100 hover:border-orange-200'
-                                        }`}
-                                >
-                                    {cat.icon} {cat.name}
+                    <div className="animate-fade-in-up -mx-6 -mt-6">
+                        {/* Sticky Header */}
+                        <div className="bg-white shadow-sm p-3 sticky top-0 z-10">
+                            <div className="flex items-center justify-between max-w-2xl mx-auto">
+                                <button onClick={() => setStep(orderType === 'reservation' && !customerInfo.preOrderFood ? 2 : 2)} className="text-slate-500 hover:text-orange-500 text-sm">
+                                    ← กลับ
                                 </button>
-                            ))}
+                                <h1 className="text-base font-bold text-slate-900">{orderTypeLabels[orderType]?.icon} {orderTypeLabels[orderType]?.name}</h1>
+                                <span className="text-xs text-orange-500 font-bold max-w-[80px] truncate">{customerInfo.name}</span>
+                            </div>
                         </div>
 
-                        {/* Menu Grid */}
-                        <div className="grid grid-cols-2 gap-4 mb-24">
-                            {menuItems.filter(i => i.category_id === selectedCategory).map(item => {
-                                const inCartCount = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.quantity, 0);
-                                return (
-                                    <div
-                                        key={item.id}
-                                        onClick={() => handleProductClick(item)}
-                                        className={`tasty-card p-0 overflow-hidden group transition-all ${!item.is_available ? 'opacity-80 cursor-not-allowed grayscale' : 'hover:scale-[1.02] active:scale-95'} ${loadingOptions ? 'pointer-events-none' : ''}`}
+                        {/* Compact Categories Bar */}
+                        <div className="bg-white shadow-sm px-2 py-1.5 overflow-x-auto hide-scrollbar sticky top-[52px] z-10">
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setSelectedCategory(categories[0]?.id)}
+                                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${!selectedCategory || selectedCategory === categories[0]?.id ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}
+                                >
+                                    🍽️ ทั้งหมด
+                                </button>
+                                {categories.map(cat => (
+                                    <button
+                                        key={cat.id}
+                                        onClick={() => setSelectedCategory(cat.id)}
+                                        className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${selectedCategory === cat.id ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}
                                     >
-                                        <div className="aspect-square bg-slate-100 relative overflow-hidden">
-                                            {item.image ? (
-                                                <img src={item.image} alt={item.name} className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${!item.is_available ? 'opacity-40' : ''}`} />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-5xl grayscale opacity-30">🍽️</div>
-                                            )}
+                                        {cat.icon} {cat.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
 
-                                            {!item.is_available && (
-                                                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                                                    <span className="bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter shadow-xl animate-pulse">
-                                                        สินค้าหมด
-                                                    </span>
-                                                </div>
-                                            )}
-
-                                            {inCartCount > 0 && (
-                                                <div className="absolute top-3 right-3 w-10 h-10 bg-orange-500 text-white rounded-2xl flex items-center justify-center font-black shadow-xl ring-4 ring-orange-500/20 animate-bounce-subtle">
-                                                    {inCartCount}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="p-4">
-                                            <h3 className="font-heading font-black text-slate-800 text-sm leading-tight line-clamp-1">{item.name}</h3>
-                                            <div className="flex items-center justify-between mt-2">
-                                                <p className="text-orange-500 font-black text-base">฿{item.price?.toLocaleString()}</p>
-                                                {item.is_available ? (
-                                                    <div className="w-7 h-7 bg-slate-50 rounded-lg flex items-center justify-center text-slate-300 group-hover:bg-orange-500/10 group-hover:text-orange-500 transition-all">+</div>
+                        {/* Compact Menu Grid */}
+                        <div className="bg-[#F2F6F9] min-h-screen p-2 pb-32">
+                            <div className="grid grid-cols-2 gap-1.5">
+                                {menuItems.filter(i => !selectedCategory || i.category_id === selectedCategory).map(item => {
+                                    const inCartCount = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.quantity, 0);
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            onClick={() => handleProductClick(item)}
+                                            className={`bg-white rounded-xl p-2 shadow-sm ${!item.is_available ? 'opacity-80 cursor-not-allowed grayscale' : ''} ${loadingOptions ? 'pointer-events-none opacity-70' : ''}`}
+                                        >
+                                            <div className="aspect-[4/3] rounded-lg overflow-hidden mb-1.5 bg-slate-100 relative">
+                                                {item.image ? (
+                                                    <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                                                 ) : (
-                                                    <div className="w-7 h-7 bg-slate-200 rounded-lg flex items-center justify-center text-slate-400">✕</div>
+                                                    <div className="w-full h-full flex items-center justify-center text-xl opacity-30">🍽️</div>
+                                                )}
+                                                {!item.is_available && (
+                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                                        <span className="bg-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase">หมด</span>
+                                                    </div>
+                                                )}
+                                                {inCartCount > 0 && (
+                                                    <div className="absolute top-1 right-1 w-6 h-6 bg-orange-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow">
+                                                        {inCartCount}
+                                                    </div>
                                                 )}
                                             </div>
+                                            <h4 className="text-[11px] font-bold text-slate-800 line-clamp-1 leading-tight mb-1">{item.name}</h4>
+                                            <div className="flex items-center justify-between mt-auto">
+                                                <span className="text-[11px] font-bold text-orange-500">฿{item.price}</span>
+                                                <button
+                                                    className="w-6 h-6 flex items-center justify-center rounded-lg bg-orange-500 text-white font-bold text-sm shadow-sm hover:bg-orange-600 transition-colors"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -787,9 +794,9 @@ const LineOrder = () => {
                 {/* Step 4: Confirm Order */}
                 {step === 4 && (
                     <div className="animate-fade-in-up">
-                        <div className="text-center mb-10">
-                            <h2 className="text-3xl font-heading font-black text-slate-900 mb-2">สรุปรายการสั่ง</h2>
-                            <p className="text-slate-400 font-medium">Review your order details</p>
+                        <div className="text-center mb-6">
+                            <h2 className="text-xl font-bold text-slate-900 mb-1">สรุปรายการสั่ง</h2>
+                            <p className="text-xs text-slate-400">Review your order details</p>
                         </div>
 
                         {/* Order Summary Card */}
@@ -951,52 +958,44 @@ const LineOrder = () => {
                         <button
                             onClick={submitOrder}
                             disabled={loading}
-                            className="w-full py-5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-[40px] font-heading font-black text-2xl shadow-2xl transition-all active:scale-95"
+                            className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-2xl font-bold text-base shadow-lg transition-all"
                         >
-                            {loading ? '⏳ PROCESSING...' : '✓ CONFIRM ORDER'}
+                            {loading ? '⏳ กำลังดำเนินการ...' : '✓ ยืนยันสั่ง'}
                         </button>
                     </div>
                 )}
 
                 {/* Step 5: Success */}
                 {step === 5 && (
-                    <div className="animate-fade-in-up text-center py-20 px-4">
-                        <div className="relative inline-block mb-10">
-                            <div className="w-40 h-40 bg-orange-500/10 rounded-[60px] flex items-center justify-center animate-pulse">
-                                <span className="text-8xl">🧡</span>
-                            </div>
-                            <div className="absolute -bottom-4 -right-4 w-20 h-20 bg-green-500 text-white rounded-[32px] flex items-center justify-center text-4xl shadow-2xl border-4 border-white animate-bounce-subtle">
-                                ✓
-                            </div>
+                    <div className="animate-fade-in-up text-center py-10 px-4">
+                        <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="text-4xl">✅</span>
+                        </div>
+                        <h1 className="text-2xl font-bold text-slate-900 mb-2">สั่งสำเร็จ!</h1>
+                        <p className="text-slate-500 mb-4">ออเดอร์ของคุณถูกส่งไปยังครัวแล้ว</p>
+
+                        <div className="bg-slate-50 rounded-2xl p-4 mb-6">
+                            <p className="text-sm text-slate-500 mb-1">หมายเลขออเดอร์</p>
+                            <p className="text-4xl font-bold text-orange-500">#{orderId}</p>
                         </div>
 
-                        <h2 className="text-4xl font-heading font-black text-slate-900 mb-2">สั่งอาหารสำเร็จ!</h2>
-                        <p className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-10">Your order has been placed successfully</p>
-
-                        <div className="tasty-card p-10 border-orange-100 bg-white shadow-2xl mb-10 relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-full h-2 bg-orange-500" />
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Order Transaction ID</p>
-                            <p className="text-6xl font-heading font-black text-orange-500 tracking-tighter">#{orderId}</p>
+                        <div className="text-left bg-amber-50 rounded-xl p-4 mb-6">
+                            <p className="text-sm font-bold text-amber-700 mb-2">📋 รายละเอียด</p>
+                            <p className="text-sm text-slate-700">ชื่อ: {customerInfo.name}</p>
+                            <p className="text-sm text-slate-700">โทร: {customerInfo.phone}</p>
+                            <p className="text-sm text-slate-700 mt-2 font-bold">ยอดรวม: ฿{cartTotal.toLocaleString()}</p>
                         </div>
 
-                        <div className="space-y-4 max-w-sm mx-auto">
-                            <div className="p-5 bg-amber-50 border border-amber-100 rounded-[32px] text-left">
-                                <p className="text-amber-600 font-black text-xs uppercase tracking-widest flex items-center gap-2 mb-2">
-                                    <span className="w-2 h-2 bg-amber-500 rounded-full animate-ping" />
-                                    Awaiting Confirmation
-                                </p>
-                                <p className="text-xs text-amber-800 font-medium leading-relaxed">
-                                    The shop will review your order shortly. We'll contact you at <span className="font-black underline">{customerInfo.phone}</span> if needed.
-                                </p>
-                            </div>
+                        <p className="text-sm text-slate-500 mb-4">
+                            {orderType === 'delivery' ? 'รอรับอาหารที่บ้านของคุณ' : orderType === 'reservation' ? 'พบกันวันที่จอง!' : 'กรุณารอรับอาหารที่หน้าร้าน'}
+                        </p>
 
-                            <button
-                                onClick={() => window.location.reload()}
-                                className="w-full py-5 bg-slate-900 text-white rounded-[32px] font-heading font-black text-xl hover:bg-slate-800 shadow-xl transition-all active:scale-95"
-                            >
-                                ORDER NEW MEAL
-                            </button>
-                        </div>
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all"
+                        >
+                            สั่งอีกครั้ง
+                        </button>
                     </div>
                 )}
             </div>
@@ -1093,23 +1092,23 @@ const LineOrder = () => {
                 }
             `}</style>
 
-            {/* Options Modal */}
+            {/* Options Modal - Compact Style */}
             {showOptionsModal && selectedProductForOptions && (
-                <div className="fixed inset-0 bg-black/60 z-[200] flex items-end justify-center backdrop-blur-sm" onClick={() => setShowOptionsModal(false)}>
+                <div className="fixed inset-0 bg-black/60 z-[200] flex items-end justify-center" onClick={() => setShowOptionsModal(false)}>
                     <div
-                        className="bg-white rounded-t-[40px] w-full max-w-lg max-h-[85vh] overflow-hidden animate-slide-up"
+                        className="bg-white rounded-t-3xl w-full max-w-md max-h-[80vh] overflow-hidden"
                         onClick={e => e.stopPropagation()}
                     >
                         {/* Header */}
-                        <div className="p-6 border-b border-slate-100 sticky top-0 bg-white z-10">
+                        <div className="p-4 border-b border-slate-100 bg-white sticky top-0 z-10">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <h3 className="text-xl font-heading font-black text-slate-900">{selectedProductForOptions.name}</h3>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">เลือกเพิ่มเติม / Add Options</p>
+                                    <h3 className="text-lg font-bold text-slate-900">{selectedProductForOptions.name}</h3>
+                                    <p className="text-[10px] text-slate-400 uppercase tracking-wider">เลือกเพิ่มเติม</p>
                                 </div>
                                 <button
                                     onClick={() => setShowOptionsModal(false)}
-                                    className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors"
+                                    className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-400"
                                 >
                                     ✕
                                 </button>
@@ -1117,12 +1116,9 @@ const LineOrder = () => {
                         </div>
 
                         {/* Options List */}
-                        <div className="p-6 space-y-3 overflow-y-auto max-h-[50vh]">
+                        <div className="p-4 space-y-2 overflow-y-auto max-h-[40vh]">
                             {productOptions.length === 0 ? (
-                                <div className="text-center py-10 text-slate-400">
-                                    <span className="text-4xl mb-4 block">📭</span>
-                                    <p className="font-bold">ไม่มี Option สำหรับสินค้านี้</p>
-                                </div>
+                                <p className="text-center text-slate-400 py-6">ไม่มี Option</p>
                             ) : (
                                 productOptions.map(opt => {
                                     const isSelected = selectedOptions.some(o => o.id === opt.id);
@@ -1130,19 +1126,19 @@ const LineOrder = () => {
                                         <button
                                             key={opt.id}
                                             onClick={() => toggleOption(opt)}
-                                            className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${isSelected
-                                                ? 'bg-orange-50 border-orange-500 ring-4 ring-orange-500/10'
-                                                : 'bg-slate-50 border-slate-100 hover:border-orange-200'
+                                            className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${isSelected
+                                                ? 'bg-orange-50 border-orange-500'
+                                                : 'bg-slate-50 border-slate-100'
                                                 }`}
                                         >
-                                            <div className="flex items-center gap-4">
-                                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-orange-500 border-orange-500' : 'border-slate-300'
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-orange-500 border-orange-500' : 'border-slate-300'
                                                     }`}>
-                                                    {isSelected && <span className="text-white text-xs">✓</span>}
+                                                    {isSelected && <span className="text-white text-[10px]">✓</span>}
                                                 </div>
-                                                <span className="font-bold text-slate-800">{opt.name}</span>
+                                                <span className="font-bold text-sm text-slate-800">{opt.name}</span>
                                             </div>
-                                            <span className={`font-black ${opt.price_modifier > 0 ? 'text-orange-500' : 'text-slate-400'}`}>
+                                            <span className={`font-bold text-sm ${opt.price_modifier > 0 ? 'text-orange-500' : 'text-slate-400'}`}>
                                                 {opt.price_modifier > 0 ? `+฿${opt.price_modifier}` : 'ฟรี'}
                                             </span>
                                         </button>
@@ -1172,16 +1168,16 @@ const LineOrder = () => {
                         </div>
 
                         {/* Footer */}
-                        <div className="p-6 border-t border-slate-100 bg-slate-50/50">
-                            <div className="flex items-center justify-between mb-4">
-                                <span className="text-sm font-bold text-slate-500">ราคารวม</span>
-                                <span className="text-2xl font-heading font-black text-orange-500">
+                        <div className="p-4 border-t border-slate-100">
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-sm text-slate-500">ราคารวม</span>
+                                <span className="text-xl font-bold text-orange-500">
                                     ฿{((parseFloat(selectedProductForOptions.price) + selectedOptions.reduce((s, o) => s + (parseFloat(o.price_modifier) || 0), 0)) * optionQuantity).toLocaleString()}
                                 </span>
                             </div>
                             <button
                                 onClick={confirmAddWithOptions}
-                                className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-heading font-black text-lg shadow-xl shadow-orange-500/30 transition-all active:scale-95"
+                                className="w-full py-3 bg-orange-500 text-white rounded-xl font-bold shadow-lg shadow-orange-500/30 transition-all active:scale-95"
                             >
                                 ✓ เพิ่ม {optionQuantity} รายการ
                             </button>

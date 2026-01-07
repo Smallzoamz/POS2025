@@ -288,6 +288,11 @@ const SalesHistory = () => {
                                                 </div>
                                                 <div>
                                                     <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{item.product_name || item.name}</p>
+                                                    {item.options && item.options.length > 0 && (
+                                                        <p className="text-[10px] text-orange-500 font-medium">
+                                                            + {item.options.map(o => o.name || o.option_name).join(', ')}
+                                                        </p>
+                                                    )}
                                                     <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">@ ฿{item.price.toLocaleString()}</p>
                                                 </div>
                                             </div>

@@ -191,8 +191,15 @@ const TablePlan = () => {
 
                                     <div className="space-y-1 mb-4">
                                         {order.items.map((item, idx) => (
-                                            <div key={idx} className="flex justify-between text-xs text-slate-600">
-                                                <span>{item.quantity}x {item.product_name}</span>
+                                            <div key={idx} className="text-xs text-slate-600">
+                                                <div className="flex justify-between">
+                                                    <span>{item.quantity}x {item.product_name}</span>
+                                                </div>
+                                                {item.options && item.options.length > 0 && (
+                                                    <p className="text-[10px] text-orange-500 font-medium ml-4">
+                                                        + {item.options.map(o => o.name || o.option_name).join(', ')}
+                                                    </p>
+                                                )}
                                             </div>
                                         ))}
                                     </div>

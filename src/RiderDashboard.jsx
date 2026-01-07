@@ -351,8 +351,15 @@ const RiderDashboard = () => {
                                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Order Details</p>
                                             <div className="space-y-2">
                                                 {order.items?.map((item, idx) => (
-                                                    <div key={idx} className="flex justify-between items-center text-xs">
-                                                        <span className="font-bold text-slate-600">{item.quantity}x {item.product_name || item.name}</span>
+                                                    <div key={idx} className="flex justify-between items-start text-xs">
+                                                        <div>
+                                                            <span className="font-bold text-slate-600">{item.quantity}x {item.product_name || item.name}</span>
+                                                            {item.options && item.options.length > 0 && (
+                                                                <p className="text-[10px] text-orange-500 font-medium mt-0.5">
+                                                                    + {item.options.map(o => o.name || o.option_name).join(', ')}
+                                                                </p>
+                                                            )}
+                                                        </div>
                                                         <span className="font-black text-slate-800">฿{(item.price * item.quantity).toLocaleString()}</span>
                                                     </div>
                                                 ))}

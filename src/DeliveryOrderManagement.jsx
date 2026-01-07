@@ -332,9 +332,16 @@ const DeliveryOrderManagement = () => {
                                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Line Items</div>
                                     <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
                                         {selectedOrder.items?.map((item, idx) => (
-                                            <div key={idx} className="flex justify-between text-[11px] font-bold text-slate-600">
-                                                <span>{item.quantity}x {item.product_name || item.name}</span>
-                                                <span className="text-slate-400">฿{(item.price * item.quantity).toLocaleString()}</span>
+                                            <div key={idx} className="text-[11px] font-bold text-slate-600">
+                                                <div className="flex justify-between">
+                                                    <span>{item.quantity}x {item.product_name || item.name}</span>
+                                                    <span className="text-slate-400">฿{(item.price * item.quantity).toLocaleString()}</span>
+                                                </div>
+                                                {item.options && item.options.length > 0 && (
+                                                    <p className="text-[10px] text-orange-500 font-medium mt-0.5 ml-4">
+                                                        + {item.options.map(o => o.name || o.option_name).join(', ')}
+                                                    </p>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
