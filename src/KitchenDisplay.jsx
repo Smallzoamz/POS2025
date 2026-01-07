@@ -236,7 +236,7 @@ const KitchenDisplay = () => {
                                                             <span className="text-base font-bold text-slate-300">{ing.name}</span>
                                                         </div>
                                                         <div className="text-right">
-                                                            <span className="text-lg font-black text-white tabular-nums">{formatIngredient(ing.quantity_used * item.quantity, ing.unit)}</span>
+                                                            <span className="text-lg font-black text-white tabular-nums">{formatIngredient((parseFloat(ing.quantity_used) || 0) * item.quantity, ing.unit || 'units')}</span>
                                                         </div>
                                                     </div>
                                                 ))}
