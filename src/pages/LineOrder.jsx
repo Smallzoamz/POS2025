@@ -40,6 +40,7 @@ const LineOrder = () => {
     const [loyaltyCustomer, setLoyaltyCustomer] = useState(null);
     const [availableCoupons, setAvailableCoupons] = useState([]);
     const [selectedCoupon, setSelectedCoupon] = useState(null);
+    const [storeStatus, setStoreStatus] = useState({ status: 'open', message: '' });
 
     // Options Modal State
     const [showOptionsModal, setShowOptionsModal] = useState(false);
@@ -129,9 +130,10 @@ const LineOrder = () => {
     useEffect(() => {
         const loadData = async () => {
             try {
-                const [menuRes, settingsRes] = await Promise.all([
+                const [menuRes, settingsRes, statusRes] = await Promise.all([
                     fetch('/api/public/menu').then(r => r.json()),
-                    fetch('/api/public/settings').then(r => r.json())
+                    fetch('/api/public/settings').then(r => r.json()),
+                    fetch('/api/store-status').then(r => r.json())
                 ]);
                 setCategories(menuRes.categories || []);
                 setMenuItems(menuRes.products || []);
@@ -139,6 +141,7 @@ const LineOrder = () => {
                     setSelectedCategory(menuRes.categories[0].id);
                 }
                 setShopSettings(settingsRes || {});
+                setStoreStatus(statusRes || { status: 'open', message: '' });
             } catch (err) {
                 console.error('Failed to load data:', err);
             }
@@ -262,6 +265,19 @@ const LineOrder = () => {
 
     // Submit Order
     const submitOrder = async () => {
+        // Final store status check
+        try {
+            const statusCheck = await fetch('/api/store-status').then(r => r.json());
+            if (statusCheck.status === 'closed') {
+                alert('ขออภัยค่ะ ขณะนี้ร้านปิดให้บริการแล้ว ไม่สามารถสั่งอาหารได้ในขณะนี้');
+                setStoreStatus(statusCheck);
+                setLoading(false);
+                return;
+            }
+        } catch (err) {
+            console.error('Store status check failed:', err);
+        }
+
         setLoading(true);
         try {
             const finalCart = customerInfo.preOrderFood ? cart : [];
@@ -443,6 +459,20 @@ const LineOrder = () => {
             </div>
 
             <div className="max-w-lg mx-auto p-5 pb-32">
+                {/* Store Status Banner */}
+                {storeStatus.status !== 'open' && (
+                    <div className={`mb-6 p-4 rounded-2xl border-2 flex items-center gap-4 animate-pulse ${storeStatus.status === 'closed'
+                            ? 'bg-rose-50 border-rose-200 text-rose-600'
+                            : 'bg-amber-50 border-amber-200 text-amber-600'
+                        }`}>
+                        <span className="text-2xl">{storeStatus.status === 'closed' ? '🛑' : '⏳'}</span>
+                        <div className="flex-1">
+                            <p className="text-xs font-black uppercase tracking-widest">{storeStatus.status === 'closed' ? 'Store Closed' : 'Last Order'}</p>
+                            <p className="text-sm font-bold leading-tight">{storeStatus.message}</p>
+                        </div>
+                    </div>
+                )}
+
                 {/* Step Indicator */}
                 {step < 5 && (
                     <div className="flex justify-center items-center gap-3 mb-8">
@@ -469,8 +499,10 @@ const LineOrder = () => {
                             {Object.entries(orderTypeLabels).map(([type, info]) => (
                                 <button
                                     key={type}
+                                    disabled={storeStatus.status === 'closed'}
                                     onClick={() => { setOrderType(type); setStep(2); }}
-                                    className="bg-white rounded-2xl p-4 shadow-sm text-left group hover:shadow-md border border-slate-100 transition-all"
+                                    className={`bg-white rounded-2xl p-4 shadow-sm text-left group hover:shadow-md border border-slate-100 transition-all ${storeStatus.status === 'closed' ? 'opacity-50 grayscale cursor-not-allowed' : ''
+                                        }`}
                                 >
                                     <div className="flex items-center gap-4">
                                         <div className={`w-12 h-12 rounded-xl ${info.color.split(' ')[0]} ${info.color.split(' ')[2]} border flex items-center justify-center text-2xl`}>
@@ -957,10 +989,10 @@ const LineOrder = () => {
 
                         <button
                             onClick={submitOrder}
-                            disabled={loading}
+                            disabled={loading || storeStatus.status === 'closed'}
                             className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-2xl font-bold text-base shadow-lg transition-all"
                         >
-                            {loading ? '⏳ กำลังดำเนินการ...' : '✓ ยืนยันสั่ง'}
+                            {loading ? '⏳ กำลังดำเนินการ...' : storeStatus.status === 'closed' ? 'ขออภัย ร้านอาหารปิดแล้ว' : '✓ ยืนยันสั่ง'}
                         </button>
                     </div>
                 )}

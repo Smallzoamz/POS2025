@@ -296,6 +296,59 @@ async function startServer() {
         }
     };
 
+    // --- STORE STATUS HELPER ---
+    const getStoreStatus = async () => {
+        try {
+            const settingsRes = await query("SELECT key, value FROM settings WHERE key IN ('store_open_time', 'store_close_time', 'last_order_offset_minutes')");
+            const settings = {};
+            settingsRes.rows.forEach(r => settings[r.key] = r.value);
+
+            const openTime = settings.store_open_time || "09:00";
+            const closeTime = settings.store_close_time || "21:00";
+            const lastOrderOffset = parseInt(settings.last_order_offset_minutes || 30);
+
+            // Current time in Bangkok (matching DB timezone)
+            const now = new Date();
+            const bangkokTime = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'Asia/Bangkok',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            }).format(now);
+
+            const [nowH, nowM] = bangkokTime.split(':').map(Number);
+            const [openH, openM] = openTime.split(':').map(Number);
+            const [closeH, closeM] = closeTime.split(':').map(Number);
+
+            const nowMinutes = nowH * 60 + nowM;
+            const openMinutes = openH * 60 + openM;
+            const closeMinutes = closeH * 60 + closeM;
+            const lastOrderMinutes = closeMinutes - lastOrderOffset;
+
+            let status = 'open';
+            let message = 'Store is currently open';
+
+            if (nowMinutes < openMinutes || nowMinutes >= closeMinutes) {
+                status = 'closed';
+                message = `ขออภัยค่ะ ขณะนี้ร้านปิดให้บริการ (เวลาเปิด-ปิด: ${openTime} - ${closeTime})`;
+            } else if (nowMinutes >= lastOrderMinutes) {
+                status = 'last_order';
+                message = `ขออภัยค่ะ ขณะนี้เลยเวลา Last Order แล้ว (ปิดรับออเดอร์เวลา ${Math.floor(lastOrderMinutes / 60).toString().padStart(2, '0')}:${(lastOrderMinutes % 60).toString().padStart(2, '0')})`;
+            }
+
+            return { status, message, openTime, closeTime, lastOrderMinutes, nowMinutes };
+        } catch (err) {
+            console.error('Failed to get store status', err);
+            return { status: 'error', message: err.message };
+        }
+    };
+
+    app.get('/api/store-status', async (req, res) => {
+        const status = await getStoreStatus();
+        res.json(status);
+    });
+
+
     app.get('/api/notifications', async (req, res) => {
         try {
             const result = await query('SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100');
@@ -629,6 +682,18 @@ async function startServer() {
 
         try {
             await client.query('BEGIN');
+
+            // 0. CHECK STORE STATUS
+            const storeStatus = await getStoreStatus();
+            if (storeStatus.status === 'closed') {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: storeStatus.message, status: 'closed' });
+            }
+            if (storeStatus.status === 'last_order') {
+                // For POS, we'll block it as well based on requirements
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: storeStatus.message, status: 'last_order' });
+            }
 
             // 1. Check for existing active order
             const existingOrderRes = await client.query(
@@ -2314,6 +2379,17 @@ async function startServer() {
         try {
             await client.query('BEGIN');
 
+            // 0. CHECK STORE STATUS
+            const storeStatus = await getStoreStatus();
+            if (storeStatus.status === 'closed') {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: storeStatus.message, status: 'closed' });
+            }
+            if (storeStatus.status === 'last_order') {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: storeStatus.message, status: 'last_order' });
+            }
+
             const {
                 orderType, customerName, customerPhone, customerAddress,
                 latitude, longitude, reservationDate, reservationTime,
@@ -2506,6 +2582,17 @@ async function startServer() {
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
+
+            // 0. CHECK STORE STATUS
+            const storeStatus = await getStoreStatus();
+            if (storeStatus.status === 'closed') {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: storeStatus.message, status: 'closed' });
+            }
+            if (storeStatus.status === 'last_order') {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: storeStatus.message, status: 'last_order' });
+            }
 
             const {
                 customer_name, customer_phone, items, total_amount

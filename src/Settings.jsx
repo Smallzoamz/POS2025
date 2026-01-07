@@ -17,7 +17,10 @@ const Settings = () => {
         holiday_multiplier: '2.0',
         promptpay_number: '',
         public_url: '',
-        enable_receipt_printer: 'true'
+        enable_receipt_printer: 'true',
+        store_open_time: '09:00',
+        store_close_time: '21:00',
+        last_order_offset_minutes: '30'
     });
     const [network, setNetwork] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -251,7 +254,55 @@ const Settings = () => {
                             </div>
                         </section>
 
-                        {/* Section 4: Takeaway QR Code */}
+                        {/* Section 4: Operating Hours */}
+                        <section className="space-y-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center text-lg">🕒</div>
+                                <div>
+                                    <h3 className="font-bold text-slate-900 leading-none">เวลาเปิด-ปิดร้าน</h3>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Operating Hours & Last Order</p>
+                                </div>
+                            </div>
+
+                            <div className="tasty-card grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Opening Time</label>
+                                    <input
+                                        type="time"
+                                        name="store_open_time"
+                                        value={settings.store_open_time || '09:00'}
+                                        onChange={handleChange}
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none font-medium text-slate-900 transition-all text-sm"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Closing Time</label>
+                                    <input
+                                        type="time"
+                                        name="store_close_time"
+                                        value={settings.store_close_time || '21:00'}
+                                        onChange={handleChange}
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none font-medium text-slate-900 transition-all text-sm"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Last Order (Minutes before close)</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            name="last_order_offset_minutes"
+                                            value={settings.last_order_offset_minutes || '30'}
+                                            onChange={handleChange}
+                                            className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none font-medium text-slate-900 transition-all text-sm"
+                                        />
+                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">min</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 ml-1 italic">* ปิดรับออเดอร์ก่อนเวลาปิดร้าน</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Section 5: Takeaway QR Code */}
                         <section className="space-y-6">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center text-lg">📸</div>

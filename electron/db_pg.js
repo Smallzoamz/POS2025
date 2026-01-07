@@ -419,6 +419,24 @@ const initDatabasePG = async () => {
             console.log('Added loyalty_points_per_unit setting');
         }
 
+        // Business Hours Settings Defaults
+        const openTimeRes = await client.query("SELECT COUNT(*) FROM settings WHERE key = $1", ['store_open_time']);
+        if (openTimeRes.rows[0].count == 0) {
+            await client.query("INSERT INTO settings (key, value) VALUES ($1, $2)", ['store_open_time', '09:00']);
+            console.log('Added store_open_time setting');
+        }
+        const closeTimeRes = await client.query("SELECT COUNT(*) FROM settings WHERE key = $1", ['store_close_time']);
+        if (closeTimeRes.rows[0].count == 0) {
+            await client.query("INSERT INTO settings (key, value) VALUES ($1, $2)", ['store_close_time', '21:00']);
+            console.log('Added store_close_time setting');
+        }
+        const lastOrderRes = await client.query("SELECT COUNT(*) FROM settings WHERE key = $1", ['last_order_offset_minutes']);
+        if (lastOrderRes.rows[0].count == 0) {
+            await client.query("INSERT INTO settings (key, value) VALUES ($1, $2)", ['last_order_offset_minutes', '30']);
+            console.log('Added last_order_offset_minutes setting');
+        }
+
+
         // --- MIGRATION: Add new columns to line_orders if they don't exist ---
         try {
             await client.query(`

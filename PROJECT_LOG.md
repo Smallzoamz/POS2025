@@ -25,6 +25,11 @@
 - [2026-01-07 15:53:00] | File: TablePlan.jsx | Line: 7 | Keyword: import | Status: Edited | Change: Added missing FaLayerGroup import to fix ReferenceError.
 - [2026-01-07 15:53:00] | File: TableManagement.jsx | Line: 545 | Keyword: Properties | Status: Created | Change: Added editable Zone Name input for Area Zones; changed label style to gray/faded.
 - [2026-01-07 16:00:00] | File: TableManagement.jsx | Line: 359 | Keyword: viewMode | Status: Hidden | Change: Suspended Visual Editor and Visual Map views due to design rethink; locked to List View.
+- [2026-01-08 09:00:00] | File: server.js | Line: 291 | Keyword: getStoreStatus | Status: Created | Change: Implemented store status logic and /api/store-status endpoint.
+- [2026-01-08 09:15:00] | File: Settings.jsx | Line: 19 | Keyword: settings | Status: Edited | Change: Added store hours and last order configuration fields.
+- [2026-01-08 10:30:00] | File: OrderEntry.jsx | Line: 37 | Keyword: storeStatus | Status: Edited | Change: Integrated status banner and order blocking for POS. Resolved all syntax errors and UI breakage.
+- [2026-01-08 11:20:00] | File: LineOrder.jsx | Line: 43 | Keyword: storeStatus | Status: Edited | Change: Integrated business hours validation and UI banner for LINE channel.
+- [2026-01-08 11:45:00] | File: TakeawayOrder.jsx | Line: 16 | Keyword: storeStatus | Status: Edited | Change: Integrated business hours validation and UI banner for public Takeaway channel.
 
 ## 🚀 Next Steps
 1. **Final User Acceptance:** Ask Papa to test the new Area Zones in his layout.

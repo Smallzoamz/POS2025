@@ -14,6 +14,7 @@ const TakeawayOrder = () => {
     const [orderNumber, setOrderNumber] = useState(null);
     const [submitting, setSubmitting] = useState(false);
     const [shopName, setShopName] = useState('Tasty Station');
+    const [storeStatus, setStoreStatus] = useState({ status: 'open', message: '' });
 
     // Option Modal State
     const [showOptionsModal, setShowOptionsModal] = useState(false);
@@ -26,7 +27,18 @@ const TakeawayOrder = () => {
     useEffect(() => {
         loadMenu();
         loadSettings();
+        loadStoreStatus();
     }, []);
+
+    const loadStoreStatus = async () => {
+        try {
+            const res = await fetch('/api/store-status');
+            const data = await res.json();
+            setStoreStatus(data || { status: 'open', message: '' });
+        } catch (err) {
+            console.error('Failed to load store status:', err);
+        }
+    };
 
     const loadSettings = async () => {
         try {
@@ -139,6 +151,19 @@ const TakeawayOrder = () => {
     const handleSubmitOrder = async () => {
         if (cart.length === 0) return alert('กรุณาเลือกเมนูก่อน');
 
+        // Final store status check
+        try {
+            const statusCheck = await fetch('/api/store-status').then(r => r.json());
+            if (statusCheck.status === 'closed') {
+                alert('ขออภัยค่ะ ขณะนี้ร้านปิดให้บริการแล้ว ไม่สามารถสั่งอาหารได้ในขณะนี้');
+                setStoreStatus(statusCheck);
+                setSubmitting(false);
+                return;
+            }
+        } catch (err) {
+            console.error('Store status check failed:', err);
+        }
+
         setSubmitting(true);
         try {
             const res = await fetch('/api/public/takeaway-orders', {
@@ -209,6 +234,20 @@ const TakeawayOrder = () => {
                         <p className="text-xs text-slate-500 mt-1">สั่งกลับบ้าน (Takeaway)</p>
                     </div>
 
+                    {/* Store Status Banner */}
+                    {storeStatus.status !== 'open' && (
+                        <div className={`mb-6 p-4 rounded-2xl border-2 flex items-center gap-4 animate-pulse ${storeStatus.status === 'closed'
+                                ? 'bg-rose-50 border-rose-200 text-rose-600'
+                                : 'bg-amber-50 border-amber-200 text-amber-600'
+                            }`}>
+                            <span className="text-2xl">{storeStatus.status === 'closed' ? '🛑' : '⏳'}</span>
+                            <div className="flex-1 text-left">
+                                <p className="text-[10px] font-black uppercase tracking-widest">{storeStatus.status === 'closed' ? 'Store Closed' : 'Last Order'}</p>
+                                <p className="text-sm font-bold leading-tight">{storeStatus.message}</p>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="space-y-4">
                         <div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">ชื่อลูกค้า *</label>
@@ -237,9 +276,10 @@ const TakeawayOrder = () => {
                             if (!customerName.trim()) return alert('กรุณากรอกชื่อ');
                             setStep(2);
                         }}
-                        className="w-full mt-5 py-3.5 bg-orange-500 text-white rounded-2xl font-bold text-base shadow-lg shadow-orange-500/30 hover:bg-orange-600 transition-colors"
+                        disabled={storeStatus.status === 'closed'}
+                        className="w-full mt-5 py-3.5 bg-orange-500 text-white rounded-2xl font-bold text-base shadow-lg shadow-orange-500/30 hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
                     >
-                        มุ่งหน้าสู่เมนู →
+                        {storeStatus.status === 'closed' ? 'ขออภัย ร้านอาหารปิดแล้ว' : 'มุ่งหน้าสู่เมนู →'}
                     </button>
                 </div>
             </div>
@@ -351,10 +391,10 @@ const TakeawayOrder = () => {
                                 </div>
                                 <button
                                     onClick={handleSubmitOrder}
-                                    disabled={submitting}
+                                    disabled={submitting || storeStatus.status === 'closed'}
                                     className="px-5 py-2.5 bg-orange-500 text-white rounded-xl font-bold shadow-lg shadow-orange-500/30 hover:bg-orange-600 transition-colors disabled:opacity-50 text-sm"
                                 >
-                                    {submitting ? 'ส่ง...' : '✓ ยืนยันสั่ง'}
+                                    {submitting ? 'ส่ง...' : storeStatus.status === 'closed' ? 'Closed' : '✓ ยืนยันสั่ง'}
                                 </button>
                             </div>
                         </div>

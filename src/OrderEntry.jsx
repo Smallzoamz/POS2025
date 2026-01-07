@@ -35,6 +35,7 @@ const OrderEntry = () => {
     const [isSearching, setIsSearching] = useState(false);
     const [customerCoupons, setCustomerCoupons] = useState([]);
     const [orderStatus, setOrderStatus] = useState('cooking'); // cooking, served, completed
+    const [storeStatus, setStoreStatus] = useState({ status: 'open', message: '' });
 
     // Receipt State
     const [receiptData, setReceiptData] = useState(null);
@@ -81,10 +82,13 @@ const OrderEntry = () => {
 
     const loadData = async () => {
         try {
-            const [menuData, orderData] = await Promise.all([
+            const [menuData, orderData, statusData] = await Promise.all([
                 api.getMenu(),
-                api.getOrder(tableId)
+                api.getOrder(tableId),
+                api.getStoreStatus()
             ]);
+
+            setStoreStatus(statusData);
 
             // Set Menu
             setCategories(menuData.categories);
@@ -307,6 +311,23 @@ const OrderEntry = () => {
     const submitOrder = async () => {
         if (cart.length === 0) return alert('กรุณาเลือกรายการอาหารก่อนครับ');
 
+        // Check store status before submitting
+        try {
+            const statusData = await api.getStoreStatus();
+            setStoreStatus(statusData);
+            if (statusData.status === 'closed') {
+                return alert('❌ ขออภัยค่ะ ขณะนี้ร้านปิดให้บริการแล้ว\n' + statusData.message);
+            }
+            if (statusData.status === 'last_order') {
+                // If it's a new order (no items in orderedItems yet), we might want to block it.
+                // If it's adding to an existing order, we might allow it? 
+                // Let's stick to the strict rule: No new submissions after last order.
+                return alert('⚠️ ขออภัยค่ะ ขณะนี้เลยเวลา Last Order แล้ว\n' + statusData.message);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+
         try {
             const res = await api.createOrder(tableId || 'T-00', cart, cartTotal, orderType);
             if (res.success) {
@@ -466,8 +487,16 @@ const OrderEntry = () => {
         <div className="flex flex-col md:flex-row h-full bg-[#F2F6F9] overflow-hidden relative text-slate-900">
             <Receipt ref={receiptRef} data={receiptData} />
 
+            {/* Store Status Banner (Only if not open) */}
+            {storeStatus.status !== 'open' && (
+                <div className={`fixed top-0 left-0 right-0 z-[200] px-4 py-2 text-center text-xs font-bold uppercase tracking-widest shadow-lg animate-bounce-subtle
+                    ${storeStatus.status === 'closed' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'}`}>
+                    {storeStatus.status === 'closed' ? '🔴 CLOSED' : '⏳ LAST ORDER'} : {storeStatus.message}
+                </div>
+            )}
+
             {/* Main Menu Side (Left) */}
-            <div className="flex-1 flex flex-col min-w-0 overflow-y-auto custom-scrollbar p-1.5 md:p-6 lg:p-8 space-y-2 md:space-y-6 pb-24 md:pb-8">
+            <div className={`flex-1 flex flex-col min-w-0 overflow-y-auto custom-scrollbar p-1.5 md:p-6 lg:p-8 space-y-2 md:space-y-6 pb-24 md:pb-8 ${storeStatus.status !== 'open' ? 'pt-12 md:pt-16' : ''}`}>
 
                 {/* Header with Back Button - Hide on customer mobile */}
                 {!isCustomer && (
@@ -810,10 +839,16 @@ const OrderEntry = () => {
                         </button>
                         <button
                             onClick={activeOrderId && cart.length === 0 ? handlePaymentClick : submitOrder}
-                            className="flex-1 bg-[#00A099] h-14 rounded-[20px] text-white font-bold text-sm uppercase tracking-widest shadow-xl shadow-[#00A099]/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                            disabled={storeStatus.status === 'closed' || storeStatus.status === 'last_order'}
+                            className={`flex-1 h-14 rounded-[20px] text-white font-bold text-sm uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-2
+                                ${storeStatus.status === 'closed' || storeStatus.status === 'last_order'
+                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed grayscale'
+                                    : 'bg-[#00A099] shadow-[#00A099]/20 hover:scale-[1.02] active:scale-95'}`}
                         >
-                            <span className="text-lg">⚡</span>
-                            {activeOrderId && cart.length === 0 ? 'Collect Payment' : activeOrderId ? 'Update Order' : 'Place Order'}
+                            <span className="text-lg">{(storeStatus.status === 'closed' || storeStatus.status === 'last_order') ? '🚫' : '⚡'}</span>
+                            {(storeStatus.status === 'closed' || storeStatus.status === 'last_order')
+                                ? 'Store Closed'
+                                : activeOrderId && cart.length === 0 ? 'Collect Payment' : activeOrderId ? 'Update Order' : 'Place Order'}
                         </button>
                     </div>
                 </div>
@@ -835,9 +870,13 @@ const OrderEntry = () => {
                 </div>
                 <button
                     onClick={submitOrder}
-                    className="px-8 py-3 bg-[#00A099] text-white rounded-[20px] font-bold text-xs uppercase tracking-widest shadow-lg shadow-[#00A099]/20"
+                    disabled={storeStatus.status === 'closed' || storeStatus.status === 'last_order'}
+                    className={`px-8 py-3 rounded-[20px] font-bold text-xs uppercase tracking-widest shadow-lg transition-all
+                        ${storeStatus.status === 'closed' || storeStatus.status === 'last_order'
+                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed grayscale'
+                            : 'bg-[#00A099] text-white shadow-[#00A099]/20 active:scale-95'}`}
                 >
-                    Confirm
+                    {(storeStatus.status === 'closed' || storeStatus.status === 'last_order') ? 'Closed' : 'Confirm'}
                 </button>
             </div>
 
@@ -966,7 +1005,7 @@ const OrderEntry = () => {
                                 onClick={confirmPayment}
                                 className="flex-1 py-3 bg-[#00A099] text-white rounded-xl font-bold hover:bg-[#009088] transition-colors shadow-lg shadow-[#00A099]/30"
                             >
-                                ✓ ยืนยันชำระ
+                                {'✓'} ยืนยันชำระ
                             </button>
                         </div>
                     </div>
@@ -1070,7 +1109,7 @@ const OrderEntry = () => {
                                 }}
                                 className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-colors shadow-lg shadow-purple-600/30"
                             >
-                                ✓ รับแล้ว
+                                {'✓'} รับแล้ว
                             </button>
                         </div>
                     </div>

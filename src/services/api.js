@@ -373,6 +373,11 @@ export const api = {
         return res.json();
     },
 
+    getStoreStatus: async () => {
+        const res = await fetch(`${BASE_URL}/store-status`);
+        return res.json();
+    },
+
     // --- USERS MANAGEMENT ---
     getUsers: async () => {
         const res = await fetch(`${BASE_URL}/users`);
