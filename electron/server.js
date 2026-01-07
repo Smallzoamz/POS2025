@@ -844,6 +844,102 @@ async function startServer() {
         }
     });
 
+    // Get Sales History (Paid Orders) with Optional Filters
+    // MOVED ABOVE generic /:tableName to avoid shadowing conflict
+    app.get('/api/orders/history', async (req, res) => {
+        const { startDate, endDate } = req.query;
+        console.log(`[History API] Fetching range: ${startDate} to ${endDate}`);
+        try {
+            // Use Asia/Bangkok consistently for filtering
+            let sql = `SELECT *, (updated_at AT TIME ZONE 'Asia/Bangkok')::date as local_date FROM orders WHERE status = 'paid'`;
+            const params = [];
+
+            if (startDate && endDate) {
+                sql += " AND (updated_at AT TIME ZONE 'Asia/Bangkok')::date >= $1::date AND (updated_at AT TIME ZONE 'Asia/Bangkok')::date <= $2::date";
+                params.push(startDate, endDate);
+            }
+
+            sql += " ORDER BY updated_at DESC";
+            if (!startDate) sql += " LIMIT 100";
+
+            const ordersRes = await query(sql, params);
+
+            // Format for frontend (ensure numbers are numbers)
+            const instoreRows = ordersRes.rows.map(o => ({
+                ...o,
+                source: 'instore',
+                total_amount: parseFloat(o.total_amount || 0)
+            }));
+
+            // LINE orders
+            let lineSql = `SELECT id, customer_name as table_name, status, total_amount, updated_at, order_type, payment_method, (updated_at AT TIME ZONE 'Asia/Bangkok')::date as local_date FROM line_orders WHERE status = 'completed'`;
+            const lineParams = [];
+
+            if (startDate && endDate) {
+                lineSql += " AND (updated_at AT TIME ZONE 'Asia/Bangkok')::date >= $1::date AND (updated_at AT TIME ZONE 'Asia/Bangkok')::date <= $2::date";
+                lineParams.push(startDate, endDate);
+            }
+
+            lineSql += " ORDER BY updated_at DESC";
+            if (!startDate) lineSql += " LIMIT 100";
+
+            const lineOrdersRes = await query(lineSql, lineParams);
+            const lineRows = lineOrdersRes.rows.map(o => ({
+                ...o,
+                source: 'line',
+                total_amount: parseFloat(o.total_amount || 0)
+            }));
+
+            const combined = [...instoreRows, ...lineRows].sort((a, b) =>
+                new Date(b.updated_at) - new Date(a.updated_at)
+            );
+
+            console.log(`[History API] Instore: ${instoreRows.length}, LINE: ${lineRows.length}, Combined: ${combined.length}`);
+            res.json(combined);
+        } catch (err) {
+            console.error('[History API Error]', err);
+            res.status(500).json({ error: err.message, history: [] });
+        }
+    });
+
+    // Get Specific Order Details by ID (for History or specific lookup)
+    // Using regex to ensure it only matches numeric IDs
+    app.get('/api/orders/:id(\\d+)', async (req, res) => {
+        const { id } = req.params;
+        try {
+            const orderRes = await query(`
+                SELECT o.*, lc.display_name as customer_name, lc.picture_url as customer_picture
+                FROM orders o
+                LEFT JOIN loyalty_customers lc ON o.customer_id = lc.id
+                WHERE o.id = $1
+            `, [id]);
+            const order = orderRes.rows[0];
+
+            if (order) {
+                const itemsRes = await query("SELECT * FROM order_items WHERE order_id = $1", [id]);
+                const items = itemsRes.rows;
+
+                // Fetch options for each item
+                for (let item of items) {
+                    const optionsRes = await query("SELECT * FROM order_item_options WHERE order_item_id = $1", [item.id]);
+                    item.options = optionsRes.rows;
+                }
+
+                // Return flat structure as expected by SalesHistory.jsx
+                res.json({
+                    ...order,
+                    items: items,
+                    total_amount: parseFloat(order.total_amount || 0)
+                });
+            } else {
+                res.status(404).json({ error: 'Order not found' });
+            }
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     // Get Active Order by Table Name
     app.get('/api/orders/:tableName', async (req, res) => {
         const { tableName } = req.params;
@@ -946,55 +1042,6 @@ async function startServer() {
         }
     });
 
-    // Get Sales History (Paid Orders) with Optional Filters
-    app.get('/api/orders/history', async (req, res) => {
-        const { startDate, endDate } = req.query;
-        console.log(`[History API] Fetching history for range: ${startDate} to ${endDate}`);
-        try {
-            // Base SQL for In-store
-            let sql = `SELECT * FROM orders WHERE status = 'paid'`;
-            const params = [];
-
-            if (startDate && endDate) {
-                sql += " AND (updated_at AT TIME ZONE 'Asia/Bangkok')::date >= $1::date AND (updated_at AT TIME ZONE 'Asia/Bangkok')::date <= $2::date";
-                params.push(startDate, endDate);
-            }
-
-            sql += " ORDER BY updated_at DESC";
-
-            if (!startDate) {
-                sql += " LIMIT 50";
-            }
-
-            const ordersRes = await query(sql, params);
-            console.log(`[History API] Fetched ${ordersRes.rows.length} in-store orders`);
-
-            // Base SQL for LINE orders
-            let lineSql = `SELECT id, customer_name as table_name, status, total_amount, updated_at, order_type, payment_method FROM line_orders WHERE status = 'completed'`;
-            const lineParams = [];
-            if (startDate && endDate) {
-                lineSql += " AND (updated_at AT TIME ZONE 'Asia/Bangkok')::date >= $1::date AND (updated_at AT TIME ZONE 'Asia/Bangkok')::date <= $2::date";
-                lineParams.push(startDate, endDate);
-            }
-            lineSql += " ORDER BY updated_at DESC";
-            if (!startDate) lineSql += " LIMIT 50";
-
-            const lineOrdersRes = await query(lineSql, lineParams);
-            console.log(`[History API] Found ${lineOrdersRes.rows.length} LINE orders`);
-
-            // Combine and sort
-            const combined = [
-                ...ordersRes.rows.map(o => ({ ...o, source: 'instore' })),
-                ...lineOrdersRes.rows.map(o => ({ ...o, source: 'line' }))
-            ].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
-
-            console.log(`[History API] Total combined records: ${combined.length}`);
-            res.json(combined);
-        } catch (err) {
-            console.error('[History API Error]', err);
-            res.status(500).json({ error: err.message });
-        }
-    });
 
     // Get Dashboard Stats
     app.get('/api/dashboard', async (req, res) => {

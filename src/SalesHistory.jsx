@@ -28,14 +28,21 @@ const SalesHistory = () => {
     const loadHistory = async () => {
         setLoading(true);
         try {
+            console.log('[SalesHistory] Loading history for range:', dateRange);
             const data = await api.getSalesHistory(dateRange);
             if (Array.isArray(data)) {
+                console.log(`[SalesHistory] Success! Loaded ${data.length} records.`);
                 setHistory(data);
+            } else if (data && data.history && Array.isArray(data.history)) {
+                // Fallback for different API response structure
+                setHistory(data.history);
             } else {
+                console.warn('[SalesHistory] Received unexpected data format:', data);
                 setHistory([]);
             }
         } catch (error) {
-            console.error("Error loading history:", error);
+            console.error("[SalesHistory] Failed to load history:", error);
+            setHistory([]);
         } finally {
             setLoading(false);
         }
@@ -66,8 +73,10 @@ const SalesHistory = () => {
     };
 
     // Calculate Summary from History Data (filtered by date)
-    const totalRevenue = history.reduce((sum, order) => sum + order.total_amount, 0);
-    const totalOrders = history.length;
+    const totalRevenue = Array.isArray(history)
+        ? history.reduce((sum, order) => sum + (parseFloat(order.total_amount) || 0), 0)
+        : 0;
+    const totalOrders = Array.isArray(history) ? history.length : 0;
     const averageBill = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
     return (

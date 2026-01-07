@@ -30,6 +30,12 @@
 - [2026-01-08 10:30:00] | File: OrderEntry.jsx | Line: 37 | Keyword: storeStatus | Status: Edited | Change: Integrated status banner and order blocking for POS. Resolved all syntax errors and UI breakage.
 - [2026-01-08 11:20:00] | File: LineOrder.jsx | Line: 43 | Keyword: storeStatus | Status: Edited | Change: Integrated business hours validation and UI banner for LINE channel.
 - [2026-01-08 11:45:00] | File: TakeawayOrder.jsx | Line: 16 | Keyword: storeStatus | Status: Edited | Change: Integrated business hours validation and UI banner for public Takeaway channel.
+- [2026-01-07 19:20:00] | File: LineOrderManagement.jsx | Line: 363 | Keyword: Modal | Status: Edited | Change: Redesigned Order Detail and Payment modals to match "Obsidian & Gold" premium theme.
+
+[2026-01-07 19:30] | File: SalesHistory.jsx | Line: 28 | Keyword: loadHistory | Status: Edited | Change: Added robust data handling and logging for sales history fetching.
+- [2026-01-07 19:30:00] | File: server.js | Line: 950 | Keyword: /api/orders/history | Status: Edited | Change: Refined SQL query with explicit timezone handling and decimal-to-float casting for better data integrity.
+- [2026-01-07 20:10:00] | File: server.js | Line: 847 | Keyword: /api/orders/history | Status: Edited | Change: Moved history route above generic :tableName route to fix shadowing conflict and added explicit date casting for robust filtering.
+- [2026-01-07 20:15:00] | File: server.js | Line: 905 | Keyword: /api/orders/:id | Status: Created | Change: Implemented numeric ID lookup route for order details to resolve blank Sales History modal issues.
 
 ## 🚀 Next Steps
 1. **Final User Acceptance:** Ask Papa to test the new Area Zones in his layout.
