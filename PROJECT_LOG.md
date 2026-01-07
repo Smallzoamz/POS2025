@@ -17,6 +17,10 @@
   - LineOrderManagement: Added Options display with pricing below product names.
   - LineOrder Cart Bar: Redesigned compact UI with delete button and `cartKey` fix.
   - Discount Display: Created centralized `getCouponDiscountAmount` helper function.
+- **Cart Bar UI Improvements:**
+  - LineOrder.jsx: Redesigned for better symmetry (cart icon 64px→44px, smaller NEXT button, reduced padding).
+  - TakeawayOrder.jsx: Added scrollable item list preview with quantity controls and delete button.
+  - KitchenDisplay.jsx: Fixed NaN display with `parseFloat(ing.quantity_used) || 0` fallback.
 
 ### Summary of Completed Tasks
 1. **Product Availability Toggle:** Refactored to include inline toggle in Menu Management.

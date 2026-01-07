@@ -317,21 +317,46 @@ const TakeawayOrder = () => {
                     </div>
                 </div>
 
-                {/* Cart Footer */}
+                {/* Cart Footer with Item List */}
                 {cart.length > 0 && (
-                    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-2 shadow-lg">
-                        <div className="flex items-center justify-between max-w-2xl mx-auto">
-                            <div>
-                                <p className="text-xs text-slate-500">{cart.reduce((sum, i) => sum + i.quantity, 0)} รายการ</p>
-                                <p className="text-lg font-bold text-slate-900">฿{totalAmount.toLocaleString()}</p>
+                    <div className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-xl border-t border-white/10 shadow-2xl z-50">
+                        <div className="max-w-2xl mx-auto p-3">
+                            {/* Scrollable Items Preview */}
+                            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-2">
+                                {cart.map(item => (
+                                    <div key={item.cartKey} className="flex items-center gap-2 bg-white/10 border border-white/10 rounded-xl px-2 py-1.5 shrink-0 group">
+                                        <div className="flex-1 min-w-0 max-w-[90px]">
+                                            <span className="text-[10px] font-bold text-white/90 line-clamp-1">{item.name}</span>
+                                            {item.optionsLabel && (
+                                                <p className="text-[8px] text-orange-400 truncate">+{item.optionsLabel}</p>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1 bg-slate-800/80 rounded-lg p-0.5">
+                                            <button onClick={(e) => { e.stopPropagation(); updateQuantity(item.cartKey, -1); }} className="w-5 h-5 flex items-center justify-center text-white/50 hover:text-white text-sm">-</button>
+                                            <span className="text-[10px] font-black text-orange-500 w-4 text-center">{item.quantity}</span>
+                                            <button onClick={(e) => { e.stopPropagation(); updateQuantity(item.cartKey, 1); }} className="w-5 h-5 flex items-center justify-center text-white/50 hover:text-white text-sm">+</button>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setCart(prev => prev.filter(c => c.cartKey !== item.cartKey)); }}
+                                            className="w-5 h-5 flex items-center justify-center text-red-400/50 hover:text-red-400 text-sm"
+                                        >✕</button>
+                                    </div>
+                                ))}
                             </div>
-                            <button
-                                onClick={handleSubmitOrder}
-                                disabled={submitting}
-                                className="px-5 py-2.5 bg-orange-500 text-white rounded-xl font-bold shadow-lg shadow-orange-500/30 hover:bg-orange-600 transition-colors disabled:opacity-50 text-sm"
-                            >
-                                {submitting ? 'ส่ง...' : '✓ ยืนยันสั่ง'}
-                            </button>
+                            {/* Summary Row */}
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-[9px] text-white/40 uppercase tracking-widest">{cart.reduce((sum, i) => sum + i.quantity, 0)} รายการ</p>
+                                    <p className="text-lg font-bold text-white">฿{totalAmount.toLocaleString()}</p>
+                                </div>
+                                <button
+                                    onClick={handleSubmitOrder}
+                                    disabled={submitting}
+                                    className="px-5 py-2.5 bg-orange-500 text-white rounded-xl font-bold shadow-lg shadow-orange-500/30 hover:bg-orange-600 transition-colors disabled:opacity-50 text-sm"
+                                >
+                                    {submitting ? 'ส่ง...' : '✓ ยืนยันสั่ง'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}

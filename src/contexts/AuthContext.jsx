@@ -51,8 +51,20 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('pos_user');
     };
 
+    // Refresh User Data (e.g., after editing in User Management)
+    const refreshUser = (updatedUserData) => {
+        if (updatedUserData && user && updatedUserData.id === user.id) {
+            const newUser = { ...user, ...updatedUserData };
+            setUser(newUser);
+            localStorage.setItem('pos_user', JSON.stringify(newUser));
+        }
+    };
+
+    // Alias for refreshUser
+    const updateUser = refreshUser;
+
     return (
-        <AuthContext.Provider value={{ user, login, logout, loading }}>
+        <AuthContext.Provider value={{ user, login, logout, loading, refreshUser, updateUser }}>
             {!loading && children}
         </AuthContext.Provider>
     );

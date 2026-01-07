@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { api } from './services/api';
 import MasterLayout from './layouts/MasterLayout';
+import { useAuth } from './contexts/AuthContext';
 
 const UserManagement = () => {
+    const { user: currentUser, refreshUser } = useAuth();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -79,6 +81,10 @@ const UserManagement = () => {
         try {
             if (editingUser) {
                 await api.updateUser(editingUser.id, formData);
+                // If editing the currently logged-in user, refresh the header display
+                if (currentUser && editingUser.id === currentUser.id) {
+                    refreshUser({ ...editingUser, ...formData });
+                }
             } else {
                 await api.addUser(formData);
             }

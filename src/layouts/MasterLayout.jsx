@@ -289,11 +289,11 @@ const MasterLayout = ({ children }) => {
                         {/* Profile Wrapper */}
                         <div className="flex items-center gap-3 pl-6 border-l border-slate-100">
                             <div className="text-right hidden lg:block">
-                                <p className="text-sm font-bold text-slate-900 leading-none">{user?.full_name || 'Ibrahim Kadri'}</p>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{user?.role || 'Admin'}</p>
+                                <p className="text-sm font-bold text-slate-900 leading-none">{user?.full_name || 'User'}</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{user?.role || 'Staff'}</p>
                             </div>
                             <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shadow-sm">
-                                <img src={`https://ui-avatars.com/api/?name=${user?.full_name || 'Admin'}&background=random`} alt="profile" className="w-full h-full object-cover" />
+                                <img src={`https://ui-avatars.com/api/?name=${user?.full_name || 'User'}&background=random`} alt="profile" className="w-full h-full object-cover" />
                             </div>
                         </div>
                     </div>

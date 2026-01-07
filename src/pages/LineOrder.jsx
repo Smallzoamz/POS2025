@@ -1003,24 +1003,25 @@ const LineOrder = () => {
 
             {/* Floating Cart (Step 3 only) */}
             {step === 3 && cart.length > 0 && (
-                <div className="fixed bottom-0 left-0 right-0 z-[100] pb-[env(safe-area-inset-bottom,1rem)] p-4 animate-slide-up">
-                    <div className="max-w-lg mx-auto bg-slate-900/95 backdrop-blur-2xl rounded-[40px] p-6 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] border border-white/10">
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-5">
+                <div className="fixed bottom-0 left-0 right-0 z-[100] pb-[env(safe-area-inset-bottom,0.5rem)] p-3 animate-slide-up">
+                    <div className="max-w-lg mx-auto bg-slate-900/95 backdrop-blur-2xl rounded-[28px] p-4 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.5)] border border-white/10">
+                        {/* Header Row - Balanced Layout */}
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
                                 <div className="relative">
-                                    <div className="w-16 h-16 bg-orange-500 rounded-[28px] flex items-center justify-center text-3xl shadow-xl shadow-orange-500/40">🛒</div>
-                                    <div className="absolute -top-2 -right-2 w-7 h-7 bg-white text-orange-500 rounded-full flex items-center justify-center text-xs font-black shadow-lg ring-2 ring-slate-900/10">
+                                    <div className="w-11 h-11 bg-orange-500 rounded-xl flex items-center justify-center text-xl shadow-lg shadow-orange-500/30">🛒</div>
+                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-white text-orange-500 rounded-full flex items-center justify-center text-[10px] font-black shadow-md">
                                         {cart.reduce((sum, i) => sum + i.quantity, 0)}
                                     </div>
                                 </div>
                                 <div>
-                                    <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Total to Pay</p>
-                                    <p className="text-3xl font-heading font-black text-white">฿{cartTotal.toLocaleString()}</p>
+                                    <p className="text-[9px] text-white/40 font-bold uppercase tracking-widest">TOTAL TO PAY</p>
+                                    <p className="text-xl font-heading font-black text-white">฿{cartTotal.toLocaleString()}</p>
                                 </div>
                             </div>
                             <button
                                 onClick={() => setStep(4)}
-                                className="px-10 py-5 bg-orange-500 hover:bg-orange-600 text-white rounded-[28px] font-heading font-black text-lg transition-all active:scale-90 shadow-xl shadow-orange-500/20"
+                                className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-heading font-black text-sm transition-all active:scale-95 shadow-lg shadow-orange-500/20"
                             >
                                 NEXT →
                             </button>
