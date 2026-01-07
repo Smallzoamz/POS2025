@@ -11,6 +11,12 @@
 - **Transactional Integrity:** Integrated stock deduction into POS, LINE, and Takeaway QR endpoints using PostgreSQL transactions.
 - **Enhanced Safety:** Added availability checks that throw a 400 error if ingredients or size-options are insufficient.
 - **Multiplier Support:** Ensured option-based recipe multipliers (e.g., +20% ingredients) are correctly calculated and deducted.
+- **LINE Order System Improvements (5 fixes):**
+  - KDS Recipe: Fixed `handleViewLineRecipe` to use `item.product_id || item.id` for base recipe fetch.
+  - LINE Notification: Added Options with prices to push message `itemsList`.
+  - LineOrderManagement: Added Options display with pricing below product names.
+  - LineOrder Cart Bar: Redesigned compact UI with delete button and `cartKey` fix.
+  - Discount Display: Created centralized `getCouponDiscountAmount` helper function.
 
 ### Summary of Completed Tasks
 1. **Product Availability Toggle:** Refactored to include inline toggle in Menu Management.

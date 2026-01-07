@@ -454,9 +454,18 @@ const LineOrderManagement = () => {
                                     <h4 className="font-bold text-slate-300 text-xs uppercase tracking-widest mb-3">รายการอาหาร</h4>
                                     <div className="space-y-2">
                                         {selectedOrder.items?.map((item, idx) => (
-                                            <div key={idx} className="flex justify-between text-white items-center py-1.5 border-b border-white/5 last:border-0">
-                                                <span className="font-medium">{item.quantity}x <span className="text-orange-400">{item.product_name || item.name || 'ไม่ระบุชื่อ'}</span></span>
-                                                <span className="font-bold text-emerald-400">฿{((item.price || 0) * (item.quantity || 1)).toLocaleString()}</span>
+                                            <div key={idx} className="flex justify-between text-white items-start py-1.5 border-b border-white/5 last:border-0">
+                                                <div>
+                                                    <span className="font-medium">{item.quantity}x <span className="text-orange-400">{item.product_name || item.name || 'ไม่ระบุชื่อ'}</span></span>
+                                                    {item.options && item.options.length > 0 && (
+                                                        <p className="text-[10px] text-orange-300/80 mt-0.5">+ {item.options.map(o => {
+                                                            const optName = o.name || o.option_name;
+                                                            const price = parseFloat(o.price_modifier || o.price || 0);
+                                                            return price > 0 ? `${optName}(฿${price})` : optName;
+                                                        }).join(', ')}</p>
+                                                    )}
+                                                </div>
+                                                <span className="font-bold text-emerald-400">฿{((item.unitPrice || item.price || 0) * (item.quantity || 1)).toLocaleString()}</span>
                                             </div>
                                         ))}
                                     </div>

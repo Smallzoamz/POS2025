@@ -2066,8 +2066,19 @@ async function startServer() {
         let items = [];
         try { items = JSON.parse(items_json || '[]'); } catch (e) { items = []; }
 
-        // Build Item List String
-        const itemsList = items.map(item => `- ${item.name} x${item.quantity}`).join('\n');
+        // Build Item List String with Options and Prices
+        const itemsList = items.map(item => {
+            let line = `- ${item.name || item.product_name} x${item.quantity}`;
+            if (item.options && item.options.length > 0) {
+                const optDetails = item.options.map(o => {
+                    const optName = o.name || o.option_name;
+                    const price = parseFloat(o.price_modifier || o.price || 0);
+                    return price > 0 ? `${optName}(฿${price})` : optName;
+                }).join(', ');
+                line += ` [+${optDetails}]`;
+            }
+            return line;
+        }).join('\n');
 
         let bubbleContent = {
             "type": "bubble",

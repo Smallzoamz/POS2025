@@ -227,6 +227,39 @@ const LineOrder = () => {
 
     const cartTotal = cart.reduce((sum, item) => sum + ((item.unitPrice || item.price) * item.quantity), 0);
 
+    // Centralized Discount Calculation Helper
+    const getCouponDiscountAmount = (coupon) => {
+        if (!coupon) return 0;
+        const title = coupon.promotion_title || '';
+
+        // Check percentage first (e.g., "10%", "ลด 10%")
+        const pctMatch = title.match(/(\d+)%/);
+        if (pctMatch) {
+            return Math.floor(cartTotal * (parseInt(pctMatch[1]) / 100));
+        }
+
+        // Check fixed amount patterns
+        const patterns = [
+            /-฿(\d+)/,                    // "-฿50"
+            /-(\d+)\s*บาท/,               // "-50 บาท"
+            /ลด\s*(\d+)/,                 // "ลด 50"
+            /(\d+)\s*บาท/,                // "50 บาท"
+            /฿(\d+)/,                     // "฿50"
+            /(\d+)\s*(?:off|discount)/i,  // "50 off" or "50 discount"
+        ];
+
+        for (const p of patterns) {
+            const match = title.match(p);
+            if (match) return parseInt(match[1]);
+        }
+
+        // Fallback: try to find any number
+        const numMatch = title.match(/(\d+)/);
+        if (numMatch) return parseInt(numMatch[1]);
+
+        return 0;
+    };
+
     // Submit Order
     const submitOrder = async () => {
         setLoading(true);
@@ -872,81 +905,33 @@ const LineOrder = () => {
                                 {selectedCoupon && (
                                     <div className="flex justify-between text-emerald-600 font-black uppercase tracking-widest text-[10px] animate-pulse">
                                         <span>Coupon Discount</span>
-                                        <span>
-                                            -฿{(() => {
-                                                let disc = 0;
-                                                const match = selectedCoupon.promotion_title.match(/ลด\s*(\d+)/);
-                                                if (match) {
-                                                    disc = parseInt(match[1]);
-                                                } else if (selectedCoupon.promotion_title.includes('%')) {
-                                                    const pctMatch = selectedCoupon.promotion_title.match(/(\d+)%/);
-                                                    if (pctMatch) disc = Math.floor(cartTotal * (parseInt(pctMatch[1]) / 100));
-                                                }
-                                                return disc.toLocaleString();
-                                            })()}
-                                        </span>
+                                        <span>-฿{getCouponDiscountAmount(selectedCoupon).toLocaleString()}</span>
                                     </div>
                                 )}
                                 {orderType === 'reservation' && cart.length > 0 && customerInfo.preOrderFood && (
                                     <>
                                         <div className="flex justify-between text-rose-500 font-bold uppercase tracking-widest text-[10px]">
                                             <span>Required Deposit (50%)</span>
-                                            <span>฿{((cartTotal - (selectedCoupon ? (() => {
-                                                let disc = 0;
-                                                const match = selectedCoupon.promotion_title.match(/ลด\s*(\d+)/);
-                                                if (match) disc = parseInt(match[1]);
-                                                else if (selectedCoupon.promotion_title.includes('%')) {
-                                                    const pctMatch = selectedCoupon.promotion_title.match(/(\d+)%/);
-                                                    if (pctMatch) disc = Math.floor(cartTotal * (parseInt(pctMatch[1]) / 100));
-                                                }
-                                                return disc;
-                                            })() : 0)) * 0.5).toLocaleString()}</span>
+                                            <span>฿{((cartTotal - getCouponDiscountAmount(selectedCoupon)) * 0.5).toLocaleString()}</span>
                                         </div>
                                         <div className="bg-white p-5 rounded-[40px] shadow-2xl border border-slate-100 mt-6 flex flex-col items-center">
                                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-5">Pay via PromptPay QR 📱</p>
                                             <div className="p-4 bg-white border-2 border-slate-100 rounded-[32px] shadow-inner mb-4">
                                                 <QRCode
                                                     value={generatePayload(shopSettings.promptpay_number || '0800000000', {
-                                                        amount: Number((cartTotal - (selectedCoupon ? (() => {
-                                                            let disc = 0;
-                                                            const match = selectedCoupon.promotion_title.match(/ลด\s*(\d+)/);
-                                                            if (match) disc = parseInt(match[1]);
-                                                            else if (selectedCoupon.promotion_title.includes('%')) {
-                                                                const pctMatch = selectedCoupon.promotion_title.match(/(\d+)%/);
-                                                                if (pctMatch) disc = Math.floor(cartTotal * (parseInt(pctMatch[1]) / 100));
-                                                            }
-                                                            return disc;
-                                                        })() : 0)) * 0.5)
+                                                        amount: Number((cartTotal - getCouponDiscountAmount(selectedCoupon)) * 0.5)
                                                     })}
                                                     size={160}
                                                 />
                                             </div>
-                                            <p className="text-3xl font-heading font-black text-slate-900">฿{((cartTotal - (selectedCoupon ? (() => {
-                                                let disc = 0;
-                                                const match = selectedCoupon.promotion_title.match(/ลด\s*(\d+)/);
-                                                if (match) disc = parseInt(match[1]);
-                                                else if (selectedCoupon.promotion_title.includes('%')) {
-                                                    const pctMatch = selectedCoupon.promotion_title.match(/(\d+)%/);
-                                                    if (pctMatch) disc = Math.floor(cartTotal * (parseInt(pctMatch[1]) / 100));
-                                                }
-                                                return disc;
-                                            })() : 0)) * 0.5).toLocaleString()}</p>
+                                            <p className="text-3xl font-heading font-black text-slate-900">฿{((cartTotal - getCouponDiscountAmount(selectedCoupon)) * 0.5).toLocaleString()}</p>
                                             <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">{shopSettings.promptpay_name || 'Tasty Station'}</p>
                                         </div>
                                     </>
                                 )}
                                 <div className="flex justify-between items-center mt-2 p-4 bg-orange-500 rounded-[28px] text-white shadow-xl shadow-orange-500/30">
                                     <span className="font-heading font-black text-lg">ORDER TOTAL</span>
-                                    <span className="text-3xl font-heading font-black">฿{(cartTotal - (selectedCoupon ? (() => {
-                                        let disc = 0;
-                                        const match = selectedCoupon.promotion_title.match(/ลด\s*(\d+)/);
-                                        if (match) disc = parseInt(match[1]);
-                                        else if (selectedCoupon.promotion_title.includes('%')) {
-                                            const pctMatch = selectedCoupon.promotion_title.match(/(\d+)%/);
-                                            if (pctMatch) disc = Math.floor(cartTotal * (parseInt(pctMatch[1]) / 100));
-                                        }
-                                        return disc;
-                                    })() : 0)).toLocaleString()}</span>
+                                    <span className="text-3xl font-heading font-black">฿{(cartTotal - getCouponDiscountAmount(selectedCoupon)).toLocaleString()}</span>
                                 </div>
                             </div>
                         </div>
@@ -1041,16 +1026,25 @@ const LineOrder = () => {
                             </button>
                         </div>
 
-                        {/* Scrollable Items Preview */}
-                        <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+                        {/* Scrollable Items Preview - Compact with Delete */}
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                             {cart.map(item => (
-                                <div key={item.id} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl pl-3 pr-2 py-2 shrink-0 group transition-all hover:bg-white/10">
-                                    <span className="text-xs font-bold text-white/90 line-clamp-1 max-w-[80px]">{item.name}</span>
-                                    <div className="flex items-center gap-2 bg-slate-800 rounded-xl p-1">
-                                        <button onClick={() => updateQuantity(item.id, -1)} className="w-7 h-7 flex items-center justify-center text-white/40 hover:text-white transition-colors">-</button>
-                                        <span className="text-xs font-black text-orange-500 w-4 text-center">{item.quantity}</span>
-                                        <button onClick={() => updateQuantity(item.id, 1)} className="w-7 h-7 flex items-center justify-center text-white/40 hover:text-white transition-colors">+</button>
+                                <div key={item.cartKey} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-2 py-1.5 shrink-0 group hover:bg-white/10 transition-all">
+                                    <div className="flex-1 min-w-0 max-w-[100px]">
+                                        <span className="text-[11px] font-bold text-white/90 line-clamp-1">{item.name}</span>
+                                        {item.optionsLabel && (
+                                            <p className="text-[9px] text-orange-400 truncate">+{item.optionsLabel}</p>
+                                        )}
                                     </div>
+                                    <div className="flex items-center gap-1 bg-slate-800/80 rounded-lg p-0.5">
+                                        <button onClick={(e) => { e.stopPropagation(); updateQuantity(item.cartKey, -1); }} className="w-5 h-5 flex items-center justify-center text-white/50 hover:text-white text-sm transition-colors">-</button>
+                                        <span className="text-[10px] font-black text-orange-500 w-4 text-center">{item.quantity}</span>
+                                        <button onClick={(e) => { e.stopPropagation(); updateQuantity(item.cartKey, 1); }} className="w-5 h-5 flex items-center justify-center text-white/50 hover:text-white text-sm transition-colors">+</button>
+                                    </div>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setCart(prev => prev.filter(c => c.cartKey !== item.cartKey)); }}
+                                        className="w-5 h-5 flex items-center justify-center text-red-400/50 hover:text-red-400 text-sm transition-colors"
+                                    >✕</button>
                                 </div>
                             ))}
                         </div>

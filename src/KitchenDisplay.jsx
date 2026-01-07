@@ -111,7 +111,9 @@ const KitchenDisplay = () => {
 
         try {
             const itemsWithRecipes = await Promise.all(order.items.map(async (item) => {
-                const baseIngredients = await api.getProductRecipe(item.product_id);
+                // LINE orders use 'id' for product, while in-store uses 'product_id'
+                const productId = item.product_id || item.id;
+                const baseIngredients = await api.getProductRecipe(productId);
                 let ingredients = [...(Array.isArray(baseIngredients) ? baseIngredients : [])];
 
                 // Fetch ingredients for each option (LINE orders store options in the item object)
@@ -133,7 +135,7 @@ const KitchenDisplay = () => {
                         }
                     });
                 }
-                return { ...item, ingredients };
+                return { ...item, product_name: item.product_name || item.name, ingredients };
             }));
 
             setSelectedRecipe({ ...order, table_name: order.customer_name, items: itemsWithRecipes });
