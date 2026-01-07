@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import MasterLayout from './layouts/MasterLayout';
 import { useNavigate } from 'react-router-dom';
-import { api, socket } from './services/api';
 import QRCode from 'react-qr-code';
 import generatePayload from 'promptpay-qr';
+import { api, socket } from './services/api';
+import MasterLayout from './layouts/MasterLayout';
+import {
+    FaUtensils, FaGlassMartiniAlt, FaRestroom, FaTree,
+    FaLeaf, FaRoad, FaHome, FaBorderAll, FaLayerGroup
+} from 'react-icons/fa';
 
 const TablePlan = () => {
     const navigate = useNavigate();
     const [selectedZone, setSelectedZone] = useState('Indoor');
     const [tables, setTables] = useState([]);
+    const [mapObjects, setMapObjects] = useState([]);
     const [takeawayOrders, setTakeawayOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [qrTable, setQrTable] = useState(null); // Table Name to show QR for
@@ -17,6 +22,54 @@ const TablePlan = () => {
     const [paymentMethod, setPaymentMethod] = useState('cash'); // 'cash' or 'qr'
     const [settings, setSettings] = useState({});
     const [submitting, setSubmitting] = useState(false);
+    const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'visual'
+
+    // --- STYLIZED COMPONENTS ---
+    const Chair = ({ side, occupied, color, tableRotation }) => {
+        // Rotation based on which side of the table the chair is on
+        const rotations = { top: 180, bottom: 0, left: 90, right: 270 };
+        const rotation = rotations[side] || 0;
+
+        return (
+            <div
+                style={{ transform: `rotate(${rotation}deg)` }}
+                className={`w-6 h-6 flex flex-col items-center justify-center transition-all duration-500`}
+            >
+                {/* Backrest */}
+                <div className={`w-4 h-1.5 rounded-t-lg -mb-0.5 ${occupied ? '' : 'border-t border-x border-slate-300'}`} style={{ backgroundColor: occupied ? color : 'transparent' }} />
+                {/* Seat */}
+                <div className={`w-5 h-4 rounded-md relative flex items-center justify-center ${occupied ? 'shadow-sm' : 'border border-slate-300 bg-white'}`} style={{ backgroundColor: occupied ? color : '' }}>
+                    {/* Legs (stylized dots) */}
+                    <div className={`absolute -top-0.5 -left-0.5 w-1 h-1 rounded-full ${occupied ? '' : 'bg-slate-200'}`} style={{ backgroundColor: occupied ? color : '' }} />
+                    <div className={`absolute -top-0.5 -right-0.5 w-1 h-1 rounded-full ${occupied ? '' : 'bg-slate-200'}`} style={{ backgroundColor: occupied ? color : '' }} />
+                    <div className={`absolute -bottom-0.5 -left-0.5 w-1 h-1 rounded-full ${occupied ? '' : 'bg-slate-200'}`} style={{ backgroundColor: occupied ? color : '' }} />
+                    <div className={`absolute -bottom-0.5 -right-0.5 w-1 h-1 rounded-full ${occupied ? '' : 'bg-slate-200'}`} style={{ backgroundColor: occupied ? color : '' }} />
+
+                    {/* Stripes on backrest look */}
+                    <div className="flex gap-0.5 opacity-20">
+                        <div className="w-0.5 h-2 bg-white rounded-full" />
+                        <div className="w-0.5 h-2 bg-white rounded-full" />
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Layout Utilities
+    const renderObjectIcon = (type, color = 'currentColor') => {
+        const props = { size: 24, color };
+        switch (type) {
+            case 'kitchen': return <FaUtensils {...props} />;
+            case 'water_station': return <FaGlassMartiniAlt {...props} />;
+            case 'restroom': return <FaRestroom {...props} />;
+            case 'tree': return <FaTree {...props} />;
+            case 'garden': return <FaLeaf {...props} />;
+            case 'walkway': return <FaRoad {...props} />;
+            case 'hut': return <FaHome {...props} />;
+            case 'area_zone': return <FaLayerGroup {...props} />;
+            default: return <FaBorderAll {...props} />;
+        }
+    };
 
     useEffect(() => {
         loadTables();
@@ -66,18 +119,19 @@ const TablePlan = () => {
 
     const loadTables = async () => {
         try {
-            const res = await fetch('/api/tables');
-            const data = await res.json();
-            // Ensure data is an array before setting state
-            if (Array.isArray(data)) {
-                setTables(data);
-            } else {
-                console.error('API returned non-array data:', data);
-                setTables([]);
+            const [tablesData, mapObjectsData] = await Promise.all([
+                api.getTables(),
+                api.getMapObjects()
+            ]);
+
+            if (Array.isArray(tablesData)) {
+                setTables(tablesData);
+            }
+            if (Array.isArray(mapObjectsData)) {
+                setMapObjects(mapObjectsData);
             }
         } catch (err) {
-            console.error('Failed to load tables:', err);
-            setTables([]);
+            console.error('Failed to load table plan data:', err);
         } finally {
             setLoading(false);
         }
@@ -143,26 +197,36 @@ const TablePlan = () => {
                         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Live Table Management • Select a table to start</p>
                     </div>
 
-                    {/* Zone Picker (Modern Tabs) */}
-                    <div className="bg-white p-1.5 rounded-[20px] flex gap-1 shadow-sm border border-slate-100">
-                        {(() => {
-                            const zones = tables.length > 0
-                                ? [...new Set(tables.map(t => t.zone))]
-                                : ['Indoor', 'Outdoor', 'VIP'];
+                    {/* View Mode & Zone Picker */}
+                    <div className="flex flex-col md:flex-row gap-4 items-center">
+                        {/* View Mode Toggle */}
+                        <div className="bg-slate-100 p-1 rounded-2xl flex gap-1">
+                            <div className="px-5 py-2 rounded-xl bg-white text-slate-900 shadow-sm font-bold text-[10px] uppercase tracking-widest">
+                                Grid View
+                            </div>
+                        </div>
 
-                            return zones.map(zone => (
-                                <button
-                                    key={zone}
-                                    onClick={() => setSelectedZone(zone)}
-                                    className={`px-6 py-2.5 rounded-[14px] text-xs font-bold uppercase tracking-widest transition-all ${selectedZone === zone
-                                        ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-                                        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-                                        }`}
-                                >
-                                    {zone}
-                                </button>
-                            ));
-                        })()}
+                        {/* Zone Picker */}
+                        <div className="bg-white p-1.5 rounded-[20px] flex gap-1 shadow-sm border border-slate-100">
+                            {(() => {
+                                const zones = tables.length > 0
+                                    ? [...new Set(tables.map(t => t.zone))]
+                                    : ['Indoor', 'Outdoor', 'VIP'];
+
+                                return zones.map(zone => (
+                                    <button
+                                        key={zone}
+                                        onClick={() => setSelectedZone(zone)}
+                                        className={`px-6 py-2.5 rounded-[14px] text-xs font-bold uppercase tracking-widest transition-all ${selectedZone === zone
+                                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                            : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                                            }`}
+                                    >
+                                        {zone}
+                                    </button>
+                                ));
+                            })()}
+                        </div>
                     </div>
                 </header>
 
@@ -216,17 +280,16 @@ const TablePlan = () => {
                     </section>
                 )}
 
-                {/* Tables Grid */}
+                {/* Tables Display */}
                 {loading ? (
                     <div className="text-center py-20 text-slate-400">กำลังโหลด...</div>
-                ) : (
+                ) : viewMode === 'grid' ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                         {filteredTables.map(table => {
                             const isOccupied = table.status === 'occupied';
                             const isCalling = table.status === 'checking' || table.status === 'payment';
                             const isReserved = !!table.reservation_time && table.status === 'available';
 
-                            // Theme Colors Helper
                             const getStatusTheme = () => {
                                 if (isCalling) return { bg: 'bg-[#FFE1E1]', border: 'border-[#FFC5C5]', text: 'text-red-500', badge: 'bg-red-500' };
                                 if (isOccupied) return { bg: 'bg-[#FFF4E5]', border: 'border-[#FFD8A8]', text: 'text-orange-500', badge: 'bg-orange-500' };
@@ -248,7 +311,6 @@ const TablePlan = () => {
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{table.seats} Seats</p>
                                         </div>
 
-                                        {/* Dynamic Content */}
                                         {(isOccupied || isCalling) ? (
                                             <div className="w-full space-y-2 pt-4 border-t border-black/5">
                                                 <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-widest">
@@ -274,12 +336,8 @@ const TablePlan = () => {
                                         )}
                                     </div>
 
-                                    {/* Action Button (QR) */}
                                     <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setQrTable(table.name);
-                                        }}
+                                        onClick={(e) => { e.stopPropagation(); setQrTable(table.name); }}
                                         className="absolute -top-3 -right-3 w-10 h-10 bg-white border border-slate-100 rounded-2xl flex items-center justify-center shadow-xl hover:bg-orange-50 hover:text-orange-500 transition-all z-10 text-xl"
                                     >
                                         📱
@@ -287,6 +345,193 @@ const TablePlan = () => {
                                 </div>
                             );
                         })}
+                    </div>
+                ) : (
+                    <div className="relative w-full overflow-hidden bg-slate-50 rounded-[40px] border border-slate-200 shadow-inner min-h-[600px] select-none p-10 animate-fade-in">
+                        {/* Map Backdrop Decor */}
+                        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+
+                        {/* Zone Label Overlay */}
+                        <div className="absolute top-8 left-10">
+                            <h4 className="text-4xl font-black text-slate-200 uppercase tracking-tighter opacity-50">{selectedZone} ZONE</h4>
+                        </div>
+
+                        {/* Interactive Map Area */}
+                        <div className="relative w-full h-[600px]">
+                            {/* Map Objects (Decorations) */}
+                            {mapObjects.map(obj => (
+                                <div
+                                    key={`obj-${obj.id}`}
+                                    style={{
+                                        position: 'absolute',
+                                        left: obj.x || 0,
+                                        top: obj.y || 0,
+                                        width: obj.w || 100,
+                                        height: obj.h || 100,
+                                        transform: `rotate(${obj.rotation || 0}deg)`,
+                                        zIndex: obj.type === 'walkway' ? 1 : (obj.type === 'area_zone' ? 0 : 10)
+                                    }}
+                                    className="flex items-center justify-center pointer-events-none"
+                                >
+                                    <div
+                                        className={`w-full h-full rounded-2xl flex flex-col items-center justify-center relative transition-all duration-700
+                                            ${obj.type === 'kitchen' ? 'bg-slate-200 border-2 border-slate-400 shadow-[inset_0_2px_10px_rgba(0,0,0,0.1)]' : ''}
+                                            ${obj.type === 'water_station' ? 'bg-sky-50 border-2 border-sky-200' : ''}
+                                            ${obj.type === 'restroom' ? 'bg-slate-100 border-2 border-slate-200' : ''}
+                                            ${obj.type === 'tree' ? 'bg-emerald-600 rounded-full border-4 border-emerald-800/20 shadow-[0_10px_20px_rgba(5,150,105,0.3)]' : ''}
+                                            ${obj.type === 'garden' ? 'bg-emerald-100 border-2 border-emerald-200 shadow-inner' : ''}
+                                            ${obj.type === 'walkway' ? 'bg-slate-200/40 border-y border-slate-300/20' : ''}
+                                            ${obj.type === 'hut' ? 'bg-[#D2B48C] border-2 border-amber-900 shadow-xl' : ''}
+                                            ${obj.type === 'area_zone' ? 'bg-orange-50/10 border-2 border-dashed border-orange-200' : ''}
+                                            ${obj.type === 'fence' ? 'border-y-4 border-dashed border-amber-800/30' : ''}
+                                        `}
+                                    >
+                                        {obj.type === 'area_zone' && (
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden opacity-50 pointer-events-none">
+                                                <span className="text-3xl font-black text-slate-400 uppercase tracking-tighter">{obj.name || 'NEW ZONE'}</span>
+                                                <div className="w-12 h-0.5 bg-slate-300 rounded-full mt-2" />
+                                            </div>
+                                        )}
+                                        {/* Realistic Details */}
+                                        {obj.type === 'tree' && (
+                                            <div className="absolute inset-0 rounded-full overflow-hidden">
+                                                <div className="absolute top-1 left-1 w-1/2 h-1/2 bg-white/20 rounded-full blur-sm" />
+                                                <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle, #000 1px, transparent 1px)', backgroundSize: '8px 8px' }} />
+                                            </div>
+                                        )}
+                                        {obj.type === 'garden' && (
+                                            <div className="absolute inset-0 p-1 grid grid-cols-4 gap-1 opacity-60">
+                                                {[...Array(8)].map((_, i) => (
+                                                    <div key={i} className={`w-1.5 h-1.5 rounded-full ${['bg-pink-400', 'bg-yellow-400', 'bg-purple-400'][i % 3]} animate-pulse`} style={{ animationDelay: `${i * 0.2}s` }} />
+                                                ))}
+                                            </div>
+                                        )}
+                                        {obj.type === 'hut' && (
+                                            <>
+                                                {/* Roof Top View */}
+                                                <div className="absolute inset-0 bg-amber-900/10" style={{ backgroundImage: 'repeating-conic-gradient(from 0deg, transparent 0deg 30deg, rgba(0,0,0,0.05) 30deg 60deg)' }} />
+                                                <div className="absolute inset-0 shadow-[inset_0_0_40px_rgba(0,0,0,0.2)]" />
+                                                <div className="w-2 h-2 bg-amber-900 rounded-full z-10 shadow-lg" />
+                                            </>
+                                        )}
+
+                                        {obj.type !== 'fence' && renderObjectIcon(obj.type, (obj.type === 'tree' || obj.type === 'hut') ? 'rgba(255,255,255,0.8)' : 'currentColor')}
+                                        <span className={`text-[9px] font-black uppercase tracking-tighter mt-1 px-2 line-clamp-1 ${(obj.type === 'tree' || obj.type === 'hut') ? 'text-white' : 'opacity-50'}`}>{obj.name}</span>
+                                    </div>
+                                </div>
+                            ))}
+
+                            {/* Tables */}
+                            {filteredTables.map(table => {
+                                const isOccupied = table.status === 'occupied';
+                                const isCalling = table.status === 'checking' || table.status === 'payment';
+                                const isReserved = !!table.reservation_time && table.status === 'available';
+
+                                const getStatusColor = () => {
+                                    if (isCalling) return 'bg-red-500 shadow-lg shadow-red-500/20';
+                                    if (isOccupied) return 'bg-orange-500 shadow-lg shadow-orange-500/20';
+                                    if (isReserved) return 'bg-blue-500 shadow-lg shadow-blue-500/20';
+                                    return 'bg-white border-2 border-slate-200 hover:border-orange-300';
+                                };
+
+                                return (
+                                    <div
+                                        key={table.id}
+                                        style={{
+                                            left: table.x || 0,
+                                            top: table.y || 0,
+                                            width: table.w || 80,
+                                            height: table.h || 80,
+                                            transform: `rotate(${table.rotation || 0}deg)`
+                                        }}
+                                        className="absolute transition-all duration-500 cursor-pointer group z-50"
+                                        onClick={() => navigate(`/order/${table.name}`)}
+                                    >
+                                        {/* Chairs Rendering based on Seat Count */}
+                                        {/* Chairs Rendering based on Seat Count & Side-Alignment */}
+                                        {(() => {
+                                            const seatsCount = parseInt(table.seats || 2);
+                                            const isLandscape = (table.w || 80) >= (table.h || 80);
+                                            const chairs = [];
+                                            const color = isOccupied || isCalling ? (table.shape === 'circle' ? '#f97316' : '#0d9488') : '#94a3b8';
+
+                                            // Logic to place chairs along the longest sides
+                                            const sides = isLandscape ? ['top', 'bottom'] : ['left', 'right'];
+                                            const perSide = Math.floor(seatsCount / 2);
+                                            const remainder = seatsCount % 2;
+
+                                            sides.forEach((side, sideIdx) => {
+                                                const count = perSide + (sideIdx === 0 ? remainder : 0);
+                                                for (let i = 0; i < count; i++) {
+                                                    const step = 100 / (count + 1);
+                                                    const pos = (i + 1) * step;
+
+                                                    let style = { position: 'absolute' };
+                                                    if (side === 'top') { style.top = '-12px'; style.left = `${pos}%`; style.transform = 'translateX(-50%)'; }
+                                                    if (side === 'bottom') { style.bottom = '-12px'; style.left = `${pos}%`; style.transform = 'translateX(-50%)'; }
+                                                    if (side === 'left') { style.left = '-12px'; style.top = `${pos}%`; style.transform = 'translateY(-50%)'; }
+                                                    if (side === 'right') { style.right = '-12px'; style.top = `${pos}%`; style.transform = 'translateY(-50%)'; }
+
+                                                    chairs.push(
+                                                        <div key={`${side}-${i}`} style={style}>
+                                                            <Chair side={side} occupied={isOccupied || isCalling} color={color} />
+                                                        </div>
+                                                    );
+                                                }
+                                            });
+                                            return chairs;
+                                        })()}
+
+                                        {/* Main Table Body */}
+                                        <div className={`w-full h-full flex flex-col items-center justify-center transition-all duration-500 ${table.shape === 'circle' ? 'rounded-full' : (table.shape === 'hut' ? 'rounded-2xl' : 'rounded-3xl')} relative group-hover:scale-110 active:scale-95 border-2
+                                            ${isCalling ? 'bg-red-50 border-red-500 shadow-xl shadow-red-500/20' :
+                                                isOccupied ? (table.shape === 'hut' ? 'bg-[#D2B48C] border-amber-900 overflow-hidden' : (table.shape === 'circle' ? 'bg-[#FFF1F2] border-[#FECDD3]' : 'bg-[#E0F2F1] border-[#80CBC4]')) :
+                                                    isReserved ? 'bg-blue-50 border-blue-200' :
+                                                        (table.shape === 'hut' ? 'bg-[#D2B48C] border-amber-900 overflow-hidden' : 'bg-white border-slate-200')}
+                                        `}>
+                                            {/* Hut Roof Texture for Table */}
+                                            {table.shape === 'hut' && (
+                                                <>
+                                                    <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'repeating-conic-gradient(from 0deg, transparent 0deg 30deg, rgba(0,0,0,0.1) 30deg 60deg)' }} />
+                                                    <div className="absolute inset-x-0 bottom-0 h-1/3 bg-amber-900/10 pointer-events-none" />
+                                                    <div className="w-1.5 h-1.5 bg-amber-950 rounded-full z-20 shadow-sm border border-amber-800/20" />
+                                                </>
+                                            )}
+
+                                            <span className={`font-black tracking-tighter transition-colors relative z-10
+                                                ${isCalling ? 'text-red-500 text-base' :
+                                                    isOccupied ? (table.shape === 'hut' ? 'text-amber-950' : (table.shape === 'circle' ? 'text-[#E11D48]' : 'text-[#00695C]')) :
+                                                        (table.shape === 'hut' ? 'text-amber-950' : 'text-slate-800')}
+                                            `} style={{ fontSize: Math.min(table.w, table.h) / 4 }}>
+                                                {table.name}
+                                            </span>
+
+                                            {/* Seat Indicator Icon */}
+                                            <div className="flex items-center gap-1 opacity-40 mt-0.5 relative z-10">
+                                                <FaUtensils size={8} className={isOccupied ? 'animate-bounce' : ''} />
+                                                <span className="text-[9px] font-bold">{table.seats}</span>
+                                            </div>
+
+                                            {isCalling && <div className="absolute -top-3 -right-3 w-7 h-7 bg-white rounded-full flex items-center justify-center animate-bounce shadow-lg text-sm border-2 border-red-500 z-[60]">🔔</div>}
+                                        </div>
+
+                                        {/* Hover Quick Card */}
+                                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 opacity-0 group-hover:opacity-100 transition-all duration-300 z-[100] pointer-events-none translate-y-2 group-hover:translate-y-0">
+                                            <div className="bg-slate-900 text-white text-[10px] py-1.5 px-4 rounded-2xl whitespace-nowrap font-black shadow-2xl border border-white/10 uppercase tracking-widest flex items-center gap-2">
+                                                <span className={`w-2 h-2 rounded-full ${isOccupied ? 'bg-orange-500' : 'bg-emerald-500'}`} />
+                                                {table.status} • {table.seats} Seats
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Decoration Elements */}
+                        <div className="absolute bottom-10 right-10 flex gap-10 items-end opacity-20 pointer-events-none">
+                            <div className="w-40 h-10 border-4 border-slate-900 rounded-t-3xl flex items-center justify-center font-black text-slate-500">ENTRANCE</div>
+                            <div className="w-20 h-20 bg-slate-300 rounded-3xl flex items-center justify-center font-black text-slate-500 text-xs">RESTROOM</div>
+                        </div>
                     </div>
                 )}
             </div>

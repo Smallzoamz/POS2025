@@ -1181,27 +1181,107 @@ async function startServer() {
     });
 
     // Add Table
-    app.post('/api/tables', (req, res) => {
-        const { name, zone, seats } = req.body;
+    app.post('/api/tables', async (req, res) => {
+        const { name, zone, seats, x, y, w, h, rotation, shape } = req.body;
         try {
-            const result = db.prepare("INSERT INTO tables (name, zone, seats, status) VALUES (?, ?, ?, 'available')")
-                .run(name, zone, seats || 4);
+            const result = await query(
+                `INSERT INTO tables (name, zone, seats, status, x, y, w, h, rotation, shape) 
+                 VALUES ($1, $2, $3, 'available', $4, $5, $6, $7, $8, $9) RETURNING id`,
+                [name, zone, seats || 4, x || 100, y || 100, w || 80, h || 80, rotation || 0, shape || 'rectangle']
+            );
 
             io.emit('table-update', { id: null, status: 'refresh' });
-            res.json({ success: true, id: result.lastInsertRowid });
+            res.json({ success: true, id: result.rows[0].id });
         } catch (err) {
+            console.error(err);
             res.status(500).json({ error: err.message });
         }
     });
 
     // Delete Table
-    app.delete('/api/tables/:id', (req, res) => {
+    app.delete('/api/tables/:id', async (req, res) => {
         const { id } = req.params;
         try {
-            db.prepare("DELETE FROM tables WHERE id = ?").run(id);
+            await query("DELETE FROM tables WHERE id = $1", [id]);
             io.emit('table-update', { id: null, status: 'refresh' });
             res.json({ success: true });
         } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Batch Update Table Layout
+    app.post('/api/tables/batch-layout', async (req, res) => {
+        const { layouts } = req.body; // Array of {id, x, y, rotation, shape, seats}
+        try {
+            await query('BEGIN');
+            for (const item of layouts) {
+                await query(
+                    `UPDATE tables SET x = $1, y = $2, rotation = $3, shape = $4, seats = $5, w = $6, h = $7 WHERE id = $8`,
+                    [item.x, item.y, item.rotation || 0, item.shape || 'rectangle', item.seats || 4, item.w || 80, item.h || 80, item.id]
+                );
+            }
+            await query('COMMIT');
+            io.emit('table-update', { id: null, status: 'refresh' });
+            res.json({ success: true });
+        } catch (err) {
+            await query('ROLLBACK');
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // --- MAP OBJECTS API ---
+    app.get('/api/map-objects', async (req, res) => {
+        try {
+            const result = await query("SELECT * FROM map_objects");
+            res.json(result.rows);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.post('/api/map-objects', async (req, res) => {
+        const { name, type, x, y, w, h, rotation, zone } = req.body;
+        try {
+            const result = await query(
+                `INSERT INTO map_objects (name, type, x, y, w, h, rotation, zone) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+                [name, type, x || 0, y || 0, w || 100, h || 100, rotation || 0, zone || 'Indoor']
+            );
+            res.json({ success: true, id: result.rows[0].id });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.patch('/api/map-objects/:id', async (req, res) => {
+        const { id } = req.params;
+        const { x, y, w, h, rotation, name, type, zone } = req.body;
+        try {
+            await query(
+                `UPDATE map_objects SET x = COALESCE($1, x), y = COALESCE($2, y), w = COALESCE($3, w), 
+                 h = COALESCE($4, h), rotation = COALESCE($5, rotation), name = COALESCE($6, name), 
+                 type = COALESCE($7, type), zone = COALESCE($8, zone) WHERE id = $9`,
+                [x, y, w, h, rotation, name, type, zone, id]
+            );
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.delete('/api/map-objects/:id', async (req, res) => {
+        const { id } = req.params;
+        try {
+            await query("DELETE FROM map_objects WHERE id = $1", [id]);
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
             res.status(500).json({ error: err.message });
         }
     });

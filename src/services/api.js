@@ -583,5 +583,41 @@ export const api = {
             body: JSON.stringify({ code, orderId, lineOrderId })
         });
         return res.json();
+    },
+
+    // --- FLOOR PLAN & MAP OBJECTS ---
+    batchUpdateTableLayout: async (layouts) => {
+        const res = await fetch(`${BASE_URL}/tables/batch-layout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ layouts })
+        });
+        return res.json();
+    },
+    getMapObjects: async () => {
+        const res = await fetch(`${BASE_URL}/map-objects`);
+        return res.json();
+    },
+    addMapObject: async (data) => {
+        const res = await fetch(`${BASE_URL}/map-objects`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        return res.json();
+    },
+    updateMapObject: async (id, data) => {
+        const res = await fetch(`${BASE_URL}/map-objects/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        return res.json();
+    },
+    deleteMapObject: async (id) => {
+        const res = await fetch(`${BASE_URL}/map-objects/${id}`, {
+            method: 'DELETE'
+        });
+        return res.json();
     }
 };

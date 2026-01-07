@@ -88,9 +88,46 @@ const initDatabasePG = async () => {
                 name TEXT NOT NULL,
                 zone TEXT NOT NULL,
                 status TEXT DEFAULT 'available',
-                seats INTEGER DEFAULT 4
+                seats INTEGER DEFAULT 4,
+                x INTEGER DEFAULT 100,
+                y INTEGER DEFAULT 100,
+                w INTEGER DEFAULT 80,
+                h INTEGER DEFAULT 80,
+                rotation INTEGER DEFAULT 0,
+                shape TEXT DEFAULT 'rectangle' -- 'rectangle', 'circle', 'hut'
             )
         `);
+
+        // 1.1 Map Objects (Decorations & Areas)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS map_objects (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL, -- 'kitchen', 'water_station', 'restroom', 'fence', 'tree', 'garden', 'walkway', 'hut'
+                x INTEGER DEFAULT 0,
+                y INTEGER DEFAULT 0,
+                w INTEGER DEFAULT 100,
+                h INTEGER DEFAULT 100,
+                rotation INTEGER DEFAULT 0,
+                zone TEXT NOT NULL
+            )
+        `);
+
+        // Tables - Add layout columns if they don't exist (Migration)
+        try {
+            await client.query(`
+                ALTER TABLE tables 
+                ADD COLUMN IF NOT EXISTS x INTEGER DEFAULT 100,
+                ADD COLUMN IF NOT EXISTS y INTEGER DEFAULT 100,
+                ADD COLUMN IF NOT EXISTS w INTEGER DEFAULT 80,
+                ADD COLUMN IF NOT EXISTS h INTEGER DEFAULT 80,
+                ADD COLUMN IF NOT EXISTS rotation INTEGER DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS shape TEXT DEFAULT 'rectangle'
+            `);
+            console.log('✅ Tables layout columns migration completed');
+        } catch (err) {
+            console.log('Tables migration note:', err.message);
+        }
 
         // 2. Categories
         await client.query(`
@@ -666,9 +703,15 @@ const initDatabasePG = async () => {
             console.error('Migration 14 error:', migrationErr14.message);
         }
 
-        await client.query('COMMIT');
+        // Final Commit for all migrations and seeds
+        // await client.query('COMMIT'); // Removed to avoid double commit if line 329 already committed
     } catch (e) {
-        await client.query('ROLLBACK');
+        // Only rollback if we are actually in a transaction
+        try {
+            await client.query('ROLLBACK');
+        } catch (rbErr) {
+            // Silently fail rollback if no transaction
+        }
         console.error("❌ PostgreSQL Initialization Error:", e);
         throw e;
     } finally {
