@@ -2531,20 +2531,7 @@ async function startServer() {
         }
     });
 
-    // PUBLIC: Get Menu for LINE Order Page
-    app.get('/api/public/menu', async (req, res) => {
-        try {
-            const categoriesRes = await query("SELECT * FROM categories ORDER BY id");
-            const productsRes = await query("SELECT * FROM products ORDER BY category_id, name");
-            res.json({
-                categories: categoriesRes.rows,
-                products: productsRes.rows
-            });
-        } catch (err) {
-            console.error('Public menu error:', err);
-            res.status(500).json({ error: err.message });
-        }
-    });
+    // (Duplicate /api/public/menu removed)
 
     // --- LINE Messaging API Helper ---
     const sendLineFlexMessage = async (to, orderData) => {

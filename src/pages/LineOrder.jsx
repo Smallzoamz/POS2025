@@ -24,6 +24,7 @@ const LineOrder = () => {
     });
     const [categories, setCategories] = useState([]);
     const [menuItems, setMenuItems] = useState([]);
+    const [globalOptions, setGlobalOptions] = useState([]); // New: Global Options State
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [cart, setCart] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -130,15 +131,23 @@ const LineOrder = () => {
     useEffect(() => {
         const loadData = async () => {
             try {
-                const [menuRes, settingsRes, statusRes] = await Promise.all([
+                const [menuRes, settingsRes, statusRes, globalOptsRes] = await Promise.all([
                     fetch('/api/public/menu').then(r => r.json()),
                     fetch('/api/public/settings').then(r => r.json()),
-                    fetch('/api/store-status').then(r => r.json())
+                    fetch('/api/store-status').then(r => r.json()),
+                    fetch('/api/global-options').then(r => r.json()) // Fetch Global Options
                 ]);
-                setCategories(menuRes.categories || []);
+
+                // Add "Recommended" Category manually
+                const recommendedCat = { id: 'recommended', name: '⭐️ แนะนำ', icon: '' };
+                const allCategories = [recommendedCat, ...menuRes.categories || []];
+
+                setCategories(allCategories);
                 setMenuItems(menuRes.products || []);
-                if (menuRes.categories?.length > 0) {
-                    setSelectedCategory(menuRes.categories[0].id);
+                setGlobalOptions(globalOptsRes || []);
+
+                if (allCategories.length > 0) {
+                    setSelectedCategory('recommended'); // Default to Recommended
                 }
                 setShopSettings(settingsRes || {});
                 setStoreStatus(statusRes || { status: 'open', message: '' });
@@ -157,12 +166,28 @@ const LineOrder = () => {
         setLoadingOptions(true);
         try {
             const res = await fetch(`/api/products/${item.id}/options`);
-            const options = await res.json();
+            const productOptions = await res.json();
 
-            if (options && options.length > 0) {
+            // Find applicable global options for this item's category
+            const itemGlobalOptions = globalOptions.filter(g =>
+                g.is_active && g.category_ids.includes(item.category_id)
+            );
+
+            // Merge options (Product Options + Global Options)
+            // Fix: Map fields to match what frontend expects (name, price_modifier, is_size_option)
+            const combinedOptions = [
+                ...(productOptions || []),
+                ...itemGlobalOptions.map(g => ({
+                    ...g,
+                    is_global: true, // Mark as global for backend
+                    price: g.price_modifier // Frontend might expect 'price' or 'price_modifier' - handled below
+                }))
+            ];
+
+            if (combinedOptions && combinedOptions.length > 0) {
                 // Show options modal
                 setSelectedProductForOptions(item);
-                setProductOptions(options);
+                setProductOptions(combinedOptions);
                 setSelectedOptions([]);
                 setOptionQuantity(1);
                 setShowOptionsModal(true);
@@ -462,8 +487,8 @@ const LineOrder = () => {
                 {/* Store Status Banner */}
                 {storeStatus.status !== 'open' && (
                     <div className={`mb-6 p-4 rounded-2xl border-2 flex items-center gap-4 animate-pulse ${storeStatus.status === 'closed'
-                            ? 'bg-rose-50 border-rose-200 text-rose-600'
-                            : 'bg-amber-50 border-amber-200 text-amber-600'
+                        ? 'bg-rose-50 border-rose-200 text-rose-600'
+                        : 'bg-amber-50 border-amber-200 text-amber-600'
                         }`}>
                         <span className="text-2xl">{storeStatus.status === 'closed' ? '🛑' : '⏳'}</span>
                         <div className="flex-1">
@@ -761,8 +786,8 @@ const LineOrder = () => {
                         <div className="bg-white shadow-sm px-2 py-1.5 overflow-x-auto hide-scrollbar sticky top-[52px] z-10">
                             <div className="flex gap-2">
                                 <button
-                                    onClick={() => setSelectedCategory(categories[0]?.id)}
-                                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${!selectedCategory || selectedCategory === categories[0]?.id ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}
+                                    onClick={() => setSelectedCategory('all')}
+                                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${selectedCategory === 'all' ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}
                                 >
                                     🍽️ ทั้งหมด
                                 </button>
@@ -781,7 +806,11 @@ const LineOrder = () => {
                         {/* Compact Menu Grid */}
                         <div className="bg-[#F2F6F9] min-h-screen p-2 pb-32">
                             <div className="grid grid-cols-2 gap-1.5">
-                                {menuItems.filter(i => !selectedCategory || i.category_id === selectedCategory).map(item => {
+                                {menuItems.filter(i => {
+                                    if (selectedCategory === 'all') return true;
+                                    if (selectedCategory === 'recommended') return i.is_popular || i.is_recommended;
+                                    return i.category_id === selectedCategory;
+                                }).map(item => {
                                     const inCartCount = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.quantity, 0);
                                     return (
                                         <div

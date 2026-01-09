@@ -8,6 +8,7 @@ const TakeawayOrder = () => {
     const [categories, setCategories] = useState([]);
     const [menuItems, setMenuItems] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState(null);
+    const [globalOptions, setGlobalOptions] = useState([]); // Global Options State
     const [cart, setCart] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -52,10 +53,17 @@ const TakeawayOrder = () => {
     const loadMenu = async () => {
         try {
             setError(null);
-            const data = await api.getPublicMenu();
-            if (data && data.categories && data.products) {
-                setCategories(data.categories);
-                setMenuItems(data.products);
+
+            // Fetch Menu AND Global Options
+            const [menuData, globalOpts] = await Promise.all([
+                api.getPublicMenu(),
+                fetch('/api/global-options').then(r => r.json()).catch(() => [])
+            ]);
+
+            if (menuData && menuData.categories && menuData.products) {
+                setCategories(menuData.categories);
+                setMenuItems(menuData.products);
+                setGlobalOptions(globalOpts || []);
             } else {
                 throw new Error('Invalid menu data received from server');
             }
@@ -76,11 +84,26 @@ const TakeawayOrder = () => {
         setLoadingOptions(true);
         try {
             const res = await fetch(`/api/products/${item.id}/options`);
-            const options = await res.json();
+            const productOptions = await res.json();
 
-            if (options && options.length > 0) {
+            // Find applicable global options for this item's category
+            const itemGlobalOptions = globalOptions.filter(g =>
+                g.is_active && g.category_ids.includes(item.category_id)
+            );
+
+            // Merge options
+            const combinedOptions = [
+                ...(productOptions || []),
+                ...itemGlobalOptions.map(g => ({
+                    ...g,
+                    is_global: true,
+                    price: g.price_modifier
+                }))
+            ];
+
+            if (combinedOptions && combinedOptions.length > 0) {
                 setSelectedProductForOptions(item);
-                setProductOptions(options);
+                setProductOptions(combinedOptions);
                 setSelectedOptions([]);
                 setOptionQuantity(1);
                 setShowOptionsModal(true);
@@ -237,8 +260,8 @@ const TakeawayOrder = () => {
                     {/* Store Status Banner */}
                     {storeStatus.status !== 'open' && (
                         <div className={`mb-6 p-4 rounded-2xl border-2 flex items-center gap-4 animate-pulse ${storeStatus.status === 'closed'
-                                ? 'bg-rose-50 border-rose-200 text-rose-600'
-                                : 'bg-amber-50 border-amber-200 text-amber-600'
+                            ? 'bg-rose-50 border-rose-200 text-rose-600'
+                            : 'bg-amber-50 border-amber-200 text-amber-600'
                             }`}>
                             <span className="text-2xl">{storeStatus.status === 'closed' ? '🛑' : '⏳'}</span>
                             <div className="flex-1 text-left">
