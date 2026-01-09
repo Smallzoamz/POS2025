@@ -89,3 +89,5 @@
 - [2026-01-09 16:30:00] | File: server.js | Line: 390 | Keyword: syncMenuToWebsite | Status: Modified | Change: Updated sync output to include unavailable (Sold Out) items so website can display them with badges.
 - [2026-01-09 16:35:00] | File: api.js | Line: 282 | Keyword: syncMenu | Status: Created | Change: Added manual sync API call to frontend service.
 - [2026-01-09 16:40:00] | File: MenuManagement.jsx | Line: 44 | Keyword: handleSyncToWebsite | Status: Refactored | Change: Refactored Sync button handler to use unified api.syncMenu() service.
+- [2026-01-10 00:35:00] | File: electron/db_pg.js | Line: 666 | Keyword: Migration 20 | Status: Modified | Change: Added Migration 20 to loyalty_customers table (nickname, birthdate, search_keywords) for CRM features.
+

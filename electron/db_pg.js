@@ -665,6 +665,17 @@ const initDatabasePG = async () => {
             console.error('Migration 11 error:', migrationErr11.message);
         }
 
+        // --- MIGRATION 20: Customer Profile (Nickname & Birthdate) ---
+        try {
+            console.log('📦 Running Migration 20: loyalty_customers profile fields...');
+            await client.query(`ALTER TABLE loyalty_customers ADD COLUMN IF NOT EXISTS nickname TEXT`);
+            await client.query(`ALTER TABLE loyalty_customers ADD COLUMN IF NOT EXISTS birthdate DATE`);
+            await client.query(`ALTER TABLE loyalty_customers ADD COLUMN IF NOT EXISTS is_profile_completed BOOLEAN DEFAULT FALSE`);
+            console.log('✅ Migration 20: loyalty_customers profile fields completed');
+        } catch (migrationErr20) {
+            console.error('Migration 20 error:', migrationErr20.message);
+        }
+
         // --- MIGRATION 12: Product Options (Add-ons & Size Variants) ---
         try {
             console.log('📦 Running Migration 12: product_options...');
