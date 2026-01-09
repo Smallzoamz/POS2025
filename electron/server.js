@@ -643,8 +643,8 @@ async function startServer() {
                 const client = await pool.connect();
                 try {
                     await client.query('INSERT INTO loyalty_point_transactions (customer_id, points, type, description) VALUES ($1, $2, $3, $4)',
-                        [result.customer.id, 50, 'PROFILE_BONUS', 'โบนัสกรอกข้อมูลส่วนตัว']);
-                    await client.query('UPDATE loyalty_customers SET points = points + 50 WHERE id = $1', [result.customer.id]);
+                        [result.customer.id, 20, 'PROFILE_BONUS', 'โบนัสกรอกข้อมูลส่วนตัว']);
+                    await client.query('UPDATE loyalty_customers SET points = points + 20 WHERE id = $1', [result.customer.id]);
                 } finally {
                     client.release();
                 }

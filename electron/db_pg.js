@@ -858,7 +858,7 @@ const updateCustomerProfile = async (lineUserId, { nickname, birthdate, phoneNum
         // Update
         const updateRes = await client.query(`
             UPDATE loyalty_customers 
-            SET nickname = $1, birthdate = $2, phone_number = $3, is_profile_completed = TRUE
+            SET nickname = $1, birthdate = $2, phone = $3, is_profile_completed = TRUE
             WHERE line_user_id = $4
             RETURNING *
         `, [nickname, birthdate, phoneNumber, lineUserId]);

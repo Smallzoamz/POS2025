@@ -363,7 +363,7 @@ const CustomerLoyalty = () => {
                                         <FaGift size={24} />
                                     </div>
                                     <div>
-                                        <h4 className="font-bold text-lg">รับฟรี 50 คะแนน! ✨</h4>
+                                        <h4 className="font-bold text-lg">รับฟรี 20 คะแนน! ✨</h4>
                                         <p className="text-sm text-white/90">เพียงกรอกข้อมูลให้ครบถ้วน</p>
                                     </div>
                                 </div>
