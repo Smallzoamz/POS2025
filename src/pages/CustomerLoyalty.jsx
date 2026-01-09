@@ -62,19 +62,23 @@ const CustomerLoyalty = () => {
                 setCustomer(fullCustomerProfile.customer); // Assuming fullCustomerProfile has a 'customer' key
 
                 // Check if profile is already completed
-                if (fullCustomerProfile.customer?.nickname && fullCustomerProfile.customer?.birthdate && fullCustomerProfile.customer?.phone_number) {
+                // Use the flag from DB if available, otherwise check fields
+                const isCompleted = fullCustomerProfile.customer?.is_profile_completed ||
+                    (fullCustomerProfile.customer?.nickname && fullCustomerProfile.customer?.birthdate && fullCustomerProfile.customer?.phone);
+
+                if (isCompleted) {
                     setIsProfileCompleted(true);
                     setProfileForm({
                         nickname: fullCustomerProfile.customer.nickname || '',
                         birthdate: fullCustomerProfile.customer.birthdate ? new Date(fullCustomerProfile.customer.birthdate).toISOString().split('T')[0] : '',
-                        phoneNumber: fullCustomerProfile.customer.phone_number || ''
+                        phoneNumber: fullCustomerProfile.customer.phone || ''
                     });
                 } else {
                     // Pre-fill if some data exists
                     setProfileForm({
                         nickname: fullCustomerProfile.customer?.nickname || '',
                         birthdate: fullCustomerProfile.customer?.birthdate ? new Date(fullCustomerProfile.customer.birthdate).toISOString().split('T')[0] : '',
-                        phoneNumber: fullCustomerProfile.customer?.phone_number || ''
+                        phoneNumber: fullCustomerProfile.customer?.phone || ''
                     });
                 }
 
