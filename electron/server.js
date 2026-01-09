@@ -7,7 +7,9 @@ const os = require('os')
 // const localtunnel = require('localtunnel')
 
 // const { db, initDatabase } = require('./db') // Legacy SQLite
-const { pool, query, initDatabasePG } = require('./db_pg')
+const { pool, query, initDatabasePG, updateCustomerProfile } = require('./db_pg')
+
+
 
 async function startServer() {
     // Initialize PostgreSQL (Primary)
@@ -616,7 +618,7 @@ async function startServer() {
             if (!lineUserId) return res.status(400).json({ success: false, message: 'Missing LINE User ID' });
 
             // 1. Update Profile in DB
-            const result = await db.updateCustomerProfile(lineUserId, { nickname, birthdate, phoneNumber });
+            const result = await updateCustomerProfile(lineUserId, { nickname, birthdate, phoneNumber });
 
             let bonusPoints = 0;
             // 2. Award Bonus Points if first time completion (db returns isFirstCompletion)
@@ -638,7 +640,7 @@ async function startServer() {
 
                 // Let's try to find `earnLoyaltyPoints` definition.
                 // Use a direct query for now to be safe and simple:
-                const client = await db.pool.connect();
+                const client = await pool.connect();
                 try {
                     await client.query('INSERT INTO loyalty_point_transactions (customer_id, points, type, description) VALUES ($1, $2, $3, $4)',
                         [result.customer.id, 50, 'PROFILE_BONUS', 'โบนัสกรอกข้อมูลส่วนตัว']);
