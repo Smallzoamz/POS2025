@@ -623,7 +623,7 @@ async function startServer() {
             let bonusPoints = 0;
             // 2. Award Bonus Points if first time completion (db returns isFirstCompletion)
             if (result.isFirstCompletion) {
-                bonusPoints = 50;
+                bonusPoints = 20;
                 // Reuse existing earnLoyaltyPoints if available in server.js scope or db module
                 // Assuming earnLoyaltyPoints is a function in db_pg or server.js. 
                 // Wait, earnLoyaltyPoints is likely in server.js or db_pg? 

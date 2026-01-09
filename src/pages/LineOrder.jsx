@@ -88,6 +88,15 @@ const LineOrder = () => {
                         const customer = await syncRes.json();
                         setLoyaltyCustomer(customer);
 
+                        // Auto-fill from Loyalty Profile (if exists)
+                        if (customer) {
+                            setCustomerInfo(prev => ({
+                                ...prev,
+                                name: customer.nickname || profile.displayName || prev.name,
+                                phone: customer.phone || prev.phone
+                            }));
+                        }
+
                         // Fetch coupons
                         const couponsRes = await fetch(`/api/loyalty/coupons/${customer.id}`);
                         const coupons = await couponsRes.json();
