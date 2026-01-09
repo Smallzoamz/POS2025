@@ -387,8 +387,8 @@ async function startServer() {
         }
 
         try {
-            // Fetch current menu from DB (only available items for public display)
-            const productsRes = await query('SELECT * FROM products WHERE is_available = TRUE ORDER BY category_id, id');
+            // Fetch all products (including unavailable/sold out ones) so website can show "Sold Out" status
+            const productsRes = await query('SELECT * FROM products ORDER BY category_id, id');
             const categoriesRes = await query('SELECT * FROM categories ORDER BY sort_order');
 
             // Transform to Website format (matching SiteRestaurant menu.json structure)

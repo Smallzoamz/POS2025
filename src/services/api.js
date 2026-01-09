@@ -279,6 +279,14 @@ export const api = {
         return res.json();
     },
 
+    // Sync Menu to Website
+    syncMenu: async () => {
+        const res = await fetch(`${BASE_URL}/sync-menu-to-website`, {
+            method: 'POST'
+        });
+        return res.json();
+    },
+
     // --- INGREDIENTS / INVENTORY ---
     getIngredients: async () => {
         const res = await fetch(`${BASE_URL}/ingredients`);

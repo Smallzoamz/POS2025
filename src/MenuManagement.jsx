@@ -44,8 +44,7 @@ const MenuManagement = () => {
     const handleSyncToWebsite = async () => {
         setSyncStatus({ loading: true, message: 'กำลังส่งเมนูไปยังเว็บไซต์...', error: false });
         try {
-            const res = await fetch('/api/sync-menu-to-website', { method: 'POST' });
-            const data = await res.json();
+            const data = await api.syncMenu();
             if (data.success) {
                 setSyncStatus({ loading: false, message: `✅ ${data.message}`, error: false });
                 setTimeout(() => setSyncStatus({ loading: false, message: '', error: false }), 5000);
