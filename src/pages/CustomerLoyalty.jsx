@@ -281,8 +281,8 @@ const CustomerLoyalty = () => {
                                             <p className="text-sm font-bold text-gray-700">{item.description}</p>
                                             <p className="text-[10px] text-gray-400">{new Date(item.created_at).toLocaleDateString('th-TH')}</p>
                                         </div>
-                                        <div className={`font-black text-sm ${item.type === 'earn' ? 'text-green-500' : 'text-red-500'}`}>
-                                            {item.type === 'earn' ? '+' : '-'}{item.points}
+                                        <div className={`font-black text-sm ${(item.type === 'earn' || item.type === 'PROFILE_BONUS') ? 'text-green-500' : 'text-red-500'}`}>
+                                            {(item.type === 'earn' || item.type === 'PROFILE_BONUS') ? '+' : '-'}{item.points}
                                         </div>
                                     </div>
                                 ))}
