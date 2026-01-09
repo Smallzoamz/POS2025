@@ -721,6 +721,86 @@ const initDatabasePG = async () => {
             console.error('Migration 14 error:', migrationErr14.message);
         }
 
+        // --- MIGRATION 15: Global Options (Category-level options) ---
+        try {
+            console.log('📦 Running Migration 15: global_options...');
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS global_options (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    price_modifier DECIMAL(12,2) DEFAULT 0,
+                    is_size_option BOOLEAN DEFAULT FALSE,
+                    stock_quantity INTEGER DEFAULT 0,
+                    recipe_multiplier DECIMAL(5,2) DEFAULT 1.00,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    sort_order INTEGER DEFAULT 0,
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+            console.log('✅ Migration 15: global_options completed');
+        } catch (migrationErr15) {
+            console.error('Migration 15 error:', migrationErr15.message);
+        }
+
+        // --- MIGRATION 16: Global Option Categories Junction ---
+        try {
+            console.log('📦 Running Migration 16: global_option_categories...');
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS global_option_categories (
+                    id SERIAL PRIMARY KEY,
+                    option_id INTEGER REFERENCES global_options(id) ON DELETE CASCADE,
+                    category_id TEXT REFERENCES categories(id) ON DELETE CASCADE,
+                    UNIQUE(option_id, category_id)
+                )
+            `);
+            console.log('✅ Migration 16: global_option_categories completed');
+        } catch (migrationErr16) {
+            console.error('Migration 16 error:', migrationErr16.message);
+        }
+
+        // --- MIGRATION 17: Global Option Recipes (Ingredient deduction for global options) ---
+        try {
+            console.log('📦 Running Migration 17: global_option_recipes...');
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS global_option_recipes (
+                    id SERIAL PRIMARY KEY,
+                    global_option_id INTEGER REFERENCES global_options(id) ON DELETE CASCADE,
+                    ingredient_id INTEGER REFERENCES ingredients(id) ON DELETE CASCADE,
+                    quantity_used DECIMAL(12,3) NOT NULL DEFAULT 0,
+                    unit TEXT
+                )
+            `);
+            console.log('✅ Migration 17: global_option_recipes completed');
+        } catch (migrationErr17) {
+            console.error('Migration 17 error:', migrationErr17.message);
+        }
+
+        // --- MIGRATION 18: Add is_recommended to products ---
+        try {
+            console.log('📦 Running Migration 18: Add is_recommended to products...');
+            await client.query(`
+                ALTER TABLE products 
+                ADD COLUMN IF NOT EXISTS is_recommended BOOLEAN DEFAULT FALSE
+            `);
+            console.log('✅ Migration 18: is_recommended column added');
+        } catch (migrationErr18) {
+            console.error('Migration 18 error:', migrationErr18.message);
+        }
+
+        // --- MIGRATION 19: Support Global Options in Order Items ---
+        try {
+            console.log('📦 Running Migration 19: Add global_option_id to order_item_options...');
+            await client.query(`
+                ALTER TABLE order_item_options 
+                ADD COLUMN IF NOT EXISTS global_option_id INTEGER REFERENCES global_options(id),
+                ADD COLUMN IF NOT EXISTS is_global BOOLEAN DEFAULT FALSE,
+                ALTER COLUMN option_id DROP NOT NULL
+            `);
+            console.log('✅ Migration 19: global_option_id added & option_id constraint relaxed');
+        } catch (migrationErr19) {
+            console.error('Migration 19 error:', migrationErr19.message);
+        }
+
         // Final Commit for all migrations and seeds
         // await client.query('COMMIT'); // Removed to avoid double commit if line 329 already committed
     } catch (e) {
@@ -742,3 +822,5 @@ module.exports = {
     query,
     initDatabasePG
 };
+
+

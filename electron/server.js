@@ -219,13 +219,24 @@ async function startServer() {
             if (selectedOptions.length > 0) {
                 for (const opt of selectedOptions) {
                     const optId = opt.option_id || opt.id;
+                    const isGlobal = opt.is_global || false;
 
-                    // A. Fetch Option Data (for multiplier and stock tracking)
-                    const optDataRes = await dbClient.query(
-                        "SELECT recipe_multiplier, is_size_option FROM product_options WHERE id = $1",
-                        [optId]
-                    );
-                    const optData = optDataRes.rows[0];
+                    // A. Fetch Option Data
+                    let optData;
+                    if (isGlobal) {
+                        const res = await dbClient.query(
+                            "SELECT name, recipe_multiplier, is_size_option, stock_quantity FROM global_options WHERE id = $1",
+                            [optId]
+                        );
+                        optData = res.rows[0];
+                    } else {
+                        const res = await dbClient.query(
+                            "SELECT name, recipe_multiplier, is_size_option, stock_quantity FROM product_options WHERE id = $1",
+                            [optId]
+                        );
+                        optData = res.rows[0];
+                    }
+
                     if (!optData) continue;
 
                     const optMultiplier = parseFloat(optData.recipe_multiplier || 1.00);
@@ -241,10 +252,19 @@ async function startServer() {
                     }
 
                     // C. Specific Option Recipe (Add-ons like Extra Cheese)
-                    const optRecipeRes = await dbClient.query(
-                        "SELECT ingredient_id, quantity_used FROM option_recipes WHERE option_id = $1",
-                        [optId]
-                    );
+                    let optRecipeRes;
+                    if (isGlobal) {
+                        optRecipeRes = await dbClient.query(
+                            "SELECT ingredient_id, quantity_used FROM global_option_recipes WHERE global_option_id = $1",
+                            [optId]
+                        );
+                    } else {
+                        optRecipeRes = await dbClient.query(
+                            "SELECT ingredient_id, quantity_used FROM option_recipes WHERE option_id = $1",
+                            [optId]
+                        );
+                    }
+
                     for (const r of optRecipeRes.rows) {
                         const totalForThisOption = parseFloat(r.quantity_used) * orderQty;
                         const current = ingredientsNeeded.get(r.ingredient_id) || 0;
@@ -253,7 +273,7 @@ async function startServer() {
 
                     // D. Direct Stock Tracking for Size Options
                     if (optData.is_size_option) {
-                        optionsToDeductStock.push({ id: optId, quantity: orderQty });
+                        optionsToDeductStock.push({ id: optId, quantity: orderQty, is_global: isGlobal, name: optData.name, stock: optData.stock_quantity });
                     }
                 }
             }
@@ -274,10 +294,11 @@ async function startServer() {
 
         // B. Size Options
         for (const optToDeduct of optionsToDeductStock) {
-            const optRes = await dbClient.query("SELECT name, stock_quantity, is_size_option FROM product_options WHERE id = $1", [optToDeduct.id]);
-            const opt = optRes.rows[0];
-            if (opt && opt.is_size_option && opt.stock_quantity < optToDeduct.quantity) {
-                throw new Error(`สินค้า '${opt.name}' ไม่พอ (มีเพียง ${opt.stock_quantity} ชิ้น)`);
+            // Re-check stock in case of race conditions (optional, but good practice)
+            // But we already fetched stock in Step 2A. For now, rely on that or re-fetch if critical.
+            // Let's use the fetched stock for simplicity + check logic
+            if (optToDeduct.stock < optToDeduct.quantity) {
+                throw new Error(`สินค้า '${optToDeduct.name}' ไม่พอ (มีเพียง ${optToDeduct.stock} ชิ้น)`);
             }
         }
 
@@ -289,10 +310,17 @@ async function startServer() {
 
         // B. Size Options
         for (const optToDeduct of optionsToDeductStock) {
-            await dbClient.query(
-                "UPDATE product_options SET stock_quantity = stock_quantity - $1 WHERE id = $2 AND is_size_option = TRUE",
-                [optToDeduct.quantity, optToDeduct.id]
-            );
+            if (optToDeduct.is_global) {
+                await dbClient.query(
+                    "UPDATE global_options SET stock_quantity = stock_quantity - $1 WHERE id = $2",
+                    [optToDeduct.quantity, optToDeduct.id]
+                );
+            } else {
+                await dbClient.query(
+                    "UPDATE product_options SET stock_quantity = stock_quantity - $1 WHERE id = $2",
+                    [optToDeduct.quantity, optToDeduct.id]
+                );
+            }
         }
     };
 
@@ -340,6 +368,71 @@ async function startServer() {
         } catch (err) {
             console.error('Failed to get store status', err);
             return { status: 'error', message: err.message };
+        }
+    };
+
+    // --- MENU SYNC TO WEBSITE HELPER ---
+    /**
+     * Syncs menu data (products & categories) to the restaurant website.
+     * Uses Webhook push with Secret Key authentication.
+     * This function is called automatically after menu CRUD operations.
+     */
+    const syncMenuToWebsite = async () => {
+        const websiteUrl = process.env.WEBSITE_SYNC_URL;
+        const syncSecret = process.env.WEBSITE_SYNC_SECRET;
+
+        if (!websiteUrl) {
+            console.log('[MenuSync] No WEBSITE_SYNC_URL configured, skipping sync');
+            return { success: false, reason: 'no_url_configured' };
+        }
+
+        try {
+            // Fetch current menu from DB (only available items for public display)
+            const productsRes = await query('SELECT * FROM products WHERE is_available = TRUE ORDER BY category_id, id');
+            const categoriesRes = await query('SELECT * FROM categories ORDER BY sort_order');
+
+            // Transform to Website format (matching SiteRestaurant menu.json structure)
+            const payload = {
+                categories: categoriesRes.rows.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    icon: c.icon || '🍽️'
+                })),
+                items: productsRes.rows.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    category: p.category_id,
+                    price: parseFloat(p.price),
+                    description: p.description || `${p.name} - อาหารอร่อยจากครัวของเรา`,
+                    image: p.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop',
+                    isPopular: p.is_popular || false,
+                    isAvailable: p.is_available
+                }))
+            };
+
+            // Push to Website via Webhook
+            const response = await fetch(websiteUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Sync-Secret': syncSecret || ''
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+
+            const result = await response.json();
+            console.log(`[MenuSync] ✅ Successfully synced ${payload.items.length} items to website`);
+            io.emit('menu-synced', { success: true, itemsCount: payload.items.length });
+            return { success: true, itemsCount: payload.items.length };
+        } catch (err) {
+            console.error('[MenuSync] ❌ Failed to sync:', err.message);
+            io.emit('menu-sync-failed', { error: err.message });
+            return { success: false, error: err.message };
         }
     };
 
@@ -501,13 +594,15 @@ async function startServer() {
 
     // Add Product
     app.post('/api/products', async (req, res) => {
-        const { name, price, category_id, image, track_stock, stock_quantity } = req.body;
+        const { name, price, category_id, image, track_stock, stock_quantity, is_recommended } = req.body;
         try {
             const result = await query(
-                'INSERT INTO products (name, price, category_id, image, is_available, track_stock, stock_quantity) VALUES ($1, $2, $3, $4, TRUE, $5, $6) RETURNING id',
-                [name, price, category_id, image, track_stock || false, stock_quantity || 0]
+                'INSERT INTO products (name, price, category_id, image, is_available, track_stock, stock_quantity, is_recommended) VALUES ($1, $2, $3, $4, TRUE, $5, $6, $7) RETURNING id',
+                [name, price, category_id, image, track_stock || false, stock_quantity || 0, is_recommended || false]
             );
             res.json({ success: true, id: result.rows[0].id });
+            // Auto-sync to website after adding new product
+            syncMenuToWebsite();
         } catch (err) {
             console.error(err);
             res.status(500).json({ error: err.message });
@@ -516,14 +611,16 @@ async function startServer() {
 
     // Update Product
     app.put('/api/products/:id', async (req, res) => {
-        const { name, price, category_id, image, is_available, track_stock, stock_quantity } = req.body;
+        const { name, price, category_id, image, is_available, track_stock, stock_quantity, is_recommended } = req.body;
         const { id } = req.params;
         try {
             await query(
-                'UPDATE products SET name = $1, price = $2, category_id = $3, image = $4, is_available = $5, track_stock = $6, stock_quantity = $7 WHERE id = $8',
-                [name, price, category_id, image, is_available, track_stock || false, stock_quantity || 0, id]
+                'UPDATE products SET name = $1, price = $2, category_id = $3, image = $4, is_available = $5, track_stock = $6, stock_quantity = $7, is_recommended = $8 WHERE id = $9',
+                [name, price, category_id, image, is_available, track_stock || false, stock_quantity || 0, is_recommended || false, id]
             );
             res.json({ success: true });
+            // Auto-sync to website after updating product
+            syncMenuToWebsite();
         } catch (err) {
             console.error(err);
             res.status(500).json({ error: err.message });
@@ -536,6 +633,8 @@ async function startServer() {
         try {
             await query('DELETE FROM products WHERE id = $1', [id]);
             res.json({ success: true });
+            // Auto-sync to website after deleting product
+            syncMenuToWebsite();
         } catch (err) {
             console.error(err);
             res.status(500).json({ error: err.message });
@@ -548,6 +647,8 @@ async function startServer() {
         try {
             await query('INSERT INTO categories (id, name, icon, sort_order) VALUES ($1, $2, $3, $4)', [id, name, icon, sort_order || 0]);
             res.json({ success: true });
+            // Auto-sync to website after adding category
+            syncMenuToWebsite();
         } catch (err) {
             console.error(err);
             res.status(500).json({ error: err.message });
@@ -560,6 +661,25 @@ async function startServer() {
         try {
             await query('DELETE FROM categories WHERE id = $1', [id]);
             res.json({ success: true });
+            // Auto-sync to website after deleting category
+            syncMenuToWebsite();
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // =====================================================
+    // MANUAL MENU SYNC (Backup button for website sync)
+    // =====================================================
+    app.post('/api/sync-menu-to-website', async (req, res) => {
+        try {
+            const result = await syncMenuToWebsite();
+            if (result.success) {
+                res.json({ success: true, message: `ส่งเมนู ${result.itemsCount} รายการไปยังเว็บไซต์สำเร็จ!`, itemsCount: result.itemsCount });
+            } else {
+                res.status(400).json({ success: false, error: result.error || result.reason });
+            }
         } catch (err) {
             console.error(err);
             res.status(500).json({ error: err.message });
@@ -675,6 +795,182 @@ async function startServer() {
         }
     });
 
+    // =====================================================
+    // GLOBAL OPTIONS (Category-level Options)
+    // =====================================================
+
+    // Get All Global Options with their Categories
+    app.get('/api/global-options', async (req, res) => {
+        try {
+            const optionsRes = await query(`
+                SELECT go.*, 
+                       COALESCE(json_agg(goc.category_id) FILTER (WHERE goc.category_id IS NOT NULL), '[]') as category_ids
+                FROM global_options go
+                LEFT JOIN global_option_categories goc ON go.id = goc.option_id
+                GROUP BY go.id
+                ORDER BY go.sort_order, go.id
+            `);
+            res.json(optionsRes.rows);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Get Global Options for a specific Category
+    app.get('/api/global-options/by-category/:categoryId', async (req, res) => {
+        const { categoryId } = req.params;
+        try {
+            const result = await query(`
+                SELECT go.* 
+                FROM global_options go
+                JOIN global_option_categories goc ON go.id = goc.option_id
+                WHERE goc.category_id = $1 AND go.is_active = TRUE
+                ORDER BY go.sort_order, go.id
+            `, [categoryId]);
+            res.json(result.rows);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Create Global Option
+    app.post('/api/global-options', async (req, res) => {
+        const { name, price_modifier, is_size_option, stock_quantity, recipe_multiplier, category_ids } = req.body;
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Insert the option
+            const result = await client.query(
+                `INSERT INTO global_options (name, price_modifier, is_size_option, stock_quantity, recipe_multiplier) 
+                 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+                [name, price_modifier || 0, is_size_option || false, stock_quantity || 0, recipe_multiplier || 1.00]
+            );
+            const optionId = result.rows[0].id;
+
+            // Insert category relationships
+            if (category_ids && category_ids.length > 0) {
+                for (const catId of category_ids) {
+                    await client.query(
+                        'INSERT INTO global_option_categories (option_id, category_id) VALUES ($1, $2)',
+                        [optionId, catId]
+                    );
+                }
+            }
+
+            await client.query('COMMIT');
+            res.json({ success: true, id: optionId });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
+
+    // Update Global Option
+    app.put('/api/global-options/:id', async (req, res) => {
+        const { id } = req.params;
+        const { name, price_modifier, is_size_option, stock_quantity, recipe_multiplier, is_active, category_ids } = req.body;
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Update the option
+            await client.query(
+                `UPDATE global_options SET name = $1, price_modifier = $2, is_size_option = $3, stock_quantity = $4, recipe_multiplier = $5, is_active = $6 WHERE id = $7`,
+                [name, price_modifier || 0, is_size_option || false, stock_quantity || 0, recipe_multiplier || 1.00, is_active !== false, id]
+            );
+
+            // Update category relationships (delete all, then re-insert)
+            await client.query('DELETE FROM global_option_categories WHERE option_id = $1', [id]);
+            if (category_ids && category_ids.length > 0) {
+                for (const catId of category_ids) {
+                    await client.query(
+                        'INSERT INTO global_option_categories (option_id, category_id) VALUES ($1, $2)',
+                        [id, catId]
+                    );
+                }
+            }
+
+            await client.query('COMMIT');
+            res.json({ success: true });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
+
+    // Delete Global Option
+    app.delete('/api/global-options/:id', async (req, res) => {
+        const { id } = req.params;
+        try {
+            await query('DELETE FROM global_options WHERE id = $1', [id]);
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Get Global Option Recipe
+    app.get('/api/global-option-recipes/:optionId', async (req, res) => {
+        const { optionId } = req.params;
+        try {
+            const result = await query(
+                `SELECT r.*, i.name as ingredient_name, i.unit as ingredient_unit 
+                 FROM global_option_recipes r 
+                 JOIN ingredients i ON r.ingredient_id = i.id 
+                 WHERE r.global_option_id = $1`,
+                [optionId]
+            );
+            res.json(result.rows);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Save Global Option Recipe
+    app.post('/api/global-option-recipes/:optionId', async (req, res) => {
+        const { optionId } = req.params;
+        const { items } = req.body; // Array of { ingredient_id, quantity_used, unit }
+
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Clear existing recipe
+            await client.query('DELETE FROM global_option_recipes WHERE global_option_id = $1', [optionId]);
+
+            // Insert new recipe items
+            if (items && items.length > 0) {
+                for (const item of items) {
+                    await client.query(
+                        'INSERT INTO global_option_recipes (global_option_id, ingredient_id, quantity_used, unit) VALUES ($1, $2, $3, $4)',
+                        [optionId, item.ingredient_id, item.quantity_used, item.unit]
+                    );
+                }
+            }
+
+            await client.query('COMMIT');
+            res.json({ success: true });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
+
+
     // Create New Order (or Append to Existing)
     app.post('/api/orders', async (req, res) => {
         const { tableName, items, total, orderType } = req.body;
@@ -740,10 +1036,20 @@ async function startServer() {
                 // 2.1 Insert Item Options
                 const selectedOptions = item.options || item.selectedOptions || [];
                 for (const opt of selectedOptions) {
-                    await client.query(
-                        'INSERT INTO order_item_options (order_item_id, option_id, option_name, price_modifier) VALUES ($1, $2, $3, $4)',
-                        [orderItemId, opt.id, opt.name, opt.price_modifier || 0]
-                    );
+                    const isGlobal = opt.is_global || false;
+                    const priceModifier = opt.price_modifier || opt.price || 0;
+
+                    if (isGlobal) {
+                        await client.query(
+                            'INSERT INTO order_item_options (order_item_id, global_option_id, option_name, price_modifier, is_global) VALUES ($1, $2, $3, $4, TRUE)',
+                            [orderItemId, opt.id, opt.name, priceModifier]
+                        );
+                    } else {
+                        await client.query(
+                            'INSERT INTO order_item_options (order_item_id, option_id, option_name, price_modifier, is_global) VALUES ($1, $2, $3, $4, FALSE)',
+                            [orderItemId, opt.id, opt.name, priceModifier]
+                        );
+                    }
                 }
             }
 
@@ -3271,13 +3577,16 @@ async function startServer() {
             // Generate tracking token
             const trackingToken = generateTrackingToken();
 
+            // Serialize items to JSON to preserve options (Global & Local)
+            const itemsJson = JSON.stringify(items || []);
+
             const result = await client.query(`
                 INSERT INTO line_orders (
                     order_type, customer_name, customer_phone, delivery_address,
-                    customer_lat, customer_lng, total_amount, status, note, tracking_token
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9) 
+                    customer_lat, customer_lng, total_amount, status, note, tracking_token, items_json
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, $10) 
                 RETURNING id
-            `, ['delivery', customerName, customerPhone, customerAddress, latitude, longitude, totalAmount, note, trackingToken]);
+            `, ['delivery', customerName, customerPhone, customerAddress, latitude, longitude, totalAmount, note, trackingToken, itemsJson]);
 
             const orderId = result.rows[0].id;
 

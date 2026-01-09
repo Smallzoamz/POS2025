@@ -7,16 +7,29 @@ const MenuManagement = () => {
     const { user } = useAuth(); // Get User for permissions
     const isOwner = user?.role === 'owner'; // Only Owner can edit
 
-    const [activeTab, setActiveTab] = useState('products'); // products | categories
+    const [activeTab, setActiveTab] = useState('products'); // products | categories | global-options
     const [products, setProducts] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    // Global Options State
+    const [globalOptions, setGlobalOptions] = useState([]);
+    const [showGlobalOptionModal, setShowGlobalOptionModal] = useState(false);
+    const [editingGlobalOption, setEditingGlobalOption] = useState(null);
+    const [globalOptionForm, setGlobalOptionForm] = useState({
+        name: '',
+        price_modifier: 0,
+        is_size_option: false,
+        stock_quantity: 0,
+        recipe_multiplier: 1.00,
+        category_ids: []
+    });
 
     const [showProductModal, setShowProductModal] = useState(false);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
     const [activeModalTab, setActiveModalTab] = useState('info');
-    const [productForm, setProductForm] = useState({ name: '', price: 0, category_id: '', image: '', is_available: true, track_stock: 0, stock_quantity: 0 });
+    const [productForm, setProductForm] = useState({ name: '', price: 0, category_id: '', image: '', is_available: true, track_stock: 0, stock_quantity: 0, is_recommended: false });
     const [categoryForm, setCategoryForm] = useState({ id: '', name: '', icon: '' });
     const [allIngredients, setAllIngredients] = useState([]);
     const [recipeItems, setRecipeItems] = useState([]);
@@ -25,6 +38,24 @@ const MenuManagement = () => {
     const [showOptionRecipeModal, setShowOptionRecipeModal] = useState(false);
     const [editingOptionRecipe, setEditingOptionRecipe] = useState(null);
     const [optionRecipeItems, setOptionRecipeItems] = useState([]);
+    const [syncStatus, setSyncStatus] = useState({ loading: false, message: '', error: false });
+
+    // Manual Sync to Website
+    const handleSyncToWebsite = async () => {
+        setSyncStatus({ loading: true, message: 'กำลังส่งเมนูไปยังเว็บไซต์...', error: false });
+        try {
+            const res = await fetch('/api/sync-menu-to-website', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                setSyncStatus({ loading: false, message: `✅ ${data.message}`, error: false });
+                setTimeout(() => setSyncStatus({ loading: false, message: '', error: false }), 5000);
+            } else {
+                setSyncStatus({ loading: false, message: `⚠️ ${data.error || 'ไม่สามารถ Sync ได้'}`, error: true });
+            }
+        } catch (err) {
+            setSyncStatus({ loading: false, message: `❌ เกิดข้อผิดพลาด: ${err.message}`, error: true });
+        }
+    };
 
     useEffect(() => {
         loadData();
@@ -33,13 +64,15 @@ const MenuManagement = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [menuRes, ingRes] = await Promise.all([
+            const [menuRes, ingRes, globalOptsRes] = await Promise.all([
                 api.getMenu(),
-                api.getIngredients()
+                api.getIngredients(),
+                api.getGlobalOptions()
             ]);
             setProducts(menuRes.products);
             setCategories(menuRes.categories);
             setAllIngredients(ingRes);
+            setGlobalOptions(globalOptsRes || []);
 
             // Set default category if any
             if (menuRes.categories.length > 0 && !productForm.category_id) {
@@ -50,6 +83,86 @@ const MenuManagement = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const [globalOptionRecipeItems, setGlobalOptionRecipeItems] = useState([]);
+
+    // --- GLOBAL OPTIONS CRUD ---
+    const openGlobalOptionModal = async (option = null) => {
+        setEditingGlobalOption(option);
+        if (option) {
+            setGlobalOptionForm({
+                name: option.name,
+                price_modifier: option.price_modifier,
+                is_size_option: option.is_size_option,
+                stock_quantity: option.stock_quantity,
+                recipe_multiplier: option.recipe_multiplier,
+                category_ids: option.category_ids || []
+            });
+            // Fetch existing recipe
+            try {
+                const recipe = await api.getGlobalOptionRecipe(option.id);
+                setGlobalOptionRecipeItems(recipe || []);
+            } catch (error) {
+                console.error("Error loading option recipe:", error);
+                setGlobalOptionRecipeItems([]);
+            }
+        } else {
+            setGlobalOptionForm({
+                name: '',
+                price_modifier: 0,
+                is_size_option: false,
+                stock_quantity: 0,
+                recipe_multiplier: 1.00,
+                category_ids: []
+            });
+            setGlobalOptionRecipeItems([]);
+        }
+        setShowGlobalOptionModal(true);
+    };
+
+    const handleGlobalOptionSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            let optionId;
+            if (editingGlobalOption) {
+                await api.updateGlobalOption(editingGlobalOption.id, globalOptionForm);
+                optionId = editingGlobalOption.id;
+            } else {
+                const res = await api.addGlobalOption(globalOptionForm);
+                optionId = res.id;
+            }
+
+            // Save recipe items
+            await api.saveGlobalOptionRecipe(optionId, globalOptionRecipeItems);
+
+            setShowGlobalOptionModal(false);
+            loadData();
+        } catch (error) {
+            console.error("Error saving global option:", error);
+        }
+    };
+
+    const handleDeleteGlobalOption = async (id) => {
+        if (!confirm('ต้องการลบ Option นี้หรือไม่?')) return;
+        try {
+            await api.deleteGlobalOption(id);
+            loadData();
+        } catch (error) {
+            console.error("Error deleting global option:", error);
+        }
+    };
+
+    const toggleCategorySelection = (categoryId) => {
+        setGlobalOptionForm(prev => {
+            const exists = prev.category_ids.includes(categoryId);
+            return {
+                ...prev,
+                category_ids: exists
+                    ? prev.category_ids.filter(id => id !== categoryId)
+                    : [...prev.category_ids, categoryId]
+            };
+        });
     };
 
     const openProductModal = async (product = null) => {
@@ -78,7 +191,8 @@ const MenuManagement = () => {
                 image: '',
                 is_available: true,
                 track_stock: 0,
-                stock_quantity: 0
+                stock_quantity: 0,
+                is_recommended: false
             });
             setRecipeItems([]);
             setProductOptions([]);
@@ -248,9 +362,48 @@ const MenuManagement = () => {
                         >
                             📁 <span className="hidden sm:inline">Category</span> Matrix
                         </button>
+                        <button
+                            onClick={() => setActiveTab('global-options')}
+                            className={`flex items-center gap-2 px-8 py-3.5 rounded-[22px] text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-500 ${activeTab === 'global-options'
+                                ? 'bg-white text-purple-600 shadow-md ring-1 ring-purple-500/10'
+                                : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'
+                                }`}
+                        >
+                            🎛️ <span className="hidden sm:inline">Global</span> Options
+                        </button>
                     </div>
 
                     <div className="flex items-center gap-4">
+                        {/* Sync Status Toast */}
+                        {syncStatus.message && (
+                            <div className={`px-4 py-2 rounded-2xl text-[11px] font-bold ${syncStatus.error ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-green-50 text-green-600 border border-green-200'} animate-fade-in`}>
+                                {syncStatus.message}
+                            </div>
+                        )}
+
+                        {/* Sync to Website Button */}
+                        {isOwner && (
+                            <button
+                                onClick={handleSyncToWebsite}
+                                disabled={syncStatus.loading}
+                                className="group relative px-6 py-4 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 text-white rounded-[24px] font-black text-[10px] uppercase tracking-[0.2em] overflow-hidden transition-all hover:scale-[1.05] hover:shadow-2xl active:scale-95 shadow-xl"
+                                title="Sync เมนูไปยังเว็บไซต์ร้านอาหาร"
+                            >
+                                <span className="relative flex items-center gap-2">
+                                    {syncStatus.loading ? (
+                                        <>
+                                            <span className="animate-spin">⏳</span>
+                                            Syncing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            🌐 Sync Website
+                                        </>
+                                    )}
+                                </span>
+                            </button>
+                        )}
+
                         {isOwner && (
                             <button
                                 onClick={() => activeTab === 'products' ? openProductModal() : openCategoryModal()}
@@ -362,7 +515,7 @@ const MenuManagement = () => {
                                 </div>
                             </div>
                         </div>
-                    ) : (
+                    ) : activeTab === 'categories' ? (
                         <div className="space-y-8">
                             <div className="px-2">
                                 <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Category <span className="text-orange-600">Matrix</span></h2>
@@ -393,7 +546,93 @@ const MenuManagement = () => {
                                 ))}
                             </div>
                         </div>
-                    )}
+                    ) : activeTab === 'global-options' ? (
+                        <div className="space-y-8">
+                            <div className="flex items-center justify-between px-2">
+                                <div>
+                                    <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Global <span className="text-purple-600">Options</span></h2>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">Options ที่ Apply กับหมวดหมู่ทั้งหมด • รวม {globalOptions.length} รายการ</p>
+                                </div>
+                                {isOwner && (
+                                    <button
+                                        onClick={() => openGlobalOptionModal()}
+                                        className="group relative px-8 py-4 bg-purple-600 text-white rounded-[24px] font-black text-[10px] uppercase tracking-[0.3em] overflow-hidden transition-all hover:scale-[1.05] hover:shadow-2xl active:scale-95 shadow-xl"
+                                    >
+                                        <span className="relative flex items-center gap-3">
+                                            <span className="text-lg">+</span>
+                                            สร้าง Option ใหม่
+                                        </span>
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                {globalOptions.map(opt => (
+                                    <div key={opt.id} className="group bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all duration-500 relative overflow-hidden">
+                                        <div className="absolute -right-4 -top-4 w-20 h-20 bg-purple-50 rounded-full opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                                        <div className="relative">
+                                            <div className="flex items-start justify-between mb-4">
+                                                <div>
+                                                    <h3 className="font-black text-lg text-slate-900 tracking-tight">{opt.name}</h3>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="text-purple-600 font-black text-lg">+฿{Number(opt.price_modifier).toLocaleString()}</span>
+                                                        {opt.is_size_option && (
+                                                            <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-[9px] font-black uppercase rounded-full">Size Option</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {isOwner && (
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => openGlobalOptionModal(opt)}
+                                                            className="w-8 h-8 bg-slate-50 hover:bg-purple-50 text-slate-400 hover:text-purple-500 rounded-xl transition-all flex items-center justify-center text-sm"
+                                                        >✏️</button>
+                                                        <button
+                                                            onClick={() => handleDeleteGlobalOption(opt.id)}
+                                                            className="w-8 h-8 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-all flex items-center justify-center text-sm"
+                                                        >🗑️</button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Applied Categories */}
+                                            <div className="mt-4 pt-4 border-t border-slate-100">
+                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Apply กับหมวดหมู่:</p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {opt.category_ids && opt.category_ids.length > 0 ? (
+                                                        opt.category_ids.map(catId => {
+                                                            const cat = categories.find(c => c.id === catId);
+                                                            return cat ? (
+                                                                <span key={catId} className="px-3 py-1 bg-purple-50 text-purple-600 text-[10px] font-bold rounded-full border border-purple-200">
+                                                                    {cat.icon} {cat.name}
+                                                                </span>
+                                                            ) : null;
+                                                        })
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-400 italic">ยังไม่ได้กำหนดหมวดหมู่</span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {opt.recipe_multiplier && opt.recipe_multiplier !== 1 && (
+                                                <div className="mt-3 text-[10px] font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg inline-block">
+                                                    ⚡ Recipe x{opt.recipe_multiplier}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {globalOptions.length === 0 && (
+                                    <div className="col-span-full py-20 text-center">
+                                        <span className="text-6xl block mb-4 grayscale opacity-20">🎛️</span>
+                                        <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-300">ยังไม่มี Global Options</p>
+                                        <p className="text-sm text-slate-400 mt-2">กดปุ่ม "สร้าง Option ใหม่" เพื่อเริ่มต้น</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ) : null}
                 </div>
 
                 {/* Glassmorphism Product Modal */}
@@ -479,6 +718,23 @@ const MenuManagement = () => {
                                                 value={productForm.image}
                                                 onChange={e => setProductForm({ ...productForm, image: e.target.value })}
                                             />
+                                        </div>
+
+                                        {/* Recommended Toggle */}
+                                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 border-l-4 border-l-pink-500 flex items-center justify-between">
+                                            <div>
+                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Recommended Menu</label>
+                                                <p className="text-[10px] text-slate-400">แสดงเมนูนี้ในหมวด "เมนูแนะนำ" หรือไม่</p>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    className="sr-only peer"
+                                                    checked={productForm.is_recommended}
+                                                    onChange={e => setProductForm({ ...productForm, is_recommended: e.target.checked })}
+                                                />
+                                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-500"></div>
+                                            </label>
                                         </div>
                                     </form>
                                 ) : activeModalTab === 'recipe' ? (
@@ -826,6 +1082,176 @@ const MenuManagement = () => {
                         </div>
                     )
                 }
+
+                {/* Global Option Modal */}
+                {showGlobalOptionModal && (
+                    <div className="fixed inset-0 backdrop-blur-md bg-slate-900/60 z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowGlobalOptionModal(false)}>
+                        <div className="bg-white rounded-[48px] w-full max-w-lg shadow-2xl animate-fade-in-up relative border border-white overflow-hidden" onClick={e => e.stopPropagation()}>
+                            <div className="h-2 bg-gradient-to-r from-purple-400 to-purple-600"></div>
+                            <div className="px-10 py-10">
+                                <h3 className="text-2xl font-black text-slate-900 tracking-tighter mb-8">
+                                    {editingGlobalOption ? 'แก้ไข' : 'สร้าง'} <span className="text-purple-600">Global Option</span>
+                                </h3>
+                                <form onSubmit={handleGlobalOptionSubmit} className="space-y-6">
+                                    {/* Name */}
+                                    <div className="p-5 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner">
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">ชื่อ Option</label>
+                                        <input
+                                            type="text" required placeholder="เช่น พิเศษ, ไข่ดาว..."
+                                            className="w-full bg-transparent text-lg font-bold text-slate-900 outline-none placeholder:text-slate-300"
+                                            value={globalOptionForm.name}
+                                            onChange={e => setGlobalOptionForm({ ...globalOptionForm, name: e.target.value })}
+                                        />
+                                    </div>
+
+                                    {/* Price + Recipe Multiplier */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="p-5 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner">
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">เพิ่มราคา (฿)</label>
+                                            <input
+                                                type="number"
+                                                className="w-full bg-transparent text-lg font-bold text-slate-900 outline-none"
+                                                value={globalOptionForm.price_modifier}
+                                                onChange={e => setGlobalOptionForm({ ...globalOptionForm, price_modifier: Number(e.target.value) })}
+                                            />
+                                        </div>
+                                        <div className="p-5 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner">
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Recipe x</label>
+                                            <input
+                                                type="number" step="0.01"
+                                                className="w-full bg-transparent text-lg font-bold text-slate-900 outline-none"
+                                                value={globalOptionForm.recipe_multiplier}
+                                                onChange={e => setGlobalOptionForm({ ...globalOptionForm, recipe_multiplier: Number(e.target.value) })}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Size Option Toggle */}
+                                    <div className="flex items-center gap-4 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                                        <input
+                                            type="checkbox"
+                                            id="is-size-option"
+                                            checked={globalOptionForm.is_size_option}
+                                            onChange={e => setGlobalOptionForm({ ...globalOptionForm, is_size_option: e.target.checked })}
+                                            className="w-5 h-5 rounded accent-blue-500"
+                                        />
+                                        <label htmlFor="is-size-option" className="text-sm font-bold text-blue-700 cursor-pointer">
+                                            Size Option (มี Stock แยก)
+                                        </label>
+                                    </div>
+
+                                    {globalOptionForm.is_size_option && (
+                                        <div className="p-5 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner">
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">จำนวน Stock</label>
+                                            <input
+                                                type="number"
+                                                className="w-full bg-transparent text-lg font-bold text-slate-900 outline-none"
+                                                value={globalOptionForm.stock_quantity}
+                                                onChange={e => setGlobalOptionForm({ ...globalOptionForm, stock_quantity: Number(e.target.value) })}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Category Selection */}
+                                    <div className="p-5 bg-purple-50 rounded-3xl border border-purple-100">
+                                        <label className="block text-[10px] font-black text-purple-600 uppercase tracking-widest mb-3">Apply กับหมวดหมู่:</label>
+                                        <div className="flex flex-wrap gap-3">
+                                            {categories.map(cat => (
+                                                <button
+                                                    key={cat.id}
+                                                    type="button"
+                                                    onClick={() => toggleCategorySelection(cat.id)}
+                                                    className={`px-4 py-2 rounded-2xl text-sm font-bold transition-all ${globalOptionForm.category_ids.includes(cat.id)
+                                                        ? 'bg-purple-600 text-white shadow-lg'
+                                                        : 'bg-white text-slate-600 border border-slate-200 hover:border-purple-300'
+                                                        }`}
+                                                >
+                                                    {cat.icon} {cat.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {globalOptionForm.category_ids.length === 0 && (
+                                            <p className="text-[10px] text-amber-600 mt-2 font-bold">⚠️ กรุณาเลือกอย่างน้อย 1 หมวดหมู่</p>
+                                        )}
+                                    </div>
+
+                                    {/* Recipe Configuration */}
+                                    <div className="p-5 bg-orange-50 rounded-3xl border border-orange-100">
+                                        <label className="block text-[10px] font-black text-orange-600 uppercase tracking-widest mb-3">สูตรการตัดสต็อก (Ingredients)</label>
+
+                                        <div className="space-y-3 mb-4">
+                                            {globalOptionRecipeItems.map((item, idx) => (
+                                                <div key={idx} className="flex gap-2 items-center">
+                                                    <select
+                                                        className="flex-1 px-3 py-2 bg-white rounded-xl text-sm font-bold border border-orange-200 outline-none"
+                                                        value={item.ingredient_id}
+                                                        onChange={e => {
+                                                            const ing = allIngredients.find(i => i.id === parseInt(e.target.value));
+                                                            const newItems = [...globalOptionRecipeItems];
+                                                            newItems[idx] = {
+                                                                ...newItems[idx],
+                                                                ingredient_id: parseInt(e.target.value),
+                                                                unit: ing ? ing.unit : ''
+                                                            };
+                                                            setGlobalOptionRecipeItems(newItems);
+                                                        }}
+                                                    >
+                                                        <option value="">เลือกวัตถุดิบ...</option>
+                                                        {allIngredients.map(ing => (
+                                                            <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>
+                                                        ))}
+                                                    </select>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        placeholder="Qty"
+                                                        className="w-20 px-3 py-2 bg-white rounded-xl text-sm font-bold border border-orange-200 outline-none"
+                                                        value={item.quantity_used}
+                                                        onChange={e => {
+                                                            const newItems = [...globalOptionRecipeItems];
+                                                            newItems[idx] = { ...newItems[idx], quantity_used: parseFloat(e.target.value) };
+                                                            setGlobalOptionRecipeItems(newItems);
+                                                        }}
+                                                    />
+                                                    <span className="text-xs font-bold text-orange-400 w-8">{item.unit}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const newItems = globalOptionRecipeItems.filter((_, i) => i !== idx);
+                                                            setGlobalOptionRecipeItems(newItems);
+                                                        }}
+                                                        className="w-8 h-8 flex items-center justify-center bg-red-100 text-red-500 rounded-xl hover:bg-red-200"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setGlobalOptionRecipeItems([...globalOptionRecipeItems, { ingredient_id: '', quantity_used: 1, unit: '' }])}
+                                            className="w-full py-2 bg-orange-100 text-orange-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-200 transition-colors"
+                                        >
+                                            + เพิ่มวัตถุดิบ
+                                        </button>
+                                    </div>
+
+                                    <div className="flex gap-4 pt-4">
+                                        <button type="button" onClick={() => setShowGlobalOptionModal(false)} className="flex-1 px-4 py-4 bg-white border border-slate-200 text-slate-900 rounded-[24px] font-black text-[10px] uppercase tracking-widest shadow-sm">ยกเลิก</button>
+                                        <button
+                                            type="submit"
+                                            disabled={globalOptionForm.category_ids.length === 0}
+                                            className="flex-1 px-4 py-4 bg-purple-600 disabled:bg-slate-300 text-white rounded-[24px] font-black text-[10px] uppercase tracking-widest shadow-xl hover:scale-[1.05] transition-all"
+                                        >
+                                            บันทึก
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div >
         </MasterLayout >
     );

@@ -359,6 +359,48 @@ export const api = {
         return res.json();
     },
 
+    // --- GLOBAL OPTIONS (Category-level) ---
+    getGlobalOptions: async () => {
+        const res = await fetch(`${BASE_URL}/global-options`);
+        return res.json();
+    },
+    getGlobalOptionsByCategory: async (categoryId) => {
+        const res = await fetch(`${BASE_URL}/global-options/by-category/${categoryId}`);
+        return res.json();
+    },
+    addGlobalOption: async (option) => {
+        const res = await fetch(`${BASE_URL}/global-options`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(option)
+        });
+        return res.json();
+    },
+    updateGlobalOption: async (id, option) => {
+        const res = await fetch(`${BASE_URL}/global-options/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(option)
+        });
+        return res.json();
+    },
+    deleteGlobalOption: async (id) => {
+        const res = await fetch(`${BASE_URL}/global-options/${id}`, { method: 'DELETE' });
+        return res.json();
+    },
+    getGlobalOptionRecipe: async (optionId) => {
+        const res = await fetch(`${BASE_URL}/global-option-recipes/${optionId}`);
+        return res.json();
+    },
+    saveGlobalOptionRecipe: async (optionId, items) => {
+        const res = await fetch(`${BASE_URL}/global-option-recipes/${optionId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items })
+        });
+        return res.json();
+    },
+
     // --- SETTINGS ---
     getSettings: async () => {
         const res = await fetch(`${BASE_URL}/settings`);

@@ -74,7 +74,15 @@ const KitchenDisplay = () => {
 
                 // Fetch ingredients for each option
                 if (item.options && item.options.length > 0) {
-                    const optionsIngredients = await Promise.all(item.options.map(opt => api.getOptionRecipe(opt.option_id || opt.id)));
+                    const optionsIngredients = await Promise.all(item.options.map(opt => {
+                        if (opt.is_global) {
+                            // Use global_option_id if available (POS Orders), otherwise fallback to id/option_id
+                            return api.getGlobalOptionRecipe(opt.global_option_id || opt.option_id || opt.id);
+                        } else {
+                            return api.getOptionRecipe(opt.option_id || opt.id);
+                        }
+                    }));
+
                     optionsIngredients.forEach(optRecipe => {
                         if (Array.isArray(optRecipe)) {
                             optRecipe.forEach(oi => {
@@ -118,7 +126,14 @@ const KitchenDisplay = () => {
 
                 // Fetch ingredients for each option (LINE orders store options in the item object)
                 if (item.options && item.options.length > 0) {
-                    const optionsIngredients = await Promise.all(item.options.map(opt => api.getOptionRecipe(opt.option_id || opt.id)));
+                    const optionsIngredients = await Promise.all(item.options.map(opt => {
+                        if (opt.is_global) {
+                            return api.getGlobalOptionRecipe(opt.global_option_id || opt.option_id || opt.id);
+                        } else {
+                            return api.getOptionRecipe(opt.option_id || opt.id);
+                        }
+                    }));
+
                     optionsIngredients.forEach(optRecipe => {
                         if (Array.isArray(optRecipe)) {
                             optRecipe.forEach(oi => {

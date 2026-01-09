@@ -56,6 +56,10 @@ const OrderEntry = () => {
     const [showEditTableModal, setShowEditTableModal] = useState(false);
     const [newTableName, setNewTableName] = useState('');
 
+    // Global Options Logic
+    const [globalOptions, setGlobalOptions] = useState([]);
+    const [availableOptions, setAvailableOptions] = useState([]); // Combined Product + Global Options
+
     useEffect(() => {
         loadData();
     }, []);
@@ -82,13 +86,15 @@ const OrderEntry = () => {
 
     const loadData = async () => {
         try {
-            const [menuData, orderData, statusData] = await Promise.all([
+            const [menuData, orderData, statusData, globalOpts] = await Promise.all([
                 api.getMenu(),
                 api.getOrder(tableId),
-                api.getStoreStatus()
+                api.getStoreStatus(),
+                api.getGlobalOptions()
             ]);
 
             setStoreStatus(statusData);
+            setGlobalOptions(globalOpts || []);
 
             // Set Menu
             setCategories(menuData.categories);
@@ -192,11 +198,21 @@ const OrderEntry = () => {
         setCouponCode('');
     };
 
-    // Check if product has options before adding to cart
     const handleProductClick = (item) => {
-        if (item.options && item.options.length > 0) {
+        // Find applicable global options for this item's category
+        const itemGlobalOptions = globalOptions.filter(g => g.is_active && g.category_ids.includes(item.category_id));
+
+        // Combine product options + global options
+        // Mark global options with is_global: true to distinguish them in backend (for stock deduction)
+        const combinedOptions = [
+            ...(item.options || []),
+            ...itemGlobalOptions.map(g => ({ ...g, is_global: true }))
+        ];
+
+        if (combinedOptions.length > 0) {
             // Has options - show options modal
             setSelectedProductForOptions(item);
+            setAvailableOptions(combinedOptions);
             setSelectedOptions([]);
             setOptionQuantity(1);
             setShowOptionsModal(true);
@@ -582,8 +598,18 @@ const OrderEntry = () => {
                             className={`flex flex-col items-center gap-1 p-1.5 min-w-[65px] md:min-w-[90px] rounded-xl md:rounded-[20px] transition-all border ${!selectedCategory ? 'bg-white border-orange-200 shadow-md ring-1 ring-orange-500/10' : 'bg-transparent border-transparent text-slate-400 hover:bg-white/50'}`}
                         >
                             <span className="text-base md:text-2xl">🍽️</span>
-                            <span className="text-[8px] md:text-[11px] font-bold uppercase tracking-wider">All</span>
+                            <span className="text-[10px] md:text-sm font-bold text-slate-800 tracking-tight leading-nonemt-0.5 whitespace-nowrap">ทั้งหมด</span>
                         </button>
+
+                        {/* Recommended Category Button */}
+                        <button
+                            onClick={() => setSelectedCategory('RECOMMENDED')}
+                            className={`flex flex-col items-center gap-1 p-1.5 min-w-[65px] md:min-w-[90px] rounded-xl md:rounded-[20px] transition-all border ${selectedCategory === 'RECOMMENDED' ? 'bg-white border-pink-200 shadow-md ring-1 ring-pink-500/10' : 'bg-transparent border-transparent text-slate-400 hover:bg-white/50'}`}
+                        >
+                            <span className="text-base md:text-2xl">🔥</span>
+                            <span className="text-[10px] md:text-sm font-bold text-slate-800 tracking-tight leading-nonemt-0.5 whitespace-nowrap">แนะนำ</span>
+                        </button>
+
                         {categories.map(cat => (
                             <button
                                 key={cat.id}
@@ -599,55 +625,61 @@ const OrderEntry = () => {
 
                 {/* 3. Product Grid */}
                 <section>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1.5 md:gap-4">
-                        {menuItems.filter(i => !selectedCategory || i.category_id === selectedCategory).map(item => {
-                            // Use computed_available which includes recipe + stock logic
-                            const isAvailable = item.computed_available !== undefined ? item.computed_available : item.is_available;
-                            return (
-                                <div key={item.id} className={`tasty-card p-1.5 md:p-3 flex flex-col group relative ${!isAvailable ? 'opacity-80 cursor-not-allowed' : ''}`}>
-                                    <div className="aspect-[4/3] rounded-lg md:rounded-xl overflow-hidden mb-1.5 bg-slate-50 ring-1 ring-slate-100 group-hover:ring-orange-100 transition-all relative">
-                                        {item.image ? (
-                                            <img src={item.image} alt={item.name} className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${!isAvailable ? 'grayscale opacity-40' : ''}`} />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-xl md:text-3xl grayscale opacity-20">🥡</div>
-                                        )}
-
-                                        {!isAvailable && (
-                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                                                <span className="bg-red-600 text-white text-[10px] md:text-xs font-black px-3 py-1 rounded-full uppercase tracking-tighter shadow-xl animate-pulse">
-                                                    สินค้าหมด
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p className="text-[7px] md:text-[9px] font-bold text-slate-400 mb-0.5 uppercase tracking-wider line-clamp-1">{categories.find(c => c.id === item.category_id)?.name || 'Dish'}</p>
-                                    <h4 className="text-[10px] md:text-xs font-bold text-slate-800 mb-1 line-clamp-1">{item.name}</h4>
-                                    <div className="mt-auto flex items-center justify-between">
-                                        <div>
-                                            <span className="text-[11px] md:text-sm font-bold text-slate-900 leading-none">฿{item.price.toLocaleString()}</span>
-                                            {item.options && item.options.length > 0 && (
-                                                <span className="ml-1 text-[8px] text-orange-500 font-bold">+Options</span>
-                                            )}
-                                        </div>
-
-                                        <div className="flex items-center gap-1">
-                                            {isAvailable ? (
-                                                <button
-                                                    onClick={() => handleProductClick(item)}
-                                                    className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-lg md:rounded-xl bg-[#00A099] text-white shadow-md shadow-[#00A099]/20 hover:scale-110 transition-all active:scale-95"
-                                                >
-                                                    <span className="text-sm md:text-lg font-bold">+</span>
-                                                </button>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 pb-24">
+                        {menuItems
+                            .filter(p => {
+                                if (!selectedCategory) return true; // Show all
+                                if (selectedCategory === 'RECOMMENDED') return p.is_recommended; // Show Recommended
+                                return p.category_id === selectedCategory; // Show by Category
+                            })
+                            .map(item => {
+                                // Use computed_available which includes recipe + stock logic
+                                const isAvailable = item.computed_available !== undefined ? item.computed_available : item.is_available;
+                                return (
+                                    <div key={item.id} className={`tasty-card p-1.5 md:p-3 flex flex-col group relative ${!isAvailable ? 'opacity-80 cursor-not-allowed' : ''}`}>
+                                        <div className="aspect-[4/3] rounded-lg md:rounded-xl overflow-hidden mb-1.5 bg-slate-50 ring-1 ring-slate-100 group-hover:ring-orange-100 transition-all relative">
+                                            {item.image ? (
+                                                <img src={item.image} alt={item.name} className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${!isAvailable ? 'grayscale opacity-40' : ''}`} />
                                             ) : (
-                                                <div className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-lg md:rounded-xl bg-slate-200 text-slate-400 cursor-not-allowed">
-                                                    <span className="text-sm md:text-lg font-bold">✕</span>
+                                                <div className="w-full h-full flex items-center justify-center text-xl md:text-3xl grayscale opacity-20">🥡</div>
+                                            )}
+
+                                            {!isAvailable && (
+                                                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                                    <span className="bg-red-600 text-white text-[10px] md:text-xs font-black px-3 py-1 rounded-full uppercase tracking-tighter shadow-xl animate-pulse">
+                                                        สินค้าหมด
+                                                    </span>
                                                 </div>
                                             )}
                                         </div>
+                                        <p className="text-[7px] md:text-[9px] font-bold text-slate-400 mb-0.5 uppercase tracking-wider line-clamp-1">{categories.find(c => c.id === item.category_id)?.name || 'Dish'}</p>
+                                        <h4 className="text-[10px] md:text-xs font-bold text-slate-800 mb-1 line-clamp-1">{item.name}</h4>
+                                        <div className="mt-auto flex items-center justify-between">
+                                            <div>
+                                                <span className="text-[11px] md:text-sm font-bold text-slate-900 leading-none">฿{item.price.toLocaleString()}</span>
+                                                {item.options && item.options.length > 0 && (
+                                                    <span className="ml-1 text-[8px] text-orange-500 font-bold">+Options</span>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center gap-1">
+                                                {isAvailable ? (
+                                                    <button
+                                                        onClick={() => handleProductClick(item)}
+                                                        className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-lg md:rounded-xl bg-[#00A099] text-white shadow-md shadow-[#00A099]/20 hover:scale-110 transition-all active:scale-95"
+                                                    >
+                                                        <span className="text-sm md:text-lg font-bold">+</span>
+                                                    </button>
+                                                ) : (
+                                                    <div className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-lg md:rounded-xl bg-slate-200 text-slate-400 cursor-not-allowed">
+                                                        <span className="text-sm md:text-lg font-bold">✕</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
                     </div>
                 </section>
             </div>
@@ -1222,10 +1254,10 @@ const OrderEntry = () => {
 
                         {/* Options List */}
                         <div className="p-6 overflow-y-auto max-h-[50vh] space-y-3">
-                            {selectedProductForOptions.options?.filter(opt => !opt.is_size_option).length > 0 && (
+                            {availableOptions.filter(opt => !opt.is_size_option).length > 0 && (
                                 <div>
                                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">➕ Add-ons (เลือกได้หลายอย่าง)</h4>
-                                    {selectedProductForOptions.options.filter(opt => !opt.is_size_option).map(opt => {
+                                    {availableOptions.filter(opt => !opt.is_size_option).map(opt => {
                                         const isSelected = selectedOptions.find(o => o.id === opt.id);
                                         return (
                                             <button key={opt.id} onClick={() => toggleOption(opt)} className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all mb-2 ${isSelected ? 'border-orange-500 bg-orange-50' : 'border-slate-100 hover:border-orange-200'}`}>
@@ -1237,10 +1269,10 @@ const OrderEntry = () => {
                                 </div>
                             )}
 
-                            {selectedProductForOptions.options?.filter(opt => opt.is_size_option).length > 0 && (
+                            {availableOptions.filter(opt => opt.is_size_option).length > 0 && (
                                 <div>
                                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">📏 Size Options (เลือก 1 อย่าง)</h4>
-                                    {selectedProductForOptions.options.filter(opt => opt.is_size_option).map(opt => {
+                                    {availableOptions.filter(opt => opt.is_size_option).map(opt => {
                                         const isSelected = selectedOptions.find(o => o.id === opt.id);
                                         const outOfStock = opt.stock_quantity <= 0;
                                         return (
