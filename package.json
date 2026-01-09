@@ -17,6 +17,7 @@
     "@line/liff": "^2.27.3",
     "assert-plus": "^1.0.0",
     "better-sqlite3": "^12.5.0",
+    "canvas-confetti": "^1.9.4",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^4.18.2",

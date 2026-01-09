@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { FaStar, FaHistory, FaGift, FaUser, FaChevronRight, FaCalendarAlt, FaPhone, FaUserEdit, FaCheckCircle } from 'react-icons/fa'; // Added FaCalendarAlt, FaPhone, FaUserEdit, FaCheckCircle
+import confetti from 'canvas-confetti'; // Import confetti for celebration
 import {
     FiGift, FiAward, FiClock, FiStar, FiUser,
     FiCheckCircle, FiChevronRight, FiCreditCard, FiZap
@@ -16,6 +18,17 @@ const CustomerLoyalty = () => {
     const [loading, setLoading] = useState(true);
     const [isFollowing, setIsFollowing] = useState(false);
     const [liffError, setLiffError] = useState(null);
+    const [lineProfile, setLineProfile] = useState(null);
+    const [customer, setCustomer] = useState(null); // New state for comprehensive customer data
+    // Profile Form State
+    const [profileForm, setProfileForm] = useState({
+        nickname: '',
+        birthdate: '',
+        phoneNumber: ''
+    });
+    const [isProfileCompleted, setIsProfileCompleted] = useState(false);
+    const [profileLoading, setProfileLoading] = useState(false);
+
 
     const initLiff = async () => {
         setLoading(true);
@@ -31,24 +44,47 @@ const CustomerLoyalty = () => {
             await liff.init({ liffId });
             if (liff.isLoggedIn()) {
                 const profile = await liff.getProfile();
-                const loyaltyData = {
+                setLineProfile(profile); // Store LINE profile
+
+                const loyaltyDataForSync = {
                     lineUserId: profile.userId,
                     displayName: profile.displayName,
                     pictureUrl: profile.pictureUrl
                 };
 
-                const syncRes = await api.syncLoyaltyProfile(loyaltyData);
+                const syncRes = await api.syncLoyaltyProfile(loyaltyDataForSync);
                 setLineUser(syncRes);
                 setPoints(syncRes.points || 0);
                 setIsFollowing(syncRes.is_following || false);
 
-                const [fullProfile, activePromos, userCoupons] = await Promise.all([
-                    api.getLoyaltyProfile(profile.userId),
+                // Fetch comprehensive loyalty profile for member tab
+                const fullCustomerProfile = await api.getLoyaltyProfile(profile.userId);
+                setCustomer(fullCustomerProfile.customer); // Assuming fullCustomerProfile has a 'customer' key
+
+                // Check if profile is already completed
+                if (fullCustomerProfile.customer?.nickname && fullCustomerProfile.customer?.birthdate && fullCustomerProfile.customer?.phone_number) {
+                    setIsProfileCompleted(true);
+                    setProfileForm({
+                        nickname: fullCustomerProfile.customer.nickname || '',
+                        birthdate: fullCustomerProfile.customer.birthdate ? new Date(fullCustomerProfile.customer.birthdate).toISOString().split('T')[0] : '',
+                        phoneNumber: fullCustomerProfile.customer.phone_number || ''
+                    });
+                } else {
+                    // Pre-fill if some data exists
+                    setProfileForm({
+                        nickname: fullCustomerProfile.customer?.nickname || '',
+                        birthdate: fullCustomerProfile.customer?.birthdate ? new Date(fullCustomerProfile.customer.birthdate).toISOString().split('T')[0] : '',
+                        phoneNumber: fullCustomerProfile.customer?.phone_number || ''
+                    });
+                }
+
+
+                const [activePromos, userCoupons] = await Promise.all([
                     api.getActivePromotions(),
                     api.getCustomerCoupons(syncRes.id)
                 ]);
 
-                setHistory(fullProfile.transactions || []);
+                setHistory(fullCustomerProfile.transactions || []);
                 setPromotions(activePromos || []);
                 setCoupons(userCoupons || []);
                 setLoading(false);
@@ -76,6 +112,23 @@ const CustomerLoyalty = () => {
         setCoupons(userCoupons || []);
         // API returns { customer: {...}, transactions: [...] }, so access customer.points
         setPoints(fullProfile.customer?.points || 0);
+        setCustomer(fullProfile.customer); // Update comprehensive customer data
+        // Update profile form and completion status
+        if (fullProfile.customer?.nickname && fullProfile.customer?.birthdate && fullProfile.customer?.phone_number) {
+            setIsProfileCompleted(true);
+            setProfileForm({
+                nickname: fullProfile.customer.nickname || '',
+                birthdate: fullProfile.customer.birthdate ? new Date(fullProfile.customer.birthdate).toISOString().split('T')[0] : '',
+                phoneNumber: fullProfile.customer.phone_number || ''
+            });
+        } else {
+            setIsProfileCompleted(false);
+            setProfileForm({
+                nickname: fullProfile.customer?.nickname || '',
+                birthdate: fullProfile.customer?.birthdate ? new Date(fullProfile.customer.birthdate).toISOString().split('T')[0] : '',
+                phoneNumber: fullProfile.customer?.phone_number || ''
+            });
+        }
     };
 
     const handleLogin = () => {
@@ -283,32 +336,154 @@ const CustomerLoyalty = () => {
                         ) : (
                             <div className="flex flex-col items-center justify-center py-20 opacity-30">
                                 <FiStar size={64} className="mb-4 text-orange-200" />
-                                <p className="text-sm font-bold text-gray-400">ยังไม่มีคูปองที่แลกไว้ค่ะ</p>
                             </div>
                         )}
                     </div>
                 )}
 
                 {activeTab === 'member' && (
-                    <div className="bg-white rounded-[2rem] p-8 shadow-sm text-center mb-20">
-                        <div className="w-24 h-24 rounded-full border-4 border-orange-100 mx-auto mb-6 flex items-center justify-center bg-orange-50">
-                            <FiUser size={48} className="text-orange-500" />
-                        </div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-1">{lineUser?.display_name}</h3>
-                        <p className="text-xs text-gray-400 mb-8 tracking-widest uppercase">Loyalty Member Since 2026</p>
+                    <div className="bg-white rounded-[2rem] p-6 shadow-sm mb-20 relative overflow-hidden">
 
-                        <div className="grid grid-cols-2 gap-4 mb-8">
-                            <div className="bg-gray-50 p-4 rounded-2xl">
-                                <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">รายการรวม</p>
-                                <p className="text-lg font-black text-slate-800">{history.length}</p>
-                            </div>
-                            <div className="bg-gray-50 p-4 rounded-2xl">
-                                <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">คูปองทั้งหมด</p>
-                                <p className="text-lg font-black text-slate-800">{coupons.length}</p>
-                            </div>
+                        {/* Header Decoration */}
+                        <div className="absolute top-0 right-0 p-4 opacity-5">
+                            <FaUserEdit size={120} />
                         </div>
 
-                        <p className="text-xs text-gray-400 italic">"หน้าสมาชิกกำลังปรับปรุงฟีเจอร์ใหม่ๆ เร็วๆ นี้ค่ะ"</p>
+                        <h3 className="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+                            <FaUserEdit className="text-[#FFB100]" />
+                            ข้อมูลสมาชิก
+                        </h3>
+                        <p className="text-gray-500 mb-6">อัปเดตข้อมูลเพื่อรับสิทธิพิเศษและวันเกิด</p>
+
+                        {/* Bonus Banner */}
+                        {!isProfileCompleted && (
+                            <div className="bg-gradient-to-r from-[#FFB100] to-[#FF9900] rounded-2xl p-4 mb-6 text-white shadow-lg relative overflow-hidden animate-pulse">
+                                <div className="relative z-10 flex items-center gap-4">
+                                    <div className="bg-white/20 p-3 rounded-full">
+                                        <FaGift size={24} />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-lg">รับฟรี 50 คะแนน! ✨</h4>
+                                        <p className="text-sm text-white/90">เพียงกรอกข้อมูลให้ครบถ้วน</p>
+                                    </div>
+                                </div>
+                                <div className="absolute -right-4 -bottom-4 bg-white/10 w-24 h-24 rounded-full blur-xl"></div>
+                            </div>
+                        )}
+
+                        <form onSubmit={async (e) => {
+                            e.preventDefault();
+                            if (profileLoading) return;
+                            setProfileLoading(true);
+                            try {
+                                const res = await api.updateMemberProfile({
+                                    lineUserId: lineProfile?.userId,
+                                    ...profileForm
+                                });
+
+                                if (res.success) {
+                                    setIsProfileCompleted(true);
+                                    setCustomer(prev => ({ ...prev, points: (prev?.points || 0) + (res.bonusPoints || 0) }));
+                                    confetti({
+                                        particleCount: 100,
+                                        spread: 70,
+                                        origin: { y: 0.6 }
+                                    });
+                                    alert('บันทึกข้อมูลสำเร็จ! ' + (res.bonusPoints ? `ได้รับ ${res.bonusPoints} คะแนน` : ''));
+                                } else {
+                                    alert('เกิดข้อผิดพลาด: ' + res.message);
+                                }
+                            } catch (err) {
+                                console.error(err);
+                                alert('ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่');
+                            } finally {
+                                setProfileLoading(false);
+                            }
+                        }} className="space-y-4 relative z-10">
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1 ml-1">ชื่อเล่น (Nickname)</label>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                        <FaUser />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={profileForm.nickname}
+                                        onChange={e => setProfileForm({ ...profileForm, nickname: e.target.value })}
+                                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-[#FFB100] focus:ring-2 focus:ring-[#FFB100]/20 outline-none transition-all"
+                                        placeholder="เช่น น้องส้ม"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1 ml-1">วันเกิด (Birthday)</label>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                        <FaCalendarAlt />
+                                    </div>
+                                    <input
+                                        type="date"
+                                        required
+                                        value={profileForm.birthdate}
+                                        onChange={e => setProfileForm({ ...profileForm, birthdate: e.target.value })}
+                                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-[#FFB100] focus:ring-2 focus:ring-[#FFB100]/20 outline-none transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1 ml-1">เบอร์โทรศัพท์ (Phone)</label>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                        <FaPhone />
+                                    </div>
+                                    <input
+                                        type="tel"
+                                        required
+                                        pattern="[0-9]{10}"
+                                        title="กรุณากรอกเบอร์โทรศัพท์ 10 หลัก"
+                                        value={profileForm.phoneNumber}
+                                        onChange={e => {
+                                            const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                            setProfileForm({ ...profileForm, phoneNumber: val });
+                                        }}
+                                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-[#FFB100] focus:ring-2 focus:ring-[#FFB100]/20 outline-none transition-all"
+                                        placeholder="08X-XXX-XXXX"
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={profileLoading} // Allow re-submit to update data even if completed, but disable while loading
+                                className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transform transition-all active:scale-95
+                                ${isProfileCompleted
+                                        ? 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                                        : 'bg-gradient-to-r from-[#FFB100] to-[#FF9900] text-white hover:shadow-xl'
+                                    }
+                            `}
+                            >
+                                {profileLoading ? (
+                                    <span className="animate-spin">⌛</span>
+                                ) : isProfileCompleted ? (
+                                    <>
+                                        <FaCheckCircle className="text-green-500" /> บันทึกข้อมูลเรียบร้อย
+                                    </>
+                                ) : (
+                                    'บันทึกข้อมูลรับคะแนนฟรี!'
+                                )}
+                            </button>
+
+                            {isProfileCompleted && (
+                                <p className="text-center text-xs text-gray-400 mt-2">
+                                    * คุณสามารถแก้ไขข้อมูลได้ตลอดเวลา
+                                </p>
+                            )}
+
+                        </form>
                     </div>
                 )}
             </div>
@@ -342,5 +517,4 @@ const CustomerLoyalty = () => {
         </div>
     );
 };
-
 export default CustomerLoyalty;

@@ -843,10 +843,41 @@ const initDatabasePG = async () => {
     }
 };
 
+const updateCustomerProfile = async (lineUserId, { nickname, birthdate, phoneNumber }) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Check current status
+        const currentRes = await client.query('SELECT is_profile_completed FROM loyalty_customers WHERE line_user_id = $1', [lineUserId]);
+        if (currentRes.rows.length === 0) throw new Error('Customer not found');
+
+        const wasCompleted = currentRes.rows[0].is_profile_completed;
+        const isFirstCompletion = !wasCompleted;
+
+        // Update
+        const updateRes = await client.query(`
+            UPDATE loyalty_customers 
+            SET nickname = $1, birthdate = $2, phone_number = $3, is_profile_completed = TRUE
+            WHERE line_user_id = $4
+            RETURNING *
+        `, [nickname, birthdate, phoneNumber, lineUserId]);
+
+        await client.query('COMMIT');
+        return { customer: updateRes.rows[0], isFirstCompletion };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
+};
+
 module.exports = {
     pool,
     query,
-    initDatabasePG
+    initDatabasePG,
+    updateCustomerProfile
 };
 
 

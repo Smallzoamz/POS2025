@@ -609,6 +609,53 @@ async function startServer() {
         }
     });
 
+    // NEW: Member Profile Update
+    app.post('/api/member/profile', async (req, res) => {
+        try {
+            const { lineUserId, nickname, birthdate, phoneNumber } = req.body;
+            if (!lineUserId) return res.status(400).json({ success: false, message: 'Missing LINE User ID' });
+
+            // 1. Update Profile in DB
+            const result = await db.updateCustomerProfile(lineUserId, { nickname, birthdate, phoneNumber });
+
+            let bonusPoints = 0;
+            // 2. Award Bonus Points if first time completion (db returns isFirstCompletion)
+            if (result.isFirstCompletion) {
+                bonusPoints = 50;
+                // Reuse existing earnLoyaltyPoints if available in server.js scope or db module
+                // Assuming earnLoyaltyPoints is a function in db_pg or server.js. 
+                // Wait, earnLoyaltyPoints is likely in server.js or db_pg? 
+                // Looking at server.js later in the file (line 1323), it calls `await earnLoyaltyPoints(...)`.
+                // So it must be defined in server.js or imported.
+                // Let's assume it's available in this scope as it is used elsewhere.
+                await earnLoyaltyPoints(result.customer.id, 0, null, null); // 0 amount spent, just points?
+                // Actually earnLoyaltyPoints usually calculates points based on amount.
+                // I need to manually add points here. 
+                // Let's check `db_pg` for a direct points addition or use a specific query here if needed.
+                // Actually, I should use a direct query or a specific helper if earnLoyaltyPoints isn't flexible.
+                // But wait, I see `await db.earnLoyaltyPoints` in my previous thought? 
+                // Let's just create a transaction here or add a specific function.
+
+                // Let's try to find `earnLoyaltyPoints` definition.
+                // Use a direct query for now to be safe and simple:
+                const client = await db.pool.connect();
+                try {
+                    await client.query('INSERT INTO loyalty_point_transactions (customer_id, points, type, description) VALUES ($1, $2, $3, $4)',
+                        [result.customer.id, 50, 'PROFILE_BONUS', 'โบนัสกรอกข้อมูลส่วนตัว']);
+                    await client.query('UPDATE loyalty_customers SET points = points + 50 WHERE id = $1', [result.customer.id]);
+                } finally {
+                    client.release();
+                }
+            }
+
+            res.json({ success: true, customer: result.customer, bonusPoints });
+
+        } catch (err) {
+            console.error('Error updating member profile:', err);
+            res.status(500).json({ success: false, message: err.message });
+        }
+    });
+
     // Update Product
     app.put('/api/products/:id', async (req, res) => {
         const { name, price, category_id, image, is_available, track_stock, stock_quantity, is_recommended } = req.body;

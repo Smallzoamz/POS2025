@@ -619,18 +619,39 @@ export const api = {
         return res.json();
     },
     getCustomerCoupons: async (customerId) => {
-        const res = await fetch(`${BASE_URL}/loyalty/coupons/${customerId}`);
-        return res.json();
+        try {
+            const response = await fetch(`${BASE_URL}/loyalty/coupons/${customerId}`);
+            if (!response.ok) throw new Error('Failed to fetch coupons');
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching coupons:', error);
+            return [];
+        }
     },
-    verifyCoupon: async (code) => {
-        const res = await fetch(`${BASE_URL}/loyalty/coupons/verify`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code })
-        });
-        return res.json();
+    updateMemberProfile: async (data) => {
+        try {
+            const response = await fetch(`${BASE_URL}/member/profile`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            return { success: false, message: error.message };
+        }
     },
-
+    verifyCoupon: async (couponId) => {
+        try {
+            const response = await fetch(`${BASE_URL}/coupons/verify/${couponId}`);
+            return await response.json();
+        } catch (error) {
+            console.error('Error verifying coupon:', error);
+            return { success: false, message: error.message };
+        }
+    },
     useCoupon: async (code, orderId = null, lineOrderId = null) => {
         const res = await fetch(`${BASE_URL}/loyalty/coupons/use`, {
             method: 'POST',
@@ -676,3 +697,5 @@ export const api = {
         return res.json();
     }
 };
+
+export default api;
