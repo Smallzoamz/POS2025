@@ -2863,9 +2863,9 @@ async function startServer() {
                 for (const item of items) {
                     try {
                         await client.query(`
-                            INSERT INTO line_order_items (line_order_id, product_id, product_name, quantity, price)
-                            VALUES ($1, $2, $3, $4, $5)
-                        `, [orderId, item.id, item.name, item.quantity, item.price]);
+                            INSERT INTO line_order_items (line_order_id, product_id, product_name, quantity, price, options)
+                            VALUES ($1, $2, $3, $4, $5, $6)
+                        `, [orderId, item.id, item.name, item.quantity, item.price, JSON.stringify(item.options || [])]);
                     } catch (itemErr) {
                         console.log('Item insert note:', itemErr.message);
                     }

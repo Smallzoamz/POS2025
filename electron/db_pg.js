@@ -325,7 +325,8 @@ const initDatabasePG = async () => {
                 product_id INTEGER REFERENCES products(id),
                 product_name TEXT,
                 price DECIMAL(12,2),
-                quantity INTEGER DEFAULT 1
+                quantity INTEGER DEFAULT 1,
+                options JSONB DEFAULT '[]'
             )
         `);
 
@@ -790,6 +791,20 @@ const initDatabasePG = async () => {
         // --- MIGRATION 19: Support Global Options in Order Items ---
         try {
             console.log('📦 Running Migration 19: Add global_option_id to order_item_options...');
+            // Migration: Add 'is_recommended' to products if missing (redundant with MIGRATION 18, but kept for robustness)
+            // And add 'options' column to line_order_items
+            await client.query(`
+                DO $$ 
+                BEGIN 
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='is_recommended') THEN 
+                        ALTER TABLE products ADD COLUMN is_recommended BOOLEAN DEFAULT FALSE; 
+                    END IF;
+                    -- Fix: Add options column to line_order_items
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='line_order_items' AND column_name='options') THEN
+                        ALTER TABLE line_order_items ADD COLUMN options JSONB DEFAULT '[]';
+                    END IF;
+                END $$;
+            `);
             await client.query(`
                 ALTER TABLE order_item_options 
                 ADD COLUMN IF NOT EXISTS global_option_id INTEGER REFERENCES global_options(id),
