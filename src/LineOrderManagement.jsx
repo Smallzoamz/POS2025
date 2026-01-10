@@ -30,7 +30,12 @@ const LineOrderManagement = () => {
             // and to keep stats counts accurate.
             const res = await fetch(`/api/line_orders`);
             const data = await res.json();
-            setOrders(Array.isArray(data) ? data : []);
+            // Map DB columns to frontend structure
+            const mappedOrders = (Array.isArray(data) ? data : []).map(o => ({
+                ...o,
+                applied_coupon: o.coupon_details || (o.coupon_code ? { coupon_code: o.coupon_code, title: 'Coupon Applied' } : null)
+            }));
+            setOrders(mappedOrders);
         } catch (err) {
             console.error('Failed to load LINE orders:', err);
             setOrders([]);
@@ -42,7 +47,16 @@ const LineOrderManagement = () => {
     const loadSettings = async () => {
         try {
             const data = await api.getSettings();
-            setSettings(data);
+            // Handle both Array (DB rows) and Object formats
+            let settingsObj = {};
+            if (Array.isArray(data)) {
+                data.forEach(item => {
+                    settingsObj[item.key] = item.value;
+                });
+            } else {
+                settingsObj = data || {};
+            }
+            setSettings(settingsObj);
         } catch (err) {
             console.error('Failed to load settings:', err);
         }
@@ -90,7 +104,8 @@ const LineOrderManagement = () => {
         setPaymentMethod('cash');
         setCashReceived('');
         setCouponCode('');
-        setAppliedCoupon(null);
+        // Initialize with existing applied coupon if present
+        setAppliedCoupon(order.applied_coupon || null);
         setCouponError('');
     };
 
@@ -723,21 +738,31 @@ const LineOrderManagement = () => {
                                 )}
 
                                 {/* QR Code */}
-                                {paymentMethod === 'transfer' && settings.promptpay_number && (
-                                    <div className="flex flex-col items-center animate-in zoom-in-95 duration-500">
-                                        <div className="bg-white p-6 rounded-[40px] shadow-2xl shadow-emerald-500/10 border-4 border-white">
-                                            <QRCode
-                                                value={generatePayload(settings.promptpay_number, { amount: Number(finalAmount) })}
-                                                size={180}
-                                                level="H"
-                                            />
+                                {paymentMethod === 'transfer' && (
+                                    settings.promptpay_number ? (
+                                        <div className="flex flex-col items-center">
+                                            <div className="bg-white p-4 rounded-[32px] shadow-xl border-4 border-white mb-4">
+                                                <QRCode
+                                                    value={generatePayload(String(settings.promptpay_number), { amount: Number(finalAmount) })}
+                                                    size={200}
+                                                    level="M"
+                                                    bgColor="#FFFFFF"
+                                                    fgColor="#000000"
+                                                />
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-[10px] font-black text-emerald-400 tracking-[0.2em] uppercase mb-1">Scan to Pay</p>
+                                                <p className="text-3xl font-black text-white tracking-tighter">฿{finalAmount.toLocaleString()}</p>
+                                                <p className="text-[10px] text-slate-500 font-bold tracking-widest mt-1 opacity-70">{settings.promptpay_number}</p>
+                                            </div>
                                         </div>
-                                        <div className="mt-6 text-center">
-                                            <p className="text-xs font-black text-emerald-400 tracking-[0.2em] uppercase mb-1">Scan to Pay</p>
-                                            <p className="text-2xl font-black text-white tracking-tighter">฿{finalAmount.toLocaleString()}</p>
-                                            <p className="text-[10px] text-slate-500 font-black tracking-widest mt-2">{settings.promptpay_number}</p>
+                                    ) : (
+                                        <div className="w-full p-8 bg-rose-500/10 border border-rose-500/20 rounded-[24px] flex flex-col items-center justify-center text-center animate-pulse">
+                                            <span className="text-3xl mb-2">⚠️</span>
+                                            <p className="text-sm font-bold text-rose-400 uppercase tracking-widest">Setup Required</p>
+                                            <p className="text-[10px] text-rose-300/70 mt-1">Please add PromptPay Number in Settings</p>
                                         </div>
-                                    </div>
+                                    )
                                 )}
                             </div>
 

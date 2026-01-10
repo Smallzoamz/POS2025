@@ -148,6 +148,14 @@
 - [2026-01-10 19:02:00] | File: src/OrderEntry.jsx | Line: 1164 | Keyword: Payment Method Selector | Status: Created | Change: Added missing Cash/QR toggle buttons in Payment Modal to restore payment method selection.
 - [2026-01-10 19:05:00] | File: electron/db_pg.js | Line: 913 | Keyword: Migration 25 | Status: Created | Change: Added migration for `coupon_code` and `coupon_details` columns in orders table.
 - [2026-01-10 19:05:00] | File: electron/server.js | Line: 3442 | Keyword: Takeaway Active Orders | Status: Modified | Change: Endpoint `/api/orders/takeaway/active` now includes item options in response.
-- [2026-01-10 19:12:00] | File: src/OrderEntry.jsx | Line: 441 | Keyword: calculateFinal | Status: Modified | Change: Reverted to use item.price directly (already includes options) to avoid double-counting.
+- [2026-01-10 19:50:00] | File: src/LineOrderManagement.jsx | Line: 32 | Keyword: loadOrders | Status: Modified | Change: Mapped coupon_details to applied_coupon to fix display issue. Changed 'Cash' label to 'ชำระเงิน'.
+- [2026-01-10 19:50:00] | File: src/OrderEntry.jsx | Line: 959 | Keyword: UI Text | Status: Modified | Change: Changed 'เงินสด' to 'ชำระเงิน' in payment selector.
+- [2026-01-10 19:56:00] | File: src/OrderEntry.jsx | Line: 970 | Keyword: UI Cleanup | Status: Modified | Change: Removed redundant 'Scan QR' button from payment method selector.
+- [2026-01-10 19:56:00] | File: src/LineOrderManagement.jsx | Line: 726 | Keyword: QR Display | Status: Fixed | Change: Added fallback warning if PromptPay number is missing, allowing staff to investigate why QR is not showing.
+- [2026-01-10 20:00:00] | File: src/LineOrderManagement.jsx | Line: 47 | Keyword: Settings Parsing | Status: Fixed | Change: Fixed settings data parsing (Array -> Object) so settings.promptpay_number is correctly read.
+- [2026-01-10 20:10:00] | File: src/LineOrderManagement.jsx | Line: 742 | Keyword: QR Visibility | Status: Fixed | Change: Removed animation classes, enforced String type for PromptPay number, and set white background to ensure QR visibility.
+- [2026-01-10 20:15:00] | File: src/LineOrderManagement.jsx | Line: 742 | Keyword: Syntax Fix | Status: Fixed | Change: Corrected malformed nested ternary operator that was causing build error.
+- [2026-01-10 20:25:00] | File: src/OrderEntry.jsx | Line: 1184 | Keyword: Missing QR Display | Status: Fixed | Change: Implemented QR Code display logic in the Confirmation Payment Modal (OrderEntry.jsx) which was previously missing. Added settings loading and state managment.
+- [2026-01-10 20:30:00] | File: src/OrderEntry.jsx | Line: 438 | Keyword: Duplicate Clean | Status: Fixed | Change: Removed duplicate 'settings' declaration and old useEffect to prevent build error.
 - [2026-01-10 19:12:00] | File: src/pages/LineOrder.jsx | Line: 267 | Keyword: getCouponDiscountAmount | Status: Modified | Change: Added 'ราคา XX.-' pattern, check discount_amount first, use LAST number as fallback.
 - [2026-01-10 19:12:00] | File: src/LineOrderManagement.jsx | Line: 209 | Keyword: getCouponDiscount | Status: Modified | Change: Same coupon parsing fixes applied.

@@ -60,6 +60,7 @@ const OrderEntry = () => {
     // Global Options Logic
     const [globalOptions, setGlobalOptions] = useState([]);
     const [availableOptions, setAvailableOptions] = useState([]); // Combined Product + Global Options
+    const [settings, setSettings] = useState({}); // Application Settings (PromptPay)
 
     useEffect(() => {
         loadData();
@@ -107,15 +108,27 @@ const OrderEntry = () => {
 
     const loadData = async () => {
         try {
-            const [menuData, orderData, statusData, globalOpts] = await Promise.all([
+            const [menuData, orderData, statusData, globalOpts, settingsData] = await Promise.all([
                 api.getMenu(),
                 api.getOrder(tableId),
                 api.getStoreStatus(),
-                api.getGlobalOptions()
+                api.getGlobalOptions(),
+                api.getSettings()
             ]);
 
             setStoreStatus(statusData);
             setGlobalOptions(globalOpts || []);
+
+            // Parse Settings (Handle Array/Object)
+            let settingsObj = {};
+            if (Array.isArray(settingsData)) {
+                settingsData.forEach(item => {
+                    settingsObj[item.key] = item.value;
+                });
+            } else {
+                settingsObj = settingsData || {};
+            }
+            setSettings(settingsObj);
 
             // Set Menu
             setCategories(menuData.categories);
@@ -422,7 +435,7 @@ const OrderEntry = () => {
         setShowPaymentModal(true);
     };
 
-    const [settings, setSettings] = useState({ tax_rate: 0, shop_name: '', shop_address: '' });
+
     const [discountAmount, setDiscountAmount] = useState(0);
 
     // Payment Logic States
@@ -430,11 +443,7 @@ const OrderEntry = () => {
     const [cashReceived, setCashReceived] = useState('');
 
     // Initial Load - Get Settings
-    useEffect(() => {
-        api.getSettings().then(data => {
-            setSettings(data);
-        });
-    }, []);
+
 
     // ... (existing loadData) ...
 
@@ -872,9 +881,9 @@ const OrderEntry = () => {
                                                 <span className="text-xs font-bold text-slate-400 w-6">{item.quantity}x</span>
                                                 <span className="text-sm font-bold text-slate-700 line-clamp-1 group-hover:text-orange-600 transition-colors">{item.product_name}</span>
                                             </div>
-                                            {/* Show Total Price including options */}
+                                            {/* Show Total Price (item.price already includes options) */}
                                             <span className="text-sm font-bold text-slate-900">
-                                                ฿{((parseFloat(item.price) + (item.options?.reduce((sum, opt) => sum + parseFloat(opt.price_modifier || 0), 0) || 0)) * item.quantity).toLocaleString()}
+                                                ฿{(parseFloat(item.price) * item.quantity).toLocaleString()}
                                             </span>
                                         </div>
                                         {/* Show Base Price + Options Breakdown if options exist */}
@@ -950,13 +959,13 @@ const OrderEntry = () => {
                             {/* Payment Method */}
                             <section className="mt-6 mb-8">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">วิธีชำระเงิน</p>
-                                <div className="grid grid-cols-3 gap-3">
+                                <div className="grid grid-cols-2 gap-3">
                                     <button
                                         onClick={() => setPaymentMethod('cash')}
                                         className={`flex flex-col items-center gap-2 p-3 rounded-[20px] transition-all border ${paymentMethod === 'cash' ? 'bg-white border-orange-200 shadow-md ring-1 ring-orange-500/10 text-orange-500' : 'bg-[#F8FAFC] border-transparent text-slate-400'}`}
                                     >
                                         <span className="text-xl">💵</span>
-                                        <span className="text-[9px] font-bold uppercase tracking-widest">เงินสด</span>
+                                        <span className="text-[9px] font-bold uppercase tracking-widest">ชำระเงิน</span>
                                     </button>
                                     <button
                                         onClick={() => setPaymentMethod('half')}
@@ -964,16 +973,6 @@ const OrderEntry = () => {
                                     >
                                         <span className="text-xl">🏛️</span>
                                         <span className="text-[8px] font-bold uppercase tracking-widest leading-tight text-center">คนละครึ่ง</span>
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setPaymentMethod('transfer');
-                                            setShowQRModal(true);
-                                        }}
-                                        className={`flex flex-col items-center gap-2 p-3 rounded-[20px] transition-all border ${paymentMethod === 'transfer' ? 'bg-white border-purple-200 shadow-md ring-1 ring-purple-500/10 text-purple-500' : 'bg-[#F8FAFC] border-transparent text-slate-400'}`}
-                                    >
-                                        <span className="text-xl">📲</span>
-                                        <span className="text-[8px] font-bold uppercase tracking-widest leading-tight text-center">Scan QR</span>
                                     </button>
                                 </div>
                             </section>
@@ -1191,6 +1190,35 @@ const OrderEntry = () => {
                                 </button>
                             </div>
                         </div>
+
+                        {/* QR Code Display Section (Added) */}
+                        {paymentMethod === 'transfer' && (
+                            <div className="mb-6 flex flex-col items-center animate-in zoom-in duration-300">
+                                <div className="bg-white p-4 rounded-3xl shadow-lg border-2 border-slate-100 mb-3">
+                                    {(settings.promptpay_number || settings.promptpay_id) ? (
+                                        <QRCode
+                                            value={generatePayload(String(settings.promptpay_number || settings.promptpay_id), { amount: Number(finals.finalToPay) })}
+                                            size={200}
+                                            level="M"
+                                            bgColor="#FFFFFF"
+                                            fgColor="#000000"
+                                        />
+                                    ) : (
+                                        <div className="w-[180px] h-[180px] flex flex-col items-center justify-center bg-slate-50 rounded-2xl">
+                                            <span className="text-4xl mb-2">⚠️</span>
+                                            <span className="text-xs text-slate-400 font-bold">Setup Required</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">ยอดที่ต้องชำระ</p>
+                                    <p className="text-3xl font-black text-slate-900">฿{finals.finalToPay.toLocaleString()}</p>
+                                    <p className="text-[10px] text-slate-400 font-bold mt-1 tracking-widest opacity-60">
+                                        {settings.promptpay_number || 'PromptPay Not Set'}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
                         {paymentMethod === 'cash' && (
                             <div className="mb-6">
