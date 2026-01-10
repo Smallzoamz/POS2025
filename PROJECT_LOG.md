@@ -130,4 +130,5 @@
 - [2026-01-10 16:20:00] | File: electron/server.js | Line: 92 | Keyword: requireAdmin | Status: Edited | Change: Fixed 401 Unauthorized on Render production by allowing same-origin requests with default key.
 - [2026-01-10 16:35:00] | File: electron/server.js | Line: 58 | Keyword: CORS Policy | Status: Edited | Change: Updated CORS to allow LINE LIFF domains, Render domains, and any 192.168/10.x LAN addresses for cross-device access.
 - [2026-01-10 16:40:00] | File: electron/server.js | Line: Multiple | Keyword: Security Audit | Status: Edited | Change: Removed requireAdmin from 8 staff-facing endpoints (orders, dashboard, riders, coupons) that were incorrectly restricted.
+- [2026-01-10 16:55:00] | File: electron/server.js | Line: Multiple | Keyword: Notification System | Status: Created | Change: Added comprehensive notifications for 12 events: orders, payment, kitchen, delivery, member, and coupon.
 

@@ -1639,6 +1639,14 @@ async function startServer() {
             // Notify clients
             io.emit('table-update', { id: null, status: 'refresh' });
 
+            // Create persistent notification for payment
+            createNotification(
+                `💰 ชำระเงินสำเร็จ - โต๊ะ ${order?.table_name || 'N/A'}`,
+                `ยอดรวม ฿${order?.total_amount || 0} (${paymentMethod || 'cash'})`,
+                'payment',
+                { orderId: id, tableName: order?.table_name, amount: order?.total_amount }
+            );
+
             res.json({ success: true });
         } catch (err) {
             await client.query('ROLLBACK');
@@ -3401,6 +3409,17 @@ async function startServer() {
         try {
             await query("UPDATE line_orders SET status = 'confirmed', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
             io.emit('line-order-update', { orderId: id, status: 'confirmed' });
+
+            // Notification: Order confirmed
+            const orderRes = await query("SELECT customer_name, order_type FROM line_orders WHERE id = $1", [id]);
+            const orderInfo = orderRes.rows[0];
+            createNotification(
+                `✅ ออเดอร์ยืนยันแล้ว #${id}`,
+                `${orderInfo?.customer_name || 'ลูกค้า'} - ${orderInfo?.order_type === 'delivery' ? '🚚 เดลิเวอรี่' : '🛍️ Takeaway'}`,
+                'order',
+                { orderId: id, status: 'confirmed' }
+            );
+
             res.json({ success: true });
         } catch (err) {
             console.error(err);
@@ -3414,6 +3433,15 @@ async function startServer() {
         try {
             await query("UPDATE line_orders SET status = 'preparing', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
             io.emit('line-order-update', { orderId: id, status: 'preparing' });
+
+            // Notification: Kitchen preparing
+            createNotification(
+                `👨‍🍳 ครัวกำลังทำ #${id}`,
+                `ออเดอร์กำลังอยู่ระหว่างการจัดเตรียม`,
+                'kitchen',
+                { orderId: id, status: 'preparing' }
+            );
+
             res.json({ success: true });
         } catch (err) {
             console.error(err);
@@ -3427,6 +3455,15 @@ async function startServer() {
         try {
             await query("UPDATE line_orders SET status = 'ready', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
             io.emit('line-order-update', { orderId: id, status: 'ready' });
+
+            // Notification: Order ready for pickup/delivery
+            createNotification(
+                `✅ อาหารพร้อมแล้ว #${id}`,
+                `รอไรเดอร์มารับ หรือลูกค้ามารับสินค้า`,
+                'delivery',
+                { orderId: id, status: 'ready' }
+            );
+
             res.json({ success: true });
         } catch (err) {
             console.error(err);
@@ -3718,6 +3755,17 @@ async function startServer() {
             `, [riderId, trackingToken, id]);
 
             io.emit('delivery-order-update', { orderId: id, status: 'picked_up', riderId });
+
+            // Notification: Rider picked up
+            const riderRes = await query("SELECT name FROM users WHERE id = $1", [riderId]);
+            const riderName = riderRes.rows[0]?.name || 'ไรเดอร์';
+            createNotification(
+                `🛵 ไรเดอร์รับงานแล้ว #${id}`,
+                `${riderName} กำลังเตรียมจัดส่ง`,
+                'delivery',
+                { orderId: id, riderId, status: 'picked_up' }
+            );
+
             res.json({ success: true, trackingToken });
         } catch (err) {
             console.error(err);
@@ -3738,6 +3786,15 @@ async function startServer() {
             `, [id]);
 
             io.emit('delivery-order-update', { orderId: id, status: 'delivering' });
+
+            // Notification: Delivery started
+            createNotification(
+                `🚀 เริ่มจัดส่งแล้ว #${id}`,
+                `ไรเดอร์ออกเดินทางส่งอาหารแล้ว`,
+                'delivery',
+                { orderId: id, status: 'delivering' }
+            );
+
             res.json({ success: true });
         } catch (err) {
             console.error(err);
@@ -3789,6 +3846,15 @@ async function startServer() {
 
             io.emit('delivery-order-update', { orderId: id, status: 'completed' });
             io.emit('line-order-update', { orderId: id, status: 'completed' });
+
+            // Notification: Delivered successfully
+            createNotification(
+                `✅ ส่งสำเร็จ #${id}`,
+                `ลูกค้าได้รับอาหารเรียบร้อยแล้ว (฿${order?.total_amount || 0})`,
+                'success',
+                { orderId: id, status: 'completed', amount: order?.total_amount }
+            );
+
             res.json({ success: true });
         } catch (err) {
             console.error(err);
@@ -3979,6 +4045,15 @@ async function startServer() {
                      RETURNING *`,
                     [lineUserId, displayName, pictureUrl, isFollowing]
                 );
+
+                // Notification: New member registered
+                createNotification(
+                    `🎉 สมาชิกใหม่!`,
+                    `${displayName} ลงทะเบียนเข้าระบบสะสมแต้ม`,
+                    'member',
+                    { customerId: result.rows[0].id, displayName }
+                );
+
                 res.json(result.rows[0]);
             }
         } catch (err) {
@@ -4074,6 +4149,15 @@ async function startServer() {
             `, [customerId, promo.points_required, promotionId, `แลกรางวัล: ${promo.title} (Code: ${couponCode})`]);
 
             await query('COMMIT');
+
+            // Notification: Coupon redeemed
+            createNotification(
+                `🎁 แลกคูปองสำเร็จ`,
+                `ลูกค้าแลกรางวัล "${promo.title}" (Code: ${couponCode})`,
+                'coupon',
+                { customerId, promotionId, couponCode }
+            );
+
             res.json({ success: true, newPoints: customer.points - promo.points_required, couponCode });
         } catch (err) {
             await query('ROLLBACK');
