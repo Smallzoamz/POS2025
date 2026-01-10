@@ -1607,22 +1607,31 @@ async function startServer() {
     // Pay / Clear Bill
     app.post('/api/orders/:id/pay', async (req, res) => {
         const { id } = req.params;
-        const { paymentMethod, couponCode, couponDetails } = req.body;
+        const { paymentMethod, couponCode, couponDetails, discountAmount, paidAmount } = req.body;
         const client = await pool.connect();
 
         try {
             await client.query('BEGIN');
 
-            // 1. Mark order as paid and save coupon info
+            // 1. Mark order as paid and save coupon info & Net total
             await client.query(
                 `UPDATE orders 
-                     SET status = 'paid', 
-                         payment_method = $1, 
-                         updated_at = CURRENT_TIMESTAMP,
-                         coupon_code = $3,
-                         coupon_details = $4
-                     WHERE id = $2`,
-                [paymentMethod || 'cash', id, couponCode || null, couponDetails ? JSON.stringify(couponDetails) : null]
+                 SET status = 'paid', 
+                     payment_method = $1, 
+                     coupon_code = $2, 
+                     coupon_details = $3, 
+                     discount_amount = $4,
+                     total_amount = COALESCE($5, total_amount),
+                     updated_at = CURRENT_TIMESTAMP 
+                 WHERE id = $6`,
+                [
+                    paymentMethod || 'cash',
+                    couponCode || null,
+                    couponDetails ? JSON.stringify(couponDetails) : null,
+                    discountAmount || 0,
+                    paidAmount || null,
+                    id
+                ]
             );
 
             // 2. Get table name, customer info, and linked reservation
@@ -3460,62 +3469,9 @@ async function startServer() {
         }
     });
 
-    // Pay Order (Dine-in / General)
-    app.post('/api/orders/:id/pay', async (req, res) => {
-        const { id } = req.params;
-        const {
-            paymentMethod,
-            discountAmount,
-            couponCode,
-            couponDetails
-        } = req.body;
-
-        try {
-            await query(
-                `UPDATE orders 
-                 SET status = 'paid', 
-                     payment_method = $1, 
-                     discount_amount = $2,
-                     coupon_code = $3,
-                     coupon_details = $4,
-                     updated_at = CURRENT_TIMESTAMP 
-                 WHERE id = $5`,
-                [
-                    paymentMethod || 'cash',
-                    discountAmount || 0,
-                    couponCode || null,
-                    couponDetails ? JSON.stringify(couponDetails) : null,
-                    id
-                ]
-            );
-
-            // Earn Loyalty Points
-            const orderRes = await query("SELECT customer_id, total_amount, subtotal FROM orders WHERE id = $1", [id]);
-            const order = orderRes.rows[0];
-
-            if (order && order.customer_id) {
-                // Calculate eligible amount (usually based on subtotal or total after discount)
-                // Using total_amount (which should be the final paid amount)
-                const pointAmount = parseFloat(order.total_amount) - (parseFloat(discountAmount) || 0);
-                if (pointAmount > 0) {
-                    await earnLoyaltyPoints(order.customer_id, pointAmount, id, null);
-                }
-            }
-
-            // If table order, clear table status
-            if (order?.table_name) {
-                await query("UPDATE tables SET status = 'available' WHERE name = $1", [order.table_name]);
-            }
-
-            io.emit('order-update');
-            io.emit('table-update', { id: null, status: 'refresh' });
-
-            res.json({ success: true });
-        } catch (err) {
-            console.error(err);
-            res.status(500).json({ error: err.message });
-        }
-    });
+    // Pay Order (Dine-in / General) - [DUPLICATE REMOVED]
+    // Consolidate logic to the endpoint (approx line 1608) to avoid conflicts.
+    // Logic from here (updating discount_amount and Loyalty Points) is merged/handled there.
 
     // Complete/Pickup Order
     app.post('/api/orders/:id/complete', async (req, res) => {
@@ -3633,14 +3589,13 @@ async function startServer() {
         }
     });
 
-    // ADMIN: Pay LINE Order
     app.post('/api/line-orders/:id/pay', async (req, res) => {
         const { id } = req.params;
-        const { paymentMethod } = req.body;
+        const { paymentMethod, paidAmount } = req.body;
         try {
             await query(
-                "UPDATE line_orders SET status = 'completed', payment_method = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
-                [paymentMethod || 'cash', id]
+                "UPDATE line_orders SET status = 'completed', payment_method = $1, total_amount = COALESCE($2, total_amount), updated_at = CURRENT_TIMESTAMP WHERE id = $3",
+                [paymentMethod || 'cash', paidAmount || null, id]
             );
 
             // Earn Loyalty Points (Fetch customer info first)

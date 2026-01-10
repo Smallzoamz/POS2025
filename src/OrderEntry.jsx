@@ -519,7 +519,8 @@ const OrderEntry = () => {
                 paymentMethod,
                 depositAmount: paidDeposit, // Send deposit amount if needed for ledger
                 couponCode: appliedCoupon?.coupon_code,
-                couponDetails: appliedCoupon
+                couponDetails: appliedCoupon,
+                paidAmount: finalToPay // Send Net Amount
             });
 
             if (res.success) {

@@ -140,7 +140,7 @@ const LineOrderManagement = () => {
             const res = await fetch(`/api/line-orders/${selectedOrder.id}/pay`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ paymentMethod })
+                body: JSON.stringify({ paymentMethod, paidAmount: finalAmount })
             });
             const data = await res.json();
             if (data.success) {
