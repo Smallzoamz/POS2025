@@ -16,13 +16,20 @@ export const socket = io(SOCKET_URL);
 export const api = {
     // Generic HTTP methods
     get: async (url) => {
-        const res = await fetch(`${BASE_URL}${url}`);
+        const res = await fetch(`${BASE_URL}${url}`, {
+            headers: {
+                'X-Admin-Secret': import.meta.env.VITE_ADMIN_SECRET_KEY || 'pos2025-admin-secret-key'
+            }
+        });
         return res.json();
     },
     post: async (url, data) => {
         const res = await fetch(`${BASE_URL}${url}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Secret': import.meta.env.VITE_ADMIN_SECRET_KEY || 'pos2025-admin-secret-key'
+            },
             body: JSON.stringify(data)
         });
         return res.json();
@@ -30,669 +37,224 @@ export const api = {
     put: async (url, data) => {
         const res = await fetch(`${BASE_URL}${url}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Secret': import.meta.env.VITE_ADMIN_SECRET_KEY || 'pos2025-admin-secret-key'
+            },
             body: JSON.stringify(data)
         });
         return res.json();
     },
     delete: async (url) => {
         const res = await fetch(`${BASE_URL}${url}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+                'X-Admin-Secret': import.meta.env.VITE_ADMIN_SECRET_KEY || 'pos2025-admin-secret-key'
+            }
         });
         return res.json();
     },
 
     // Get all tables
-    getTables: async () => {
-        const res = await fetch(`${BASE_URL}/tables`);
-        return res.json();
-    },
+    getTables: async () => api.get('/tables'),
 
     // --- ZONES & TABLES MANAGEMENT ---
-    getZones: async () => {
-        const res = await fetch(`${BASE_URL}/zones`);
-        return res.json();
-    },
-    addZone: async (name) => {
-        const res = await fetch(`${BASE_URL}/zones`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
-        });
-        return res.json();
-    },
-    deleteZone: async (id) => {
-        const res = await fetch(`${BASE_URL}/zones/${id}`, {
-            method: 'DELETE'
-        });
-        return res.json();
-    },
-    addTable: async (data) => {
-        const res = await fetch(`${BASE_URL}/tables`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        return res.json();
-    },
-    deleteTable: async (id) => {
-        const res = await fetch(`${BASE_URL}/tables/${id}`, {
-            method: 'DELETE'
-        });
-        return res.json();
-    },
+    getZones: async () => api.get('/zones'),
+    addZone: async (name) => api.post('/zones', { name }),
+    deleteZone: async (id) => api.delete(`/zones/${id}`),
+    addTable: async (data) => api.post('/tables', data),
+    deleteTable: async (id) => api.delete(`/tables/${id}`),
 
     // --- ANALYTICS ---
     getSalesTrend: async (dateRange = {}) => {
         const { startDate, endDate } = dateRange;
         const query = startDate && endDate ? `?startDate=${startDate}&endDate=${endDate}` : '';
-        const res = await fetch(`${BASE_URL}/analytics/sales-trend${query}`);
-        return res.json();
+        return api.get(`/analytics/sales-trend${query}`);
     },
     getTopItems: async (dateRange = {}) => {
         const { startDate, endDate } = dateRange;
         const query = startDate && endDate ? `?startDate=${startDate}&endDate=${endDate}` : '';
-        const res = await fetch(`${BASE_URL}/analytics/top-items${query}`);
-        return res.json();
+        return api.get(`/analytics/top-items${query}`);
     },
 
     // Get menu (products + categories)
-    getMenu: async () => {
-        const res = await fetch(`${BASE_URL}/products`);
-        return res.json();
-    },
+    getMenu: async () => api.get('/products'),
 
     // Update table status
-    updateTableStatus: async (id, status) => {
-        const res = await fetch(`${BASE_URL}/tables/${id}/status`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status })
-        });
-        return res.json();
-    },
+    updateTableStatus: async (id, status) => api.post(`/tables/${id}/status`, { status }),
 
     // Create new order
-    createOrder: async (tableName, items, total, orderType = 'dine_in') => {
-        const res = await fetch(`${BASE_URL}/orders`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tableName, items, total, orderType })
-        });
-        return res.json();
-    },
+    createOrder: async (tableName, items, total, orderType = 'dine_in') =>
+        api.post('/orders', { tableName, items, total, orderType }),
 
     // Get active order for table
-    getOrder: async (tableName) => {
-        const res = await fetch(`${BASE_URL}/orders/${tableName}`);
-        return res.json();
-    },
+    getOrder: async (tableName) => api.get(`/orders/${tableName}`),
 
     // Delete/Cancel Order
-    deleteOrder: async (id) => {
-        const res = await fetch(`${BASE_URL}/orders/${id}`, { method: 'DELETE' });
-        return res.json();
-    },
+    deleteOrder: async (id) => api.delete(`/orders/${id}`),
 
     // Update Order Metadata
-    updateOrder: async (id, data) => {
-        const res = await fetch(`${BASE_URL}/orders/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        return res.json();
-    },
+    updateOrder: async (id, data) => api.patch(`/orders/${id}`, data),
 
     // Pay bill
-    payOrder: async (orderId, data = {}) => {
-        const res = await fetch(`${BASE_URL}/orders/${orderId}/pay`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        return res.json();
-    },
+    payOrder: async (orderId, data = {}) => api.post(`/orders/${orderId}/pay`, data),
 
     // Call Bill
-    callBill: async (tableName) => {
-        const res = await fetch(`${BASE_URL}/tables/${tableName}/call-bill`, {
-            method: 'POST'
-        });
-        return res.json();
-    },
+    callBill: async (tableName) => api.post(`/tables/${tableName}/call-bill`),
 
     // Get Kitchen Orders (In-store)
-    getKitchenOrders: async () => {
-        const res = await fetch(`${BASE_URL}/kitchen/orders`);
-        return res.json();
-    },
+    getKitchenOrders: async () => api.get('/kitchen/orders'),
 
     // Get Kitchen LINE Orders (confirmed/preparing)
-    getKitchenLineOrders: async () => {
-        const res = await fetch(`${BASE_URL}/kitchen/line-orders`);
-        return res.json();
-    },
+    getKitchenLineOrders: async () => api.get('/kitchen/line-orders'),
 
     // Serve Order (Mark as served)
-    serveOrder: async (orderId) => {
-        const res = await fetch(`${BASE_URL}/kitchen/orders/${orderId}/serve`, {
-            method: 'POST'
-        });
-        return res.json();
-    },
+    serveOrder: async (orderId) => api.post(`/kitchen/orders/${orderId}/serve`),
 
     // Takeaway Orders
-    getActiveTakeawayOrders: async () => {
-        const res = await fetch(`${BASE_URL}/orders/takeaway/active`);
-        return res.json();
-    },
+    getActiveTakeawayOrders: async () => api.get('/orders/takeaway/active'),
 
-    completeOrder: async (orderId, paymentMethod = 'cash') => {
-        const res = await fetch(`${BASE_URL}/orders/${orderId}/complete`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ paymentMethod })
-        });
-        return res.json();
-    },
+    completeOrder: async (orderId, paymentMethod = 'cash') =>
+        api.post(`/orders/${orderId}/complete`, { paymentMethod }),
 
     // Get Sales History
     getSalesHistory: async (dateRange = {}) => {
         const { startDate, endDate } = dateRange;
         const query = startDate && endDate ? `?startDate=${startDate}&endDate=${endDate}` : '';
-        const res = await fetch(`${BASE_URL}/orders/history${query}`);
-        return res.json();
+        return api.get(`/orders/history${query}`);
     },
 
     // Get Dashboard Stats
-    getDashboardStats: async () => {
-        const res = await fetch(`${BASE_URL}/dashboard`);
-        return res.json();
-    },
+    getDashboardStats: async () => api.get('/dashboard'),
 
     // Product Management
-    addProduct: async (product) => {
-        const res = await fetch(`${BASE_URL}/products`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(product)
-        });
-        return res.json();
-    },
-    updateProduct: async (id, product) => {
-        const res = await fetch(`${BASE_URL}/products/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(product)
-        });
-        return res.json();
-    },
-    deleteProduct: async (id) => {
-        const res = await fetch(`${BASE_URL}/products/${id}`, {
-            method: 'DELETE'
-        });
-        return res.json();
-    },
+    addProduct: async (product) => api.post('/products', product),
+    updateProduct: async (id, product) => api.put(`/products/${id}`, product),
+    deleteProduct: async (id) => api.delete(`/products/${id}`),
 
     // --- NOTIFICATIONS ---
-    getNotifications: async () => {
-        const res = await fetch(`${BASE_URL}/notifications`);
-        return res.json();
-    },
-    markNotificationAsRead: async (id) => {
-        const res = await fetch(`${BASE_URL}/notifications/${id}/read`, {
-            method: 'POST'
-        });
-        return res.json();
-    },
-    markAllNotificationsAsRead: async () => {
-        const res = await fetch(`${BASE_URL}/notifications/read-all`, {
-            method: 'POST'
-        });
-        return res.json();
-    },
-    deleteNotification: async (id) => {
-        const res = await fetch(`${BASE_URL}/notifications/${id}`, {
-            method: 'DELETE'
-        });
-        return res.json();
-    },
-    clearAllNotifications: async () => {
-        const res = await fetch(`${BASE_URL}/notifications`, {
-            method: 'DELETE'
-        });
-        return res.json();
-    },
-    addCategory: async (category) => {
-        const res = await fetch(`${BASE_URL}/categories`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(category)
-        });
-        return res.json();
-    },
-    deleteCategory: async (id) => {
-        const res = await fetch(`${BASE_URL}/categories/${id}`, {
-            method: 'DELETE'
-        });
-        return res.json();
-    },
+    getNotifications: async () => api.get('/notifications'),
+    markNotificationAsRead: async (id) => api.post(`/notifications/${id}/read`),
+    markAllNotificationsAsRead: async () => api.post('/notifications/read-all'),
+    deleteNotification: async (id) => api.delete(`/notifications/${id}`),
+    clearAllNotifications: async () => api.delete('/notifications'),
+
+    addCategory: async (category) => api.post('/categories', category),
+    deleteCategory: async (id) => api.delete(`/categories/${id}`),
 
     // Sync Menu to Website
-    syncMenu: async () => {
-        const res = await fetch(`${BASE_URL}/sync-menu-to-website`, {
-            method: 'POST'
-        });
-        return res.json();
-    },
+    syncMenu: async () => api.post('/sync-menu-to-website'),
 
     // --- INGREDIENTS / INVENTORY ---
-    getIngredients: async () => {
-        const res = await fetch(`${BASE_URL}/ingredients`);
-        return res.json();
-    },
-    addIngredient: async (ingredient) => {
-        const res = await fetch(`${BASE_URL}/ingredients`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(ingredient)
-        });
-        return res.json();
-    },
-    updateIngredient: async (id, ingredient) => {
-        const res = await fetch(`${BASE_URL}/ingredients/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(ingredient)
-        });
-        return res.json();
-    },
-    deleteIngredient: async (id) => {
-        const res = await fetch(`${BASE_URL}/ingredients/${id}`, {
-            method: 'DELETE'
-        });
-        return res.json();
-    },
-    getProductRecipe: async (productId) => {
-        const res = await fetch(`${BASE_URL}/products/${productId}/recipe`);
-        return res.json();
-    },
-    updateProductRecipe: async (productId, ingredients) => {
-        const res = await fetch(`${BASE_URL}/products/${productId}/recipe`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ingredients })
-        });
-        return res.json();
-    },
+    getIngredients: async () => api.get('/ingredients'),
+    addIngredient: async (ingredient) => api.post('/ingredients', ingredient),
+    updateIngredient: async (id, ingredient) => api.put(`/ingredients/${id}`, ingredient),
+    deleteIngredient: async (id) => api.delete(`/ingredients/${id}`),
+    getProductRecipe: async (productId) => api.get(`/products/${productId}/recipe`),
+    updateProductRecipe: async (productId, ingredients) =>
+        api.post(`/products/${productId}/recipe`, { ingredients }),
 
     // --- PRODUCT OPTIONS ---
-    getProductOptions: async (productId) => {
-        const res = await fetch(`${BASE_URL}/products/${productId}/options`);
-        return res.json();
-    },
-    addProductOption: async (productId, option) => {
-        const res = await fetch(`${BASE_URL}/products/${productId}/options`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(option)
-        });
-        return res.json();
-    },
-    updateProductOption: async (optionId, option) => {
-        const res = await fetch(`${BASE_URL}/product-options/${optionId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(option)
-        });
-        return res.json();
-    },
-    deleteProductOption: async (optionId) => {
-        const res = await fetch(`${BASE_URL}/product-options/${optionId}`, { method: 'DELETE' });
-        return res.json();
-    },
+    getProductOptions: async (productId) => api.get(`/products/${productId}/options`),
+    addProductOption: async (productId, option) =>
+        api.post(`/products/${productId}/options`, option),
+    updateProductOption: async (optionId, option) =>
+        api.put(`/product-options/${optionId}`, option),
+    deleteProductOption: async (optionId) => api.delete(`/product-options/${optionId}`),
 
     // --- OPTION RECIPES ---
-    getOptionRecipe: async (optionId) => {
-        const res = await fetch(`${BASE_URL}/option-recipes/${optionId}`);
-        return res.json();
-    },
-    saveOptionRecipe: async (optionId, ingredients) => {
-        const res = await fetch(`${BASE_URL}/option-recipes/${optionId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ingredients })
-        });
-        return res.json();
-    },
+    getOptionRecipe: async (optionId) => api.get(`/option-recipes/${optionId}`),
+    saveOptionRecipe: async (optionId, ingredients) =>
+        api.post(`/option-recipes/${optionId}`, { ingredients }),
 
     // --- GLOBAL OPTIONS (Category-level) ---
-    getGlobalOptions: async () => {
-        const res = await fetch(`${BASE_URL}/global-options`);
-        return res.json();
-    },
-    getGlobalOptionsByCategory: async (categoryId) => {
-        const res = await fetch(`${BASE_URL}/global-options/by-category/${categoryId}`);
-        return res.json();
-    },
-    addGlobalOption: async (option) => {
-        const res = await fetch(`${BASE_URL}/global-options`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(option)
-        });
-        return res.json();
-    },
-    updateGlobalOption: async (id, option) => {
-        const res = await fetch(`${BASE_URL}/global-options/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(option)
-        });
-        return res.json();
-    },
-    deleteGlobalOption: async (id) => {
-        const res = await fetch(`${BASE_URL}/global-options/${id}`, { method: 'DELETE' });
-        return res.json();
-    },
-    getGlobalOptionRecipe: async (optionId) => {
-        const res = await fetch(`${BASE_URL}/global-option-recipes/${optionId}`);
-        return res.json();
-    },
-    saveGlobalOptionRecipe: async (optionId, items) => {
-        const res = await fetch(`${BASE_URL}/global-option-recipes/${optionId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items })
-        });
-        return res.json();
-    },
+    getGlobalOptions: async () => api.get('/global-options'),
+    getGlobalOptionsByCategory: async (categoryId) =>
+        api.get(`/global-options/by-category/${categoryId}`),
+    addGlobalOption: async (option) => api.post('/global-options', option),
+    updateGlobalOption: async (id, option) => api.put(`/global-options/${id}`, option),
+    deleteGlobalOption: async (id) => api.delete(`/global-options/${id}`),
+    getGlobalOptionRecipe: async (optionId) => api.get(`/global-option-recipes/${optionId}`),
+    saveGlobalOptionRecipe: async (optionId, items) =>
+        api.post(`/global-option-recipes/${optionId}`, { items }),
 
     // --- SETTINGS ---
-    getSettings: async () => {
-        const res = await fetch(`${BASE_URL}/settings`);
-        return res.json();
-    },
-    saveSettings: async (settings) => {
-        const res = await fetch(`${BASE_URL}/settings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ settings })
-        });
-        return res.json();
-    },
+    getSettings: async () => api.get('/settings'),
+    saveSettings: async (settings) => api.post('/settings', { settings }),
 
-    getStoreStatus: async () => {
-        const res = await fetch(`${BASE_URL}/store-status`);
-        return res.json();
-    },
+    getStoreStatus: async () => api.get('/store-status'),
 
     // --- USERS MANAGEMENT ---
-    getUsers: async () => {
-        const res = await fetch(`${BASE_URL}/users`);
-        return res.json();
-    },
-    addUser: async (user) => {
-        const res = await fetch(`${BASE_URL}/users`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(user)
-        });
-        return res.json();
-    },
-    updateUser: async (id, user) => {
-        const res = await fetch(`${BASE_URL}/users/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(user)
-        });
-        return res.json();
-    },
-    deleteUser: async (id) => {
-        const res = await fetch(`${BASE_URL}/users/${id}`, {
-            method: 'DELETE'
-        });
-        return res.json();
-    },
+    getUsers: async () => api.get('/users'),
+    addUser: async (user) => api.post('/users', user),
+    updateUser: async (id, user) => api.put(`/users/${id}`, user),
+    deleteUser: async (id) => api.delete(`/users/${id}`),
 
     // --- AUTH ---
-    login: (pin) => fetch(`${BASE_URL}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin })
-    }).then(res => res.json()),
+    login: (pin) => api.post('/login', { pin }),
+    logout: (attendanceId) => api.post('/logout', { attendanceId }),
 
-    logout: (attendanceId) => fetch(`${BASE_URL}/logout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ attendanceId })
-    }).then(res => res.json()),
-
-    getAttendanceLogs: async () => {
-        const res = await fetch(`${BASE_URL}/attendance`);
-        return res.json();
-    },
-    addAttendanceManual: async (data) => {
-        const res = await fetch(`${BASE_URL}/attendance/manual`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        return res.json();
-    },
+    getAttendanceLogs: async () => api.get('/attendance'),
+    addAttendanceManual: async (data) => api.post('/attendance/manual', data),
 
     // --- NETWORK & CLOUD ---
-    getNetworkStatus: async () => {
-        const res = await fetch(`${BASE_URL}/network/status`);
-        return res.json();
-    },
-    toggleCloud: async (active) => {
-        const res = await fetch(`${BASE_URL}/network/cloud-toggle`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ active })
-        });
-        return res.json();
-    },
+    getNetworkStatus: async () => api.get('/network/status'),
+    toggleCloud: async (active) => api.post('/network/cloud-toggle', { active }),
 
     // --- DELIVERY SYSTEM ---
     getDeliveryOrders: async (params = {}) => {
         const query = new URLSearchParams(params).toString();
-        const res = await fetch(`${BASE_URL}/delivery-orders?${query}`);
-        return res.json();
+        return api.get(`/delivery-orders?${query}`);
     },
-    getDeliverySettings: async () => {
-        const res = await fetch(`${BASE_URL}/delivery/settings`);
-        return res.json();
-    },
-    getRiders: async () => {
-        const res = await fetch(`${BASE_URL}/riders`);
-        return res.json();
-    },
-    getPendingPickups: async () => {
-        const res = await fetch(`${BASE_URL}/delivery-orders/pending-pickup`);
-        return res.json();
-    },
-    getMyDeliveries: async (riderId) => {
-        const res = await fetch(`${BASE_URL}/delivery-orders/my-deliveries/${riderId}`);
-        return res.json();
-    },
-    pickupDeliveryOrder: async (orderId, riderId) => {
-        const res = await fetch(`${BASE_URL}/delivery-orders/${orderId}/pickup`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ riderId })
-        });
-        return res.json();
-    },
-    startDelivery: async (orderId) => {
-        const res = await fetch(`${BASE_URL}/delivery-orders/${orderId}/start-delivery`, { method: 'POST' });
-        return res.json();
-    },
-    updateRiderLocation: async (orderId, lat, lng) => {
-        const res = await fetch(`${BASE_URL}/delivery-orders/${orderId}/rider-location`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lat, lng })
-        });
-        return res.json();
-    },
-    markDelivered: async (orderId) => {
-        const res = await fetch(`${BASE_URL}/delivery-orders/${orderId}/delivered`, { method: 'POST' });
-        return res.json();
-    },
-    getTrackingInfo: async (token) => {
-        const res = await fetch(`${BASE_URL}/public/tracking/${token}`);
-        return res.json();
-    },
-    getPublicMenu: async () => {
-        const res = await fetch(`${BASE_URL}/public/menu`);
-        return res.json();
-    },
-    getPublicSettings: async () => {
-        const res = await fetch(`${BASE_URL}/public/settings`);
-        return res.json();
-    },
+    getDeliverySettings: async () => api.get('/delivery/settings'),
+    getRiders: async () => api.get('/riders'),
+    getPendingPickups: async () => api.get('/delivery-orders/pending-pickup'),
+    getMyDeliveries: async (riderId) => api.get(`/delivery-orders/my-deliveries/${riderId}`),
+    pickupDeliveryOrder: async (orderId, riderId) =>
+        api.post(`/delivery-orders/${orderId}/pickup`, { riderId }),
+    startDelivery: async (orderId) => api.post(`/delivery-orders/${orderId}/start-delivery`),
+    updateRiderLocation: async (orderId, lat, lng) =>
+        api.patch(`/delivery-orders/${orderId}/rider-location`, { lat, lng }),
+    markDelivered: async (orderId) => api.post(`/delivery-orders/${orderId}/delivered`),
+    getTrackingInfo: async (token) => api.get(`/public/tracking/${token}`),
+    getPublicMenu: async () => api.get('/public/menu'),
+    getPublicSettings: async () => api.get('/public/settings'),
 
     // --- LOYALTY & PROMOTIONS ---
-    syncLoyaltyProfile: async (data) => {
-        const res = await fetch(`${BASE_URL}/loyalty/sync`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        return res.json();
-    },
-    getLoyaltyProfile: async (lineUserId) => {
-        const res = await fetch(`${BASE_URL}/loyalty/profile/${lineUserId}`);
-        return res.json();
-    },
-    getActivePromotions: async () => {
-        const res = await fetch(`${BASE_URL}/loyalty/active-promotions`);
-        return res.json();
-    },
-    redeemLoyaltyPoints: async (data) => {
-        const res = await fetch(`${BASE_URL}/loyalty/redeem`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        return res.json();
-    },
-    getAdminPromotions: async () => {
-        const res = await fetch(`${BASE_URL}/admin/loyalty/promotions`);
-        return res.json();
-    },
-    addPromotion: async (promo) => {
-        const res = await fetch(`${BASE_URL}/admin/loyalty/promotions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(promo)
-        });
-        return res.json();
-    },
-    updatePromotion: async (id, promo) => {
-        const res = await fetch(`${BASE_URL}/admin/loyalty/promotions/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(promo)
-        });
-        return res.json();
-    },
-    deletePromotion: async (id) => {
-        const res = await fetch(`${BASE_URL}/admin/loyalty/promotions/${id}`, {
-            method: 'DELETE'
-        });
-        return res.json();
-    },
-    searchLoyaltyCustomers: async (query) => {
-        const res = await fetch(`${BASE_URL}/admin/loyalty/customers?query=${encodeURIComponent(query)}`);
-        return res.json();
-    },
-    linkCustomerToOrder: async (orderId, customerId) => {
-        const res = await fetch(`${BASE_URL}/orders/${orderId}/link-customer`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ customerId })
-        });
-        return res.json();
-    },
-    getCustomerCoupons: async (customerId) => {
-        try {
-            const response = await fetch(`${BASE_URL}/loyalty/coupons/${customerId}`);
-            if (!response.ok) throw new Error('Failed to fetch coupons');
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching coupons:', error);
-            return [];
-        }
-    },
-    updateMemberProfile: async (data) => {
-        try {
-            const response = await fetch(`${BASE_URL}/member/profile`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            });
-            return await response.json();
-        } catch (error) {
-            console.error('Error updating profile:', error);
-            return { success: false, message: error.message };
-        }
-    },
-    verifyCoupon: async (couponId) => {
-        try {
-            const response = await fetch(`${BASE_URL}/coupons/verify/${couponId}`);
-            return await response.json();
-        } catch (error) {
-            console.error('Error verifying coupon:', error);
-            return { success: false, message: error.message };
-        }
-    },
-    useCoupon: async (code, orderId = null, lineOrderId = null) => {
-        const res = await fetch(`${BASE_URL}/loyalty/coupons/use`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code, orderId, lineOrderId })
-        });
-        return res.json();
-    },
+    syncLoyaltyProfile: async (data) => api.post('/loyalty/sync', data),
+    getLoyaltyProfile: async (lineUserId) => api.get(`/loyalty/profile/${lineUserId}`),
+    getActivePromotions: async () => api.get('/loyalty/active-promotions'),
+    redeemLoyaltyPoints: async (data) => api.post('/loyalty/redeem', data),
+    getAdminPromotions: async () => api.get('/admin/loyalty/promotions'),
+    addPromotion: async (promo) => api.post('/admin/loyalty/promotions', promo),
+    updatePromotion: async (id, promo) => api.put(`/admin/loyalty/promotions/${id}`, promo),
+    deletePromotion: async (id) => api.delete(`/admin/loyalty/promotions/${id}`),
+    searchLoyaltyCustomers: async (query) =>
+        api.get(`/admin/loyalty/customers?query=${encodeURIComponent(query)}`),
+    linkCustomerToOrder: async (orderId, customerId) =>
+        api.post(`/orders/${orderId}/link-customer`, { customerId }),
+    getCustomerCoupons: async (customerId) => api.get(`/loyalty/coupons/${customerId}`),
+    updateMemberProfile: async (data) => api.post('/member/profile', data),
+    verifyCoupon: async (couponId) => api.get(`/coupons/verify/${couponId}`),
+    useCoupon: async (code, orderId = null, lineOrderId = null) =>
+        api.post('/loyalty/coupons/use', { code, orderId, lineOrderId }),
 
     // --- FLOOR PLAN & MAP OBJECTS ---
-    batchUpdateTableLayout: async (layouts) => {
-        const res = await fetch(`${BASE_URL}/tables/batch-layout`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ layouts })
-        });
-        return res.json();
-    },
-    getMapObjects: async () => {
-        const res = await fetch(`${BASE_URL}/map-objects`);
-        return res.json();
-    },
-    addMapObject: async (data) => {
-        const res = await fetch(`${BASE_URL}/map-objects`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        return res.json();
-    },
-    updateMapObject: async (id, data) => {
-        const res = await fetch(`${BASE_URL}/map-objects/${id}`, {
+    batchUpdateTableLayout: async (layouts) => api.post('/tables/batch-layout', { layouts }),
+    getMapObjects: async () => api.get('/map-objects'),
+    addMapObject: async (data) => api.post('/map-objects', data),
+    updateMapObject: async (id, data) => api.patch(`/map-objects/${id}`, data),
+    deleteMapObject: async (id) => api.delete(`/map-objects/${id}`),
+
+    // API Helpers
+    patch: async (url, data) => {
+        const res = await fetch(`${BASE_URL}${url}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Secret': import.meta.env.VITE_ADMIN_SECRET_KEY || 'pos2025-admin-secret-key'
+            },
             body: JSON.stringify(data)
-        });
-        return res.json();
-    },
-    deleteMapObject: async (id) => {
-        const res = await fetch(`${BASE_URL}/map-objects/${id}`, {
-            method: 'DELETE'
         });
         return res.json();
     }

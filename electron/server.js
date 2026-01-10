@@ -31,34 +31,51 @@ async function startServer() {
     });
 
     // 🛡️ SECURITY HARDENING: Tighter CORS Policy
+    const localIp = getLocalIp();
     const allowedOrigins = [
         'http://localhost:5173', // Vite Dev
         'http://localhost:3000', // Electron Prod
         'http://127.0.0.1:5173',
-        'http://127.0.0.1:3000'
+        'http://127.0.0.1:3000',
+        `http://${localIp}:5173`,
+        `http://${localIp}:3000`
     ];
 
     app.use(cors({
         origin: (origin, callback) => {
             // Allow requests with no origin (like mobile apps or curl)
             if (!origin) return callback(null, true);
-            if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+
+            // Check if origin is in allowed list or is from local IP range
+            const isAllowed = allowedOrigins.indexOf(origin) !== -1 ||
+                origin.includes('localhost') ||
+                origin.includes('127.0.0.1') ||
+                (localIp !== 'localhost' && origin.includes(localIp));
+
+            if (isAllowed || process.env.NODE_ENV !== 'production') {
                 callback(null, true);
             } else {
                 console.warn(`[Security] Blocked CORS request from: ${origin}`);
                 callback(new Error('Not allowed by CORS'));
             }
-        }
+        },
+        credentials: true
     }));
 
     app.use(express.json())
 
     // 🛡️ SECURITY HARDENING: Admin Authorization Middleware
     const requireAdmin = (req, res, next) => {
+        // In local development/electron context, we might allow it if it's from localhost
+        const isLocal = req.ip === '127.0.0.1' || req.ip === '::1' || req.ip.includes('localhost');
+
         const secretKey = process.env.ADMIN_SECRET_KEY || 'pos2025-admin-secret-key';
         const clientKey = req.headers['x-admin-secret'];
 
         if (clientKey === secretKey) {
+            next();
+        } else if (process.env.NODE_ENV !== 'production' && isLocal) {
+            // Allow local access without secret in dev mode for convenience
             next();
         } else {
             console.warn(`[Security] Unauthorized Admin Access Attempt - IP: ${req.ip}`);
