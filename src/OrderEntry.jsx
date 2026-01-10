@@ -64,6 +64,26 @@ const OrderEntry = () => {
         loadData();
     }, []);
 
+    // Mobile Drawer Back Button Handling
+    useEffect(() => {
+        if (isCartOpen) {
+            // Push a dummy state when drawer opens
+            window.history.pushState({ drawer: 'open' }, '');
+
+            const handlePopState = () => {
+                // When back button pressed, close drawer
+                setIsCartOpen(false);
+            };
+
+            window.addEventListener('popstate', handlePopState);
+            return () => {
+                window.removeEventListener('popstate', handlePopState);
+                // If unmounting while open, we might want to cleanup... 
+                // but usually React routing handles this.
+            };
+        }
+    }, [isCartOpen]);
+
     // Socket listener for real-time order status updates
     useEffect(() => {
         socket.on('order-ready', (data) => {
@@ -320,6 +340,17 @@ const OrderEntry = () => {
         }
     };
 
+    const handleCallStaff = async () => {
+        if (storeStatus.status === 'closed') return alert('ร้านปิดแล้วครับ');
+        try {
+            await api.callBill(tableId);
+            alert('🔔 เรียกพนักงานเรียบร้อยครับ กรุณารอสักครู่');
+        } catch (error) {
+            console.error(error);
+            alert('ไม่สามารถเรียกพนักงานได้');
+        }
+    };
+
     const cartTotal = cart.reduce((sum, item) => sum + ((item.unitPrice || item.price) * item.quantity), 0);
     const orderedTotal = orderedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const totalAmount = cartTotal + orderedTotal;
@@ -437,7 +468,9 @@ const OrderEntry = () => {
                 discountAmount: validDiscount,
                 taxRate: parseFloat(settings.tax_rate) || 0,
                 paymentMethod,
-                depositAmount: paidDeposit // Send deposit amount if needed for ledger
+                depositAmount: paidDeposit, // Send deposit amount if needed for ledger
+                couponCode: appliedCoupon?.coupon_code,
+                couponDetails: appliedCoupon
             });
 
             if (res.success) {
@@ -698,8 +731,21 @@ const OrderEntry = () => {
                             <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Order #{activeOrderId || 'NEW'}</p>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={handleEditOrder} className="p-2 text-slate-400 hover:text-orange-500 transition-colors" title="แก้ไขโต๊ะ"><span className="text-xl">✏️</span></button>
-                            <button onClick={handleDeleteOrder} className="p-2 text-slate-400 hover:text-red-500 transition-colors" title="ลบออเดอร์"><span className="text-xl">🗑️</span></button>
+                            {/* Mobile Close Drawer Button */}
+                            <button
+                                onClick={() => setIsCartOpen(false)}
+                                className="md:hidden p-2 text-slate-400 hover:text-slate-600 transition-colors bg-slate-100 rounded-full"
+                            >
+                                <span className="text-xl">✕</span>
+                            </button>
+
+                            {/* Only show Edit/Delete for Staff */}
+                            {!isCustomer && (
+                                <>
+                                    <button onClick={handleEditOrder} className="p-2 text-slate-400 hover:text-orange-500 transition-colors" title="แก้ไขโต๊ะ"><span className="text-xl">✏️</span></button>
+                                    <button onClick={handleDeleteOrder} className="p-2 text-slate-400 hover:text-red-500 transition-colors" title="ลบออเดอร์"><span className="text-xl">🗑️</span></button>
+                                </>
+                            )}
                         </div>
                     </div>
 
@@ -765,14 +811,22 @@ const OrderEntry = () => {
                                                 <span className="text-xs font-bold text-slate-400 w-6">{item.quantity}x</span>
                                                 <span className="text-sm font-bold text-slate-700 line-clamp-1 group-hover:text-orange-600 transition-colors">{item.product_name}</span>
                                             </div>
-                                            <span className="text-sm font-bold text-slate-900">฿{(item.price * item.quantity).toLocaleString()}</span>
+                                            {/* Show Total Price including options */}
+                                            <span className="text-sm font-bold text-slate-900">
+                                                ฿{((parseFloat(item.price) + (item.options?.reduce((sum, opt) => sum + parseFloat(opt.price_modifier || 0), 0) || 0)) * item.quantity).toLocaleString()}
+                                            </span>
                                         </div>
+                                        {/* Show Base Price + Options Breakdown if options exist */}
                                         {item.options && item.options.length > 0 && (
                                             <div className="pl-9 space-y-0.5">
+                                                {/* <p className="text-[9px] text-slate-400">Base: ฿{parseFloat(item.price).toLocaleString()}</p> */}
                                                 {item.options.map((opt, oIdx) => (
-                                                    <p key={oIdx} className="text-[10px] text-orange-500 font-medium flex items-center gap-1">
-                                                        <span className="w-1 h-1 rounded-full bg-orange-400"></span>
-                                                        {opt.option_name || opt.name}
+                                                    <p key={oIdx} className="text-[10px] text-orange-500 font-medium flex items-center justify-between gap-1 pr-1">
+                                                        <span className="flex items-center gap-1">
+                                                            <span className="w-1 h-1 rounded-full bg-orange-400"></span>
+                                                            {opt.option_name || opt.name}
+                                                        </span>
+                                                        {parseFloat(opt.price_modifier) > 0 && <span>+฿{parseFloat(opt.price_modifier).toLocaleString()}</span>}
                                                     </p>
                                                 ))}
                                             </div>
@@ -810,56 +864,60 @@ const OrderEntry = () => {
                         )}
                     </div>
 
-                    {/* Payment Summary */}
-                    <section className="border-t border-slate-100 pt-6 space-y-3">
-                        <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest">
-                            <span>Subtotal</span>
-                            <span>฿{totalAmount.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest">
-                            <span>Tax (7%)</span>
-                            <span>฿0.00</span>
-                        </div>
-                        <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-50 pb-3">
-                            <span>Service Charge</span>
-                            <span>฿0.00</span>
-                        </div>
-                        <div className="flex justify-between items-center py-2">
-                            <span className="text-lg font-bold text-slate-900 font-heading uppercase">Total Payable</span>
-                            <span className="text-3xl font-bold text-slate-900 tracking-tighter">฿{totalAmount.toLocaleString()}</span>
-                        </div>
-                    </section>
+                    {/* Payment Summary - Hide for Customer */}
+                    {!isCustomer && (
+                        <>
+                            <section className="border-t border-slate-100 pt-6 space-y-3">
+                                <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                    <span>Subtotal</span>
+                                    <span>฿{totalAmount.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                    <span>Tax (7%)</span>
+                                    <span>฿0.00</span>
+                                </div>
+                                <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-50 pb-3">
+                                    <span>Service Charge</span>
+                                    <span>฿0.00</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2">
+                                    <span className="text-lg font-bold text-slate-900 font-heading uppercase">Total Payable</span>
+                                    <span className="text-3xl font-bold text-slate-900 tracking-tighter">฿{totalAmount.toLocaleString()}</span>
+                                </div>
+                            </section>
 
-                    {/* Payment Method */}
-                    <section className="mt-6 mb-8">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">วิธีชำระเงิน</p>
-                        <div className="grid grid-cols-3 gap-3">
-                            <button
-                                onClick={() => setPaymentMethod('cash')}
-                                className={`flex flex-col items-center gap-2 p-3 rounded-[20px] transition-all border ${paymentMethod === 'cash' ? 'bg-white border-orange-200 shadow-md ring-1 ring-orange-500/10 text-orange-500' : 'bg-[#F8FAFC] border-transparent text-slate-400'}`}
-                            >
-                                <span className="text-xl">💵</span>
-                                <span className="text-[9px] font-bold uppercase tracking-widest">เงินสด</span>
-                            </button>
-                            <button
-                                onClick={() => setPaymentMethod('half')}
-                                className={`flex flex-col items-center gap-2 p-3 rounded-[20px] transition-all border ${paymentMethod === 'half' ? 'bg-white border-blue-200 shadow-md ring-1 ring-blue-500/10 text-blue-500' : 'bg-[#F8FAFC] border-transparent text-slate-400'}`}
-                            >
-                                <span className="text-xl">🏛️</span>
-                                <span className="text-[8px] font-bold uppercase tracking-widest leading-tight text-center">คนละครึ่ง</span>
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setPaymentMethod('transfer');
-                                    setShowQRModal(true);
-                                }}
-                                className={`flex flex-col items-center gap-2 p-3 rounded-[20px] transition-all border ${paymentMethod === 'transfer' ? 'bg-white border-purple-200 shadow-md ring-1 ring-purple-500/10 text-purple-500' : 'bg-[#F8FAFC] border-transparent text-slate-400'}`}
-                            >
-                                <span className="text-xl">📲</span>
-                                <span className="text-[8px] font-bold uppercase tracking-widest leading-tight text-center">Scan QR</span>
-                            </button>
-                        </div>
-                    </section>
+                            {/* Payment Method */}
+                            <section className="mt-6 mb-8">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">วิธีชำระเงิน</p>
+                                <div className="grid grid-cols-3 gap-3">
+                                    <button
+                                        onClick={() => setPaymentMethod('cash')}
+                                        className={`flex flex-col items-center gap-2 p-3 rounded-[20px] transition-all border ${paymentMethod === 'cash' ? 'bg-white border-orange-200 shadow-md ring-1 ring-orange-500/10 text-orange-500' : 'bg-[#F8FAFC] border-transparent text-slate-400'}`}
+                                    >
+                                        <span className="text-xl">💵</span>
+                                        <span className="text-[9px] font-bold uppercase tracking-widest">เงินสด</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setPaymentMethod('half')}
+                                        className={`flex flex-col items-center gap-2 p-3 rounded-[20px] transition-all border ${paymentMethod === 'half' ? 'bg-white border-blue-200 shadow-md ring-1 ring-blue-500/10 text-blue-500' : 'bg-[#F8FAFC] border-transparent text-slate-400'}`}
+                                    >
+                                        <span className="text-xl">🏛️</span>
+                                        <span className="text-[8px] font-bold uppercase tracking-widest leading-tight text-center">คนละครึ่ง</span>
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setPaymentMethod('transfer');
+                                            setShowQRModal(true);
+                                        }}
+                                        className={`flex flex-col items-center gap-2 p-3 rounded-[20px] transition-all border ${paymentMethod === 'transfer' ? 'bg-white border-purple-200 shadow-md ring-1 ring-purple-500/10 text-purple-500' : 'bg-[#F8FAFC] border-transparent text-slate-400'}`}
+                                    >
+                                        <span className="text-xl">📲</span>
+                                        <span className="text-[8px] font-bold uppercase tracking-widest leading-tight text-center">Scan QR</span>
+                                    </button>
+                                </div>
+                            </section>
+                        </>
+                    )}
 
                     {/* Footer Buttons */}
                     <div className="flex gap-3">
@@ -870,17 +928,23 @@ const OrderEntry = () => {
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                         </button>
                         <button
-                            onClick={activeOrderId && cart.length === 0 ? handlePaymentClick : submitOrder}
-                            disabled={storeStatus.status === 'closed' || storeStatus.status === 'last_order'}
+                            onClick={
+                                isCustomer
+                                    ? (cart.length > 0 ? submitOrder : handleCallStaff)
+                                    : (activeOrderId && cart.length === 0 ? handlePaymentClick : submitOrder)
+                            }
+                            disabled={storeStatus.status === 'closed' || (storeStatus.status === 'last_order' && cart.length > 0)}
                             className={`flex-1 h-14 rounded-[20px] text-white font-bold text-sm uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-2
-                                ${storeStatus.status === 'closed' || storeStatus.status === 'last_order'
+                                ${storeStatus.status === 'closed' || (storeStatus.status === 'last_order' && cart.length > 0)
                                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed grayscale'
                                     : 'bg-[#00A099] shadow-[#00A099]/20 hover:scale-[1.02] active:scale-95'}`}
                         >
-                            <span className="text-lg">{(storeStatus.status === 'closed' || storeStatus.status === 'last_order') ? '🚫' : '⚡'}</span>
-                            {(storeStatus.status === 'closed' || storeStatus.status === 'last_order')
+                            <span className="text-lg">{(storeStatus.status === 'closed') ? '🚫' : (isCustomer && cart.length === 0) ? '🔔' : '⚡'}</span>
+                            {(storeStatus.status === 'closed')
                                 ? 'Store Closed'
-                                : activeOrderId && cart.length === 0 ? 'Collect Payment' : activeOrderId ? 'Update Order' : 'Place Order'}
+                                : isCustomer
+                                    ? (cart.length > 0 ? 'ยืนยันออเดอร์ (Place Order)' : 'เรียกพนักงาน (Call Staff)')
+                                    : (activeOrderId && cart.length === 0 ? 'Collect Payment' : activeOrderId ? 'Update Order' : 'Place Order')}
                         </button>
                     </div>
                 </div>
@@ -901,14 +965,23 @@ const OrderEntry = () => {
                     </div>
                 </div>
                 <button
-                    onClick={submitOrder}
-                    disabled={storeStatus.status === 'closed' || storeStatus.status === 'last_order'}
+                    onClick={
+                        isCustomer
+                            ? (cart.length > 0 ? submitOrder : handleCallStaff)
+                            : submitOrder
+                    }
+                    disabled={storeStatus.status === 'closed' || (storeStatus.status === 'last_order' && cart.length > 0)}
                     className={`px-8 py-3 rounded-[20px] font-bold text-xs uppercase tracking-widest shadow-lg transition-all
-                        ${storeStatus.status === 'closed' || storeStatus.status === 'last_order'
+                        ${storeStatus.status === 'closed' || (storeStatus.status === 'last_order' && cart.length > 0)
                             ? 'bg-slate-200 text-slate-400 cursor-not-allowed grayscale'
                             : 'bg-[#00A099] text-white shadow-[#00A099]/20 active:scale-95'}`}
                 >
-                    {(storeStatus.status === 'closed' || storeStatus.status === 'last_order') ? 'Closed' : 'Confirm'}
+                    {(storeStatus.status === 'closed')
+                        ? 'Closed'
+                        : isCustomer
+                            ? (cart.length > 0 ? 'Confirm' : 'Call Staff')
+                            : 'Confirm'
+                    }
                 </button>
             </div>
 
@@ -1066,12 +1139,27 @@ const OrderEntry = () => {
                                 <p className="text-[10px] text-green-600 font-bold mt-1">
                                     (รวมส่วนลดคูปอง -฿{finals.couponDiscount})
                                 </p>
-                            ) : appliedCoupon && (
-                                <p className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center justify-center gap-1">
-                                    <span>🎁</span> Reward Ready
-                                </p>
                             )}
                         </div>
+
+                        {/* Order Details for QR Payment */}
+                        {finalToPay > 0 && (
+                            <div className="bg-slate-50 rounded-xl p-3 mb-4 text-left border border-slate-100">
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">Order Summary</p>
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-slate-600">Subtotal</span>
+                                        <span className="font-bold">฿{finals.subtotal.toLocaleString()}</span>
+                                    </div>
+                                    {finals.couponDiscount > 0 && (
+                                        <div className="flex justify-between text-xs text-green-600">
+                                            <span>Coupon ({appliedCoupon?.coupon_code})</span>
+                                            <span className="font-bold">-฿{finals.couponDiscount.toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Coupon Section inside QR Modal for Convenience */}
                         <div className="mb-4 text-left">

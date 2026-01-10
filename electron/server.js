@@ -1598,16 +1598,22 @@ async function startServer() {
     // Pay / Clear Bill
     app.post('/api/orders/:id/pay', async (req, res) => {
         const { id } = req.params;
-        const { paymentMethod } = req.body;
+        const { paymentMethod, couponCode, couponDetails } = req.body;
         const client = await pool.connect();
 
         try {
             await client.query('BEGIN');
 
-            // 1. Mark order as paid
+            // 1. Mark order as paid and save coupon info
             await client.query(
-                "UPDATE orders SET status = 'paid', payment_method = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
-                [paymentMethod || 'cash', id]
+                `UPDATE orders 
+                     SET status = 'paid', 
+                         payment_method = $1, 
+                         updated_at = CURRENT_TIMESTAMP,
+                         coupon_code = $3,
+                         coupon_details = $4
+                     WHERE id = $2`,
+                [paymentMethod || 'cash', id, couponCode || null, couponDetails ? JSON.stringify(couponDetails) : null]
             );
 
             // 2. Get table name, customer info, and linked reservation
@@ -2006,6 +2012,24 @@ async function startServer() {
         const { id } = req.params;
         try {
             await query("DELETE FROM map_objects WHERE id = $1", [id]);
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Call Bill / Call Staff Endpoint
+    app.post('/api/tables/:id/call-bill', async (req, res) => {
+        const { id } = req.params;
+        try {
+            // Notification: Call Staff
+            createNotification(
+                `🔔 โต๊ะ ${id} เรียกพนักงาน`,
+                `ลูกค้าที่โต๊ะ ${id} กดเรียกพนักงาน (หรือเรียกเช็คบิล)`,
+                'info',
+                { tableId: id }
+            );
             res.json({ success: true });
         } catch (err) {
             console.error(err);
