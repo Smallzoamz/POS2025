@@ -11,7 +11,32 @@ const { pool, query, initDatabasePG, updateCustomerProfile } = require('./db_pg'
 const { initBirthdayScheduler, checkBirthdaysManually } = require('./birthdayScheduler')
 const { initWinbackScheduler, checkWinbackManually } = require('./winbackScheduler')
 
+// Utility: Get Local IP (Prioritize common LAN ranges and ignore virtual adapters)
+const getLocalIp = () => {
+    const interfaces = os.networkInterfaces();
+    const ips = [];
 
+    for (const devName in interfaces) {
+        // Ignore common virtual/loopback adapter names
+        if (devName.toLowerCase().includes('virtual') ||
+            devName.toLowerCase().includes('loopback') ||
+            devName.toLowerCase().includes('radmin') ||
+            devName.toLowerCase().includes('hamachi') ||
+            devName.toLowerCase().includes('wsl')) continue;
+
+        const iface = interfaces[devName];
+        for (let i = 0; i < iface.length; i++) {
+            const alias = iface[i];
+            if (alias.family === 'IPv4' && !alias.internal) {
+                ips.push(alias.address);
+            }
+        }
+    }
+
+    // Prioritize 192.168 or 10.0 ranges (most common for routers)
+    const bestIp = ips.find(ip => ip.startsWith('192.168.') || ip.startsWith('10.')) || ips[0] || 'localhost';
+    return bestIp;
+};
 
 async function startServer() {
     // Initialize PostgreSQL (Primary)
@@ -87,32 +112,6 @@ async function startServer() {
     let cloudUrl = null;
     let isLaunchingCloud = false;
 
-    // Utility: Get Local IP (Prioritize common LAN ranges and ignore virtual adapters)
-    const getLocalIp = () => {
-        const interfaces = os.networkInterfaces();
-        const ips = [];
-
-        for (const devName in interfaces) {
-            // Ignore common virtual/loopback adapter names
-            if (devName.toLowerCase().includes('virtual') ||
-                devName.toLowerCase().includes('loopback') ||
-                devName.toLowerCase().includes('radmin') ||
-                devName.toLowerCase().includes('hamachi') ||
-                devName.toLowerCase().includes('wsl')) continue;
-
-            const iface = interfaces[devName];
-            for (let i = 0; i < iface.length; i++) {
-                const alias = iface[i];
-                if (alias.family === 'IPv4' && !alias.internal) {
-                    ips.push(alias.address);
-                }
-            }
-        }
-
-        // Prioritize 192.168 or 10.0 ranges (most common for routers)
-        const bestIp = ips.find(ip => ip.startsWith('192.168.') || ip.startsWith('10.')) || ips[0] || 'localhost';
-        return bestIp;
-    };
 
     // Serve Static Files (Frontend) - Build output
     const distPath = path.join(__dirname, '../dist');
