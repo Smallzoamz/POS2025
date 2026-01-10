@@ -25,14 +25,46 @@ async function startServer() {
     const app = express()
     const port = process.env.PORT || 3000 // Use dynamic port for Render
 
-    // Log all requests for debugging
     app.use((req, res, next) => {
         console.log(`[REQ] ${req.method} ${req.url}`);
         next();
     });
 
-    app.use(cors())
+    // 🛡️ SECURITY HARDENING: Tighter CORS Policy
+    const allowedOrigins = [
+        'http://localhost:5173', // Vite Dev
+        'http://localhost:3000', // Electron Prod
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:3000'
+    ];
+
+    app.use(cors({
+        origin: (origin, callback) => {
+            // Allow requests with no origin (like mobile apps or curl)
+            if (!origin) return callback(null, true);
+            if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+                callback(null, true);
+            } else {
+                console.warn(`[Security] Blocked CORS request from: ${origin}`);
+                callback(new Error('Not allowed by CORS'));
+            }
+        }
+    }));
+
     app.use(express.json())
+
+    // 🛡️ SECURITY HARDENING: Admin Authorization Middleware
+    const requireAdmin = (req, res, next) => {
+        const secretKey = process.env.ADMIN_SECRET_KEY || 'pos2025-admin-secret-key';
+        const clientKey = req.headers['x-admin-secret'];
+
+        if (clientKey === secretKey) {
+            next();
+        } else {
+            console.warn(`[Security] Unauthorized Admin Access Attempt - IP: ${req.ip}`);
+            res.status(401).json({ error: 'Unauthorized Access: Invalid Admin Secret Key' });
+        }
+    };
 
     let tunnel = null;
     let cloudUrl = null;
@@ -504,7 +536,7 @@ async function startServer() {
     // =====================================================
 
     // Manual trigger birthday check (for admin testing)
-    app.post('/api/admin/trigger-birthday-check', async (req, res) => {
+    app.post('/api/admin/trigger-birthday-check', requireAdmin, async (req, res) => {
         try {
             console.log('[Admin] Manual birthday check triggered');
             const results = await checkBirthdaysManually();
@@ -521,7 +553,7 @@ async function startServer() {
     });
 
     // Get customers with birthdays this month
-    app.get('/api/admin/birthday-customers', async (req, res) => {
+    app.get('/api/admin/birthday-customers', requireAdmin, async (req, res) => {
         try {
             const currentMonth = new Date().getMonth() + 1;
             const currentYear = new Date().getFullYear();
@@ -556,7 +588,7 @@ async function startServer() {
     });
 
     // Get all birthday coupons
-    app.get('/api/admin/birthday-coupons', async (req, res) => {
+    app.get('/api/admin/birthday-coupons', requireAdmin, async (req, res) => {
         try {
             const result = await query(`
                 SELECT 
@@ -586,7 +618,7 @@ async function startServer() {
     // =====================================================
 
     // Manual trigger win-back check (for admin testing)
-    app.post('/api/admin/trigger-winback-check', async (req, res) => {
+    app.post('/api/admin/trigger-winback-check', requireAdmin, async (req, res) => {
         try {
             console.log('[Admin] Manual win-back check triggered');
             const results = await checkWinbackManually();
@@ -603,7 +635,7 @@ async function startServer() {
     });
 
     // Get inactive customers (potential win-back targets)
-    app.get('/api/admin/inactive-customers', async (req, res) => {
+    app.get('/api/admin/inactive-customers', requireAdmin, async (req, res) => {
         try {
             // Get settings
             const settingsRes = await query(`
@@ -648,7 +680,7 @@ async function startServer() {
     });
 
     // Get all win-back coupons
-    app.get('/api/admin/winback-coupons', async (req, res) => {
+    app.get('/api/admin/winback-coupons', requireAdmin, async (req, res) => {
         try {
             const result = await query(`
                 SELECT 
@@ -673,8 +705,13 @@ async function startServer() {
         }
     });
 
-    // DEBUG: Get schema info for troubleshooting
-    app.get('/api/debug/schema/:table', async (req, res) => {
+    // DEBUG: Get schema info for troubleshooting (Development Only)
+    app.get('/api/debug/schema/:table', (req, res, next) => {
+        if (process.env.NODE_ENV === 'production') {
+            return res.status(403).json({ error: 'Forbidden: Debug routes disabled in production' });
+        }
+        next();
+    }, requireAdmin, async (req, res) => {
         try {
             const { table } = req.params;
             const result = await query(`
@@ -777,7 +814,7 @@ async function startServer() {
     });
 
     // Add Product
-    app.post('/api/products', async (req, res) => {
+    app.post('/api/products', requireAdmin, async (req, res) => {
         const { name, price, category_id, image, track_stock, stock_quantity, is_recommended } = req.body;
         try {
             const result = await query(
@@ -841,7 +878,7 @@ async function startServer() {
     });
 
     // Update Product
-    app.put('/api/products/:id', async (req, res) => {
+    app.put('/api/products/:id', requireAdmin, async (req, res) => {
         const { name, price, category_id, image, is_available, track_stock, stock_quantity, is_recommended } = req.body;
         const { id } = req.params;
         try {
@@ -859,7 +896,7 @@ async function startServer() {
     });
 
     // Delete Product
-    app.delete('/api/products/:id', async (req, res) => {
+    app.delete('/api/products/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
         try {
             await query('DELETE FROM products WHERE id = $1', [id]);
@@ -873,7 +910,7 @@ async function startServer() {
     });
 
     // Add Category
-    app.post('/api/categories', async (req, res) => {
+    app.post('/api/categories', requireAdmin, async (req, res) => {
         const { id, name, icon, sort_order } = req.body;
         try {
             await query('INSERT INTO categories (id, name, icon, sort_order) VALUES ($1, $2, $3, $4)', [id, name, icon, sort_order || 0]);
@@ -887,7 +924,7 @@ async function startServer() {
     });
 
     // Delete Category
-    app.delete('/api/categories/:id', async (req, res) => {
+    app.delete('/api/categories/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
         try {
             await query('DELETE FROM categories WHERE id = $1', [id]);
@@ -903,7 +940,7 @@ async function startServer() {
     // =====================================================
     // MANUAL MENU SYNC (Backup button for website sync)
     // =====================================================
-    app.post('/api/sync-menu-to-website', async (req, res) => {
+    app.post('/api/sync-menu-to-website', requireAdmin, async (req, res) => {
         try {
             const result = await syncMenuToWebsite();
             if (result.success) {
@@ -934,7 +971,7 @@ async function startServer() {
     });
 
     // Add Option to Product
-    app.post('/api/products/:id/options', async (req, res) => {
+    app.post('/api/products/:id/options', requireAdmin, async (req, res) => {
         const { id } = req.params;
         const { name, price_modifier, is_size_option, stock_quantity, is_available, sort_order, recipe_multiplier } = req.body;
         try {
@@ -951,7 +988,7 @@ async function startServer() {
     });
 
     // Update Option
-    app.put('/api/product-options/:id', async (req, res) => {
+    app.put('/api/product-options/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
         const { name, price_modifier, is_size_option, stock_quantity, is_available, sort_order, recipe_multiplier } = req.body;
         try {
@@ -967,7 +1004,7 @@ async function startServer() {
     });
 
     // Delete Option
-    app.delete('/api/product-options/:id', async (req, res) => {
+    app.delete('/api/product-options/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
         try {
             await query('DELETE FROM product_options WHERE id = $1', [id]);
@@ -1000,7 +1037,7 @@ async function startServer() {
     });
 
     // Save/Update Recipe for an Option
-    app.post('/api/option-recipes/:optionId', async (req, res) => {
+    app.post('/api/option-recipes/:optionId', requireAdmin, async (req, res) => {
         const { optionId } = req.params;
         const { ingredients } = req.body; // Array of { ingredient_id, quantity_used }
         const client = await pool.connect();
@@ -1067,7 +1104,7 @@ async function startServer() {
     });
 
     // Create Global Option
-    app.post('/api/global-options', async (req, res) => {
+    app.post('/api/global-options', requireAdmin, async (req, res) => {
         const { name, price_modifier, is_size_option, stock_quantity, recipe_multiplier, category_ids } = req.body;
         const client = await pool.connect();
         try {
@@ -1103,7 +1140,7 @@ async function startServer() {
     });
 
     // Update Global Option
-    app.put('/api/global-options/:id', async (req, res) => {
+    app.put('/api/global-options/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
         const { name, price_modifier, is_size_option, stock_quantity, recipe_multiplier, is_active, category_ids } = req.body;
         const client = await pool.connect();
@@ -1139,7 +1176,7 @@ async function startServer() {
     });
 
     // Delete Global Option
-    app.delete('/api/global-options/:id', async (req, res) => {
+    app.delete('/api/global-options/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
         try {
             await query('DELETE FROM global_options WHERE id = $1', [id]);
@@ -1169,7 +1206,7 @@ async function startServer() {
     });
 
     // Save Global Option Recipe
-    app.post('/api/global-option-recipes/:optionId', async (req, res) => {
+    app.post('/api/global-option-recipes/:optionId', requireAdmin, async (req, res) => {
         const { optionId } = req.params;
         const { items } = req.body; // Array of { ingredient_id, quantity_used, unit }
 
@@ -1309,7 +1346,7 @@ async function startServer() {
     });
 
     // DELETE /api/orders/:id - Cancel/Delete Order
-    app.delete('/api/orders/:id', async (req, res) => {
+    app.delete('/api/orders/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
         const client = await pool.connect();
         try {
@@ -1344,7 +1381,7 @@ async function startServer() {
     });
 
     // PATCH /api/orders/:id - Update Order Metadata (e.g. Change Table)
-    app.patch('/api/orders/:id', async (req, res) => {
+    app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
         const { table_name } = req.body;
         const client = await pool.connect();
@@ -1383,7 +1420,7 @@ async function startServer() {
 
     // Get Sales History (Paid Orders) with Optional Filters
     // MOVED ABOVE generic /:tableName to avoid shadowing conflict
-    app.get('/api/orders/history', async (req, res) => {
+    app.get('/api/orders/history', requireAdmin, async (req, res) => {
         const { startDate, endDate } = req.query;
         console.log(`[History API] Fetching range: ${startDate} to ${endDate}`);
         try {
@@ -1581,7 +1618,7 @@ async function startServer() {
 
 
     // Get Dashboard Stats
-    app.get('/api/dashboard', async (req, res) => {
+    app.get('/api/dashboard', requireAdmin, async (req, res) => {
         try {
             // 1. Total Revenue Today (Combined In-store and LINE)
             const inStoreRes = await query("SELECT SUM(total_amount) as total FROM orders WHERE status = 'paid' AND (updated_at AT TIME ZONE 'Asia/Bangkok')::date = CURRENT_DATE");
@@ -3837,7 +3874,7 @@ async function startServer() {
     });
 
     // Get users with rider role (for assigning riders)
-    app.get('/api/riders', async (req, res) => {
+    app.get('/api/riders', requireAdmin, async (req, res) => {
         try {
             const result = await query("SELECT id, name, full_name FROM users WHERE role IN ('rider', 'staff', 'admin', 'owner')");
             res.json(result.rows);
@@ -3850,7 +3887,7 @@ async function startServer() {
     // --- LOYALTY & PROMOTIONS APIs ---
 
     // Search Loyalty Customers
-    app.get('/api/admin/loyalty/customers', async (req, res) => {
+    app.get('/api/admin/loyalty/customers', requireAdmin, async (req, res) => {
         const { query: q } = req.query;
         if (!q) return res.json([]);
         try {
@@ -3869,7 +3906,7 @@ async function startServer() {
     });
 
     // Link customer to order
-    app.post('/api/orders/:id/link-customer', async (req, res) => {
+    app.post('/api/orders/:id/link-customer', requireAdmin, async (req, res) => {
         const { id } = req.params;
         const { customerId } = req.body;
         try {
@@ -4026,7 +4063,7 @@ async function startServer() {
         }
     });
 
-    app.post('/api/loyalty/coupons/verify', async (req, res) => {
+    app.post('/api/loyalty/coupons/verify', requireAdmin, async (req, res) => {
         const { code } = req.body;
         try {
             const result = await query(`
@@ -4047,7 +4084,7 @@ async function startServer() {
     });
 
     // POS: Use Coupon
-    app.post('/api/loyalty/coupons/use', async (req, res) => {
+    app.post('/api/loyalty/coupons/use', requireAdmin, async (req, res) => {
         const { code, orderId, lineOrderId } = req.body;
         try {
             const result = await query(`
@@ -4072,7 +4109,7 @@ async function startServer() {
     });
 
     // ADMIN: Management Promotions
-    app.get('/api/admin/loyalty/promotions', async (req, res) => {
+    app.get('/api/admin/loyalty/promotions', requireAdmin, async (req, res) => {
         try {
             const result = await query('SELECT * FROM loyalty_promotions ORDER BY created_at DESC');
             res.json(result.rows);
@@ -4081,7 +4118,7 @@ async function startServer() {
         }
     });
 
-    app.post('/api/admin/loyalty/promotions', async (req, res) => {
+    app.post('/api/admin/loyalty/promotions', requireAdmin, async (req, res) => {
         const { title, description, pointsRequired, imageUrl, startDate, endDate } = req.body;
         // Convert empty strings to null for DATE columns
         const finalStartDate = startDate === '' ? null : startDate;
@@ -4100,7 +4137,7 @@ async function startServer() {
         }
     });
 
-    app.put('/api/admin/loyalty/promotions/:id', async (req, res) => {
+    app.put('/api/admin/loyalty/promotions/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
         const { title, description, pointsRequired, imageUrl, startDate, endDate, isActive } = req.body;
         // Convert empty strings to null for DATE columns
@@ -4121,7 +4158,7 @@ async function startServer() {
         }
     });
 
-    app.delete('/api/admin/loyalty/promotions/:id', async (req, res) => {
+    app.delete('/api/admin/loyalty/promotions/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
         try {
             await query('DELETE FROM loyalty_promotions WHERE id = $1', [id]);
