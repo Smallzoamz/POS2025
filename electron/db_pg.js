@@ -852,6 +852,46 @@ const initDatabasePG = async () => {
             console.error('Migration 21 error:', migrationErr21.message);
         }
 
+        // --- MIGRATION 22: Win-Back System ---
+        try {
+            console.log('📦 Running Migration 22: Win-Back System...');
+            // Add last_order_at to track customer's last purchase
+            await client.query(`
+                ALTER TABLE loyalty_customers 
+                ADD COLUMN IF NOT EXISTS last_order_at TIMESTAMPTZ
+            `);
+            // Add winback_sent_at to prevent sending too frequently
+            await client.query(`
+                ALTER TABLE loyalty_customers 
+                ADD COLUMN IF NOT EXISTS winback_sent_at TIMESTAMPTZ
+            `);
+            console.log('✅ Migration 22: Win-Back System columns added');
+        } catch (migrationErr22) {
+            console.error('Migration 22 error:', migrationErr22.message);
+        }
+
+        // Win-Back Settings Defaults
+        const winbackInactiveDaysRes = await client.query("SELECT COUNT(*) FROM settings WHERE key = $1", ['winback_inactive_days']);
+        if (winbackInactiveDaysRes.rows[0].count == 0) {
+            await client.query("INSERT INTO settings (key, value) VALUES ($1, $2)", ['winback_inactive_days', '45']);
+            console.log('Added winback_inactive_days setting');
+        }
+        const winbackDiscountRes = await client.query("SELECT COUNT(*) FROM settings WHERE key = $1", ['winback_discount_percent']);
+        if (winbackDiscountRes.rows[0].count == 0) {
+            await client.query("INSERT INTO settings (key, value) VALUES ($1, $2)", ['winback_discount_percent', '10']);
+            console.log('Added winback_discount_percent setting');
+        }
+        const winbackCooldownRes = await client.query("SELECT COUNT(*) FROM settings WHERE key = $1", ['winback_cooldown_days']);
+        if (winbackCooldownRes.rows[0].count == 0) {
+            await client.query("INSERT INTO settings (key, value) VALUES ($1, $2)", ['winback_cooldown_days', '90']);
+            console.log('Added winback_cooldown_days setting');
+        }
+        const winbackValidRes = await client.query("SELECT COUNT(*) FROM settings WHERE key = $1", ['winback_coupon_valid_days']);
+        if (winbackValidRes.rows[0].count == 0) {
+            await client.query("INSERT INTO settings (key, value) VALUES ($1, $2)", ['winback_coupon_valid_days', '30']);
+            console.log('Added winback_coupon_valid_days setting');
+        }
+
         // Final Commit for all migrations and seeds
         // await client.query('COMMIT'); // Removed to avoid double commit if line 329 already committed
     } catch (e) {

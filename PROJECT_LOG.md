@@ -102,3 +102,16 @@
 - [2026-01-10 13:38:00] | File: electron/server.js | Line: 520 | Keyword: /api/admin/birthday-customers | Status: Created | Change: Added Admin API to list customers with birthdays this month.
 - [2026-01-10 13:38:00] | File: electron/server.js | Line: 555 | Keyword: /api/admin/birthday-coupons | Status: Created | Change: Added Admin API to list all birthday coupons.
 
+## 🎣 Win-Back System (Plan 3)
+
+### 2026-01-10
+- [2026-01-10 15:16:00] | File: electron/db_pg.js | Line: 855 | Keyword: Migration 22 | Status: Created | Change: Added Migration 22 for Win-Back System (last_order_at, winback_sent_at columns in loyalty_customers).
+- [2026-01-10 15:16:00] | File: electron/db_pg.js | Line: 875 | Keyword: winback_settings | Status: Created | Change: Added default settings (winback_inactive_days, winback_discount_percent, winback_cooldown_days, winback_coupon_valid_days).
+- [2026-01-10 15:17:00] | File: electron/winbackScheduler.js | Line: 0 | Keyword: winbackScheduler | Status: Created | Change: Created Win-Back Scheduler module with node-cron (10AM daily), LINE Flex Message, and coupon generation for inactive customers.
+- [2026-01-10 15:18:00] | File: electron/server.js | Line: 12 | Keyword: import | Status: Edited | Change: Added import for winbackScheduler module.
+- [2026-01-10 15:18:00] | File: electron/server.js | Line: 84 | Keyword: initWinbackScheduler | Status: Created | Change: Initialize win-back scheduler on server start with pool and io.
+- [2026-01-10 15:19:00] | File: electron/server.js | Line: 588 | Keyword: /api/admin/trigger-winback-check | Status: Created | Change: Added Admin API for manual win-back check trigger.
+- [2026-01-10 15:19:00] | File: electron/server.js | Line: 606 | Keyword: /api/admin/inactive-customers | Status: Created | Change: Added Admin API to list inactive customers (potential win-back targets).
+- [2026-01-10 15:19:00] | File: electron/server.js | Line: 653 | Keyword: /api/admin/winback-coupons | Status: Created | Change: Added Admin API to list all win-back coupons.
+- [2026-01-10 15:20:00] | File: electron/server.js | Line: 122 | Keyword: earnLoyaltyPoints | Status: Edited | Change: Updated to also set last_order_at for Win-Back System tracking.
+

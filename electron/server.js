@@ -9,6 +9,7 @@ const os = require('os')
 // const { db, initDatabase } = require('./db') // Legacy SQLite
 const { pool, query, initDatabasePG, updateCustomerProfile } = require('./db_pg')
 const { initBirthdayScheduler, checkBirthdaysManually } = require('./birthdayScheduler')
+const { initWinbackScheduler, checkWinbackManually } = require('./winbackScheduler')
 
 
 
@@ -80,6 +81,9 @@ async function startServer() {
     // --- BIRTHDAY SCHEDULER INIT ---
     initBirthdayScheduler(pool, io);
 
+    // --- WIN-BACK SCHEDULER INIT ---
+    initWinbackScheduler(pool, io);
+
     // --- NOTIFICATION HELPER ---
     const createNotification = async (title, message, type = 'info', meta = null) => {
         try {
@@ -114,8 +118,8 @@ async function startServer() {
             const pointsToEarn = Math.floor(amount / rate);
             if (pointsToEarn <= 0) return null;
 
-            // 1. Update customer points
-            await query("UPDATE loyalty_customers SET points = points + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [pointsToEarn, customerId]);
+            // 1. Update customer points AND last_order_at (for Win-Back System tracking)
+            await query("UPDATE loyalty_customers SET points = points + $1, updated_at = CURRENT_TIMESTAMP, last_order_at = CURRENT_TIMESTAMP WHERE id = $2", [pointsToEarn, customerId]);
 
             // 2. Log transaction
             await query(`
@@ -573,6 +577,98 @@ async function startServer() {
             res.json(result.rows);
         } catch (err) {
             console.error('[Admin] Get birthday coupons error:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // =====================================================
+    // WIN-BACK SYSTEM ADMIN APIs
+    // =====================================================
+
+    // Manual trigger win-back check (for admin testing)
+    app.post('/api/admin/trigger-winback-check', async (req, res) => {
+        try {
+            console.log('[Admin] Manual win-back check triggered');
+            const results = await checkWinbackManually();
+            res.json({
+                success: true,
+                sent: results.sent,
+                errors: results.errors,
+                message: `ส่ง Win-Back Message ให้ ${results.sent} คนเรียบร้อย!`
+            });
+        } catch (err) {
+            console.error('[Admin] Win-back check error:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Get inactive customers (potential win-back targets)
+    app.get('/api/admin/inactive-customers', async (req, res) => {
+        try {
+            // Get settings
+            const settingsRes = await query(`
+                SELECT key, value FROM settings 
+                WHERE key IN ('winback_inactive_days', 'winback_cooldown_days')
+            `);
+            const settings = {};
+            for (const row of settingsRes.rows) {
+                settings[row.key] = row.value;
+            }
+            const inactiveDays = parseInt(settings.winback_inactive_days) || 45;
+            const cooldownDays = parseInt(settings.winback_cooldown_days) || 90;
+
+            const result = await query(`
+                SELECT 
+                    lc.id, 
+                    lc.display_name, 
+                    lc.nickname, 
+                    lc.last_order_at,
+                    lc.winback_sent_at,
+                    lc.is_following,
+                    EXTRACT(DAY FROM (NOW() - lc.last_order_at)) as days_inactive,
+                    coup.coupon_code as winback_coupon_code,
+                    coup.status as coupon_status
+                FROM loyalty_customers lc
+                LEFT JOIN loyalty_coupons coup ON coup.customer_id = lc.id AND coup.coupon_type = 'winback' 
+                    AND coup.redeemed_at > NOW() - INTERVAL '${cooldownDays} days'
+                WHERE lc.last_order_at IS NOT NULL
+                AND lc.last_order_at < NOW() - INTERVAL '${inactiveDays} days'
+                ORDER BY lc.last_order_at ASC
+            `);
+
+            res.json({
+                inactiveDays,
+                cooldownDays,
+                customers: result.rows
+            });
+        } catch (err) {
+            console.error('[Admin] Get inactive customers error:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Get all win-back coupons
+    app.get('/api/admin/winback-coupons', async (req, res) => {
+        try {
+            const result = await query(`
+                SELECT 
+                    lc.coupon_code,
+                    lc.status,
+                    lc.discount_type,
+                    lc.discount_value,
+                    lc.redeemed_at,
+                    lc.used_at,
+                    cust.display_name,
+                    cust.nickname
+                FROM loyalty_coupons lc
+                JOIN loyalty_customers cust ON lc.customer_id = cust.id
+                WHERE lc.coupon_type = 'winback'
+                ORDER BY lc.redeemed_at DESC
+                LIMIT 100
+            `);
+            res.json(result.rows);
+        } catch (err) {
+            console.error('[Admin] Get winback coupons error:', err);
             res.status(500).json({ error: err.message });
         }
     });
