@@ -133,3 +133,10 @@
 - [2026-01-10 16:55:00] | File: electron/server.js | Line: Multiple | Keyword: Notification System | Status: Created | Change: Added comprehensive notifications for 12 events: orders, payment, kitchen, delivery, member, and coupon.
 - [2026-01-10 17:15:00] | File: electron/server.js | Line: 3163 | Keyword: Coupon Logic | Status: Edited | Change: Fixed bug where coupon applied but not marked used. Added strict rowCount check and rollback on failure. Added 'coupon' notification.
 
+
+## 🎫 LINE Order Coupon Integration
+### 2026-01-10
+- [2026-01-10 18:00:00] | File: electron/server.js | Line: 2827 | Keyword: GET /api/line_orders | Status: Modified | Change: Fixed 500 Error by correcting SQL query to JOIN loyalty_promotions for coupon title/description retrieval.
+- [2026-01-10 18:05:00] | File: src/LineOrderManagement.jsx | Line: 335 | Keyword: Coupon Display | Status: Modified | Change: Added 'Applied Coupon' indicator and detail block to Order Card and Modal for staff visibility.
+- [2026-01-10 18:10:00] | File: electron/server.js | Line: 3020 | Keyword: sendLineFlexMessage | Status: Modified | Change: Updated LINE notification to include Coupon details in the customer confirmation message.
+- [2026-01-10 18:12:00] | File: src/OrderEntry.jsx | Line: 1201 | Keyword: Syntax Fix | Status: Fixed | Change: Fixed malformed ternary operator syntax in QR Payment Modal preventing rendering.

@@ -2830,9 +2830,10 @@ async function startServer() {
 
                 // Fetch linked coupon
                 const couponRes = await query(`
-                    SELECT coupon_code, promotion_id, title, description 
-                    FROM loyalty_coupons 
-                    WHERE line_order_id = $1 AND status = 'used'
+                    SELECT c.coupon_code, c.promotion_id, p.title, p.description 
+                    FROM loyalty_coupons c
+                    JOIN loyalty_promotions p ON c.promotion_id = p.id
+                    WHERE c.line_order_id = $1 AND c.status = 'used'
                 `, [order.id]);
 
                 if (couponRes.rows.length > 0) {
@@ -3020,9 +3021,10 @@ async function startServer() {
         let couponInfo = null;
         try {
             const couponRes = await query(`
-                SELECT coupon_code, title 
-                FROM loyalty_coupons 
-                WHERE line_order_id = $1 AND status = 'used'
+                SELECT c.coupon_code, p.title 
+                FROM loyalty_coupons c
+                JOIN loyalty_promotions p ON c.promotion_id = p.id
+                WHERE c.line_order_id = $1 AND c.status = 'used'
             `, [id]);
             couponInfo = couponRes.rows[0];
         } catch (e) {
