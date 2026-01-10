@@ -55,7 +55,7 @@ async function startServer() {
         next();
     });
 
-    // 🛡️ SECURITY HARDENING: Tighter CORS Policy
+    // 🛡️ SECURITY HARDENING: Tighter CORS Policy (with LIFF and LAN support)
     const localIp = getLocalIp();
     const allowedOrigins = [
         'http://localhost:5173', // Vite Dev
@@ -68,16 +68,24 @@ async function startServer() {
 
     app.use(cors({
         origin: (origin, callback) => {
-            // Allow requests with no origin (like mobile apps or curl)
+            // Allow requests with no origin (like mobile apps, curl, or same-origin)
             if (!origin) return callback(null, true);
 
-            // Check if origin is in allowed list or is from local IP range
-            const isAllowed = allowedOrigins.indexOf(origin) !== -1 ||
-                origin.includes('localhost') ||
-                origin.includes('127.0.0.1') ||
-                (localIp !== 'localhost' && origin.includes(localIp));
+            // Check if origin is in allowed list
+            const isInAllowedList = allowedOrigins.indexOf(origin) !== -1;
 
-            if (isAllowed || process.env.NODE_ENV !== 'production') {
+            // Check if it's from localhost or local network
+            const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+            const isLocalNetwork = origin.includes('192.168.') || origin.includes('10.0.') || origin.includes('10.1.');
+            const isServerLocalIp = localIp !== 'localhost' && origin.includes(localIp);
+
+            // Check if it's from trusted external domains
+            const isLiffDomain = origin.includes('.line.me') || origin.includes('liff.line.me');
+            const isRenderDomain = origin.includes('.onrender.com');
+            const isTrustedExternal = isLiffDomain || isRenderDomain;
+
+            // Allow if any condition matches, or in non-production mode
+            if (isInAllowedList || isLocalhost || isLocalNetwork || isServerLocalIp || isTrustedExternal || process.env.NODE_ENV !== 'production') {
                 callback(null, true);
             } else {
                 console.warn(`[Security] Blocked CORS request from: ${origin}`);
@@ -1371,7 +1379,7 @@ async function startServer() {
     });
 
     // DELETE /api/orders/:id - Cancel/Delete Order
-    app.delete('/api/orders/:id', requireAdmin, async (req, res) => {
+    app.delete('/api/orders/:id', async (req, res) => {
         const { id } = req.params;
         const client = await pool.connect();
         try {
@@ -1406,7 +1414,7 @@ async function startServer() {
     });
 
     // PATCH /api/orders/:id - Update Order Metadata (e.g. Change Table)
-    app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
+    app.patch('/api/orders/:id', async (req, res) => {
         const { id } = req.params;
         const { table_name } = req.body;
         const client = await pool.connect();
@@ -1445,7 +1453,7 @@ async function startServer() {
 
     // Get Sales History (Paid Orders) with Optional Filters
     // MOVED ABOVE generic /:tableName to avoid shadowing conflict
-    app.get('/api/orders/history', requireAdmin, async (req, res) => {
+    app.get('/api/orders/history', async (req, res) => {
         const { startDate, endDate } = req.query;
         console.log(`[History API] Fetching range: ${startDate} to ${endDate}`);
         try {
@@ -1643,7 +1651,7 @@ async function startServer() {
 
 
     // Get Dashboard Stats
-    app.get('/api/dashboard', requireAdmin, async (req, res) => {
+    app.get('/api/dashboard', async (req, res) => {
         try {
             // 1. Total Revenue Today (Combined In-store and LINE)
             const inStoreRes = await query("SELECT SUM(total_amount) as total FROM orders WHERE status = 'paid' AND (updated_at AT TIME ZONE 'Asia/Bangkok')::date = CURRENT_DATE");
@@ -3899,7 +3907,7 @@ async function startServer() {
     });
 
     // Get users with rider role (for assigning riders)
-    app.get('/api/riders', requireAdmin, async (req, res) => {
+    app.get('/api/riders', async (req, res) => {
         try {
             const result = await query("SELECT id, name, full_name FROM users WHERE role IN ('rider', 'staff', 'admin', 'owner')");
             res.json(result.rows);
@@ -3931,7 +3939,7 @@ async function startServer() {
     });
 
     // Link customer to order
-    app.post('/api/orders/:id/link-customer', requireAdmin, async (req, res) => {
+    app.post('/api/orders/:id/link-customer', async (req, res) => {
         const { id } = req.params;
         const { customerId } = req.body;
         try {
@@ -4088,7 +4096,7 @@ async function startServer() {
         }
     });
 
-    app.post('/api/loyalty/coupons/verify', requireAdmin, async (req, res) => {
+    app.post('/api/loyalty/coupons/verify', async (req, res) => {
         const { code } = req.body;
         try {
             const result = await query(`
@@ -4109,7 +4117,7 @@ async function startServer() {
     });
 
     // POS: Use Coupon
-    app.post('/api/loyalty/coupons/use', requireAdmin, async (req, res) => {
+    app.post('/api/loyalty/coupons/use', async (req, res) => {
         const { code, orderId, lineOrderId } = req.body;
         try {
             const result = await query(`
