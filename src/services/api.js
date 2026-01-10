@@ -11,7 +11,10 @@ const SOCKET_URL = isVite
     ? `${window.location.protocol}//${window.location.hostname}:3000`
     : window.location.origin;
 
-export const socket = io(SOCKET_URL);
+export const socket = io(SOCKET_URL, {
+    transports: ['websocket'],
+    reconnection: true,
+});
 
 export const api = {
     // Generic HTTP methods

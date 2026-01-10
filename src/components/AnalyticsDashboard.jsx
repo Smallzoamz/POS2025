@@ -44,7 +44,7 @@ const AnalyticsDashboard = ({ dateRange = {} }) => {
                     </div>
 
                     <div className="h-[280px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                             <AreaChart data={salesData}>
                                 <defs>
                                     <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
@@ -105,7 +105,7 @@ const AnalyticsDashboard = ({ dateRange = {} }) => {
                     </div>
 
                     <div className="h-[280px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                             <BarChart data={topItems} layout="vertical" margin={{ left: 10 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F1F5F9" />
                                 <XAxis type="number" hide />
