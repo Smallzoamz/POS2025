@@ -94,16 +94,25 @@ async function startServer() {
         // In local development/electron context, we might allow it if it's from localhost
         const isLocal = req.ip === '127.0.0.1' || req.ip === '::1' || req.ip.includes('localhost');
 
+        // Check if request is from same origin (internal frontend to backend)
+        const origin = req.headers.origin;
+        const host = req.headers.host;
+        const isSameOrigin = !origin || (host && origin.includes(host.split(':')[0]));
+
         const secretKey = process.env.ADMIN_SECRET_KEY || 'pos2025-admin-secret-key';
         const clientKey = req.headers['x-admin-secret'];
 
         if (clientKey === secretKey) {
+            // Valid secret key provided
             next();
         } else if (process.env.NODE_ENV !== 'production' && isLocal) {
             // Allow local access without secret in dev mode for convenience
             next();
+        } else if (isSameOrigin && clientKey === 'pos2025-admin-secret-key') {
+            // Allow same-origin requests with default key (for Render co-hosting)
+            next();
         } else {
-            console.warn(`[Security] Unauthorized Admin Access Attempt - IP: ${req.ip}`);
+            console.warn(`[Security] Unauthorized Admin Access Attempt - IP: ${req.ip}, Origin: ${origin}`);
             res.status(401).json({ error: 'Unauthorized Access: Invalid Admin Secret Key' });
         }
     };

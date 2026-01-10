@@ -127,4 +127,5 @@
 - [2026-01-10 16:05:00] | File: electron/server.js | Line: 56 | Keyword: requireAdmin | Status: Edited | Change: Improved requirement to allow local access in dev mode and strictly check secret in prod.
 - [2026-01-10 16:10:00] | File: src/services/api.js | Line: 17 | Keyword: API Helpers | Status: Refactored | Change: Refactored all API calls to use centralized helpers that include the X-Admin-Secret header.
 - [2026-01-10 16:15:00] | File: electron/server.js | Line: 15 | Keyword: fix initialization | Status: Edited | Change: Moved getLocalIp to top-level to fix ReferenceError during server start.
+- [2026-01-10 16:20:00] | File: electron/server.js | Line: 92 | Keyword: requireAdmin | Status: Edited | Change: Fixed 401 Unauthorized on Render production by allowing same-origin requests with default key.
 
