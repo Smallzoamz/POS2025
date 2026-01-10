@@ -1439,6 +1439,15 @@ async function startServer() {
                 }
             }
 
+            // Update Coupon Info
+            const { coupon_code, coupon_details } = req.body;
+            if (coupon_code !== undefined) { // Allow null to remove coupon
+                await client.query(
+                    "UPDATE orders SET coupon_code = $1, coupon_details = $2 WHERE id = $3",
+                    [coupon_code, coupon_details ? JSON.stringify(coupon_details) : null, id]
+                );
+            }
+
             await client.query('COMMIT');
             io.emit('table-update', { id: null, status: 'refresh' });
             res.json({ success: true });
@@ -2818,6 +2827,19 @@ async function startServer() {
             for (let order of lineOrders) {
                 const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
                 order.items = itemsRes.rows;
+
+                // Fetch linked coupon
+                const couponRes = await query(`
+                    SELECT coupon_code, promotion_id, title, description 
+                    FROM loyalty_coupons 
+                    WHERE line_order_id = $1 AND status = 'used'
+                `, [order.id]);
+
+                if (couponRes.rows.length > 0) {
+                    order.applied_coupon = couponRes.rows[0];
+                    // Also populate legacy fields if needed
+                    order.coupon_code = couponRes.rows[0].coupon_code;
+                }
             }
             res.json(lineOrders);
         } catch (err) {
@@ -2994,25 +3016,54 @@ async function startServer() {
             });
         }
 
+        // Fetch Coupon Info
+        let couponInfo = null;
+        try {
+            const couponRes = await query(`
+                SELECT coupon_code, title 
+                FROM loyalty_coupons 
+                WHERE line_order_id = $1 AND status = 'used'
+            `, [id]);
+            couponInfo = couponRes.rows[0];
+        } catch (e) {
+            console.error('Failed to fetch coupon for Line Msg:', e);
+        }
+
         // Add Items and Total
+        const detailsContents = [
+            { "type": "text", "text": "📦 รายการอาหาร", "weight": "bold", "size": "sm" },
+            { "type": "text", "text": itemsList || 'ไม่ได้ระบุรายการ', "size": "xs", "color": "#888888", "wrap": true, "margin": "xs" },
+            { "type": "separator", "margin": "md" }
+        ];
+
+        // Add Coupon Row if exists
+        if (couponInfo) {
+            detailsContents.push({
+                "type": "box",
+                "layout": "horizontal",
+                "margin": "md",
+                "contents": [
+                    { "type": "text", "text": "🎁 คูปองส่วนลด", "size": "xs", "color": "#A020F0", "weight": "bold" },
+                    { "type": "text", "text": couponInfo.title, "size": "xs", "align": "end", "color": "#A020F0" }
+                ]
+            });
+        }
+
+        detailsContents.push({
+            "type": "box",
+            "layout": "horizontal",
+            "margin": "md",
+            "contents": [
+                { "type": "text", "text": "ยอดรวมทั้งสิ้น", "weight": "bold", "size": "md" },
+                { "type": "text", "text": `฿${total_amount.toLocaleString()}`, "weight": "bold", "size": "md", "align": "end", "color": "#D32F2F" }
+            ]
+        });
+
         bubbleContent.body.contents.push({
             "type": "box",
             "layout": "vertical",
             "margin": "lg",
-            "contents": [
-                { "type": "text", "text": "📦 รายการอาหาร", "weight": "bold", "size": "sm" },
-                { "type": "text", "text": itemsList || 'ไม่ได้ระบุรายการ', "size": "xs", "color": "#888888", "wrap": true, "margin": "xs" },
-                { "type": "separator", "margin": "md" },
-                {
-                    "type": "box",
-                    "layout": "horizontal",
-                    "margin": "md",
-                    "contents": [
-                        { "type": "text", "text": "ยอดรวมทั้งสิ้น", "weight": "bold", "size": "md" },
-                        { "type": "text", "text": `฿${total_amount}`, "weight": "bold", "size": "md", "align": "end", "color": "#D32F2F" }
-                    ]
-                }
-            ]
+            "contents": detailsContents
         });
 
         try {

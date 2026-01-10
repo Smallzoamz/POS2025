@@ -335,6 +335,11 @@ const LineOrderManagement = () => {
                                         <p className="text-[10px] font-bold text-slate-400 line-clamp-1">
                                             👤 {order.customer_name}
                                         </p>
+                                        {order.applied_coupon && (
+                                            <p className="text-[10px] font-bold text-purple-500 flex items-center gap-1 mt-1">
+                                                <span>🎁</span> {order.applied_coupon.coupon_code}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="flex justify-between items-center mt-auto">
@@ -516,6 +521,21 @@ const LineOrderManagement = () => {
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Coupon Info Block */}
+                                {selectedOrder.applied_coupon && (
+                                    <div className="bg-purple-500/10 border border-purple-500/20 rounded-[24px] p-5 flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 bg-purple-500 rounded-xl flex items-center justify-center text-white text-xl shadow-lg shadow-purple-500/20">🎁</div>
+                                            <div>
+                                                <p className="text-[10px] font-bold text-purple-400 uppercase tracking-widest mb-0.5">Applied Coupon</p>
+                                                <p className="font-bold text-white text-sm">{selectedOrder.applied_coupon.title}</p>
+                                                <p className="text-[10px] text-white/50">{selectedOrder.applied_coupon.description}</p>
+                                            </div>
+                                        </div>
+                                        <span className="px-3 py-1 bg-purple-500 text-white text-[10px] font-bold rounded-lg uppercase tracking-wider">{selectedOrder.applied_coupon.coupon_code}</span>
+                                    </div>
+                                )}
 
                                 {/* Note */}
                                 {selectedOrder.note && (

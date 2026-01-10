@@ -139,6 +139,19 @@ const OrderEntry = () => {
                     api.getCustomerCoupons(orderData.order.customer_id).then(setCustomerCoupons).catch(console.error);
                 }
 
+                // Load existing coupon
+                if (orderData.order.coupon_details) {
+                    // Check if it's a string (JSON) or object
+                    const details = typeof orderData.order.coupon_details === 'string'
+                        ? JSON.parse(orderData.order.coupon_details)
+                        : orderData.order.coupon_details;
+                    setAppliedCoupon(details);
+                } else if (orderData.order.coupon_code) {
+                    // Fallback if only code exists (shouldn't handle usually but good for safety)
+                    // Ideally we would fetch details, but for now just showing code is better than nothing
+                    // setAppliedCoupon({ coupon_code: orderData.coupon_code, title: 'Coupon' }); 
+                }
+
                 setDepositInfo({
                     amount: parseFloat(orderData.order.deposit_amount) || 0,
                     isPaid: orderData.order.is_deposit_paid || false
@@ -204,6 +217,13 @@ const OrderEntry = () => {
             } else {
                 setAppliedCoupon(res);
                 setCouponCode(''); // Clear input on success
+                // Sync with server immediately
+                if (activeOrderId) {
+                    await api.updateOrder(activeOrderId, {
+                        coupon_code: res.coupon_code,
+                        coupon_details: res
+                    });
+                }
             }
         } catch (err) {
             setCouponError('ไม่สามารถตรวจสอบคูปองได้');
@@ -212,10 +232,17 @@ const OrderEntry = () => {
         }
     };
 
-    const removeCoupon = () => {
+    const removeCoupon = async () => {
         setAppliedCoupon(null);
         setCouponError('');
         setCouponCode('');
+        // Sync with server immediately
+        if (activeOrderId) {
+            await api.updateOrder(activeOrderId, {
+                coupon_code: null, // or empty string to clear? Logic handled in server to allow null
+                coupon_details: null
+            });
+        }
     };
 
     const handleProductClick = (item) => {
@@ -586,6 +613,27 @@ const OrderEntry = () => {
                                     <span className="px-3 py-1 bg-[#00A099] text-white rounded-full text-[9px] font-bold uppercase">In Kitchen</span>
                                 </div>
                             </div>
+                            {/* ACTIVE COUPON CARD (For Staff) */}
+                            {appliedCoupon && !isCustomer && (
+                                <div className="min-w-[280px] bg-purple-50 p-5 rounded-[24px] border border-purple-200 relative overflow-hidden">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <p className="text-[10px] font-bold text-purple-600 uppercase tracking-widest leading-none mb-1">Active Coupon</p>
+                                            <h3 className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{appliedCoupon.title}</h3>
+                                        </div>
+                                        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                                            <FaGift />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <span className="px-2 py-0.5 bg-white border border-purple-200 rounded text-[10px] font-bold text-purple-500">{appliedCoupon.coupon_code}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-bold text-slate-500">Auto-Apply</span>
+                                        <span className="px-3 py-1 bg-purple-500 text-white rounded-full text-[9px] font-bold uppercase">Active</span>
+                                    </div>
+                                </div>
+                            )}
                             {/* Kitchen Status Card - Dynamic */}
                             <div className={`min-w-[280px] p-5 rounded-[24px] border ${orderStatus === 'served' ? 'bg-emerald-50 border-emerald-200' :
                                 orderStatus === 'cooking' ? 'bg-orange-50 border-orange-200' :
@@ -1045,7 +1093,22 @@ const OrderEntry = () => {
                                             {customerCoupons.filter(c => c.status === 'active').map(coupon => (
                                                 <button
                                                     key={coupon.id}
-                                                    onClick={() => setAppliedCoupon({ ...coupon, title: coupon.promotion_title })}
+                                                    onClick={async () => {
+                                                        const couponWithTitle = { ...coupon, title: coupon.promotion_title };
+                                                        setAppliedCoupon(couponWithTitle);
+
+                                                        // Sync with server immediately
+                                                        if (activeOrderId) {
+                                                            try {
+                                                                await api.updateOrder(activeOrderId, {
+                                                                    coupon_code: coupon.coupon_code,
+                                                                    coupon_details: couponWithTitle
+                                                                });
+                                                            } catch (err) {
+                                                                console.error("Failed to save coupon to server:", err);
+                                                            }
+                                                        }
+                                                    }}
                                                     className="flex-shrink-0 bg-white border border-orange-200 rounded-xl p-3 text-left hover:border-orange-500 hover:shadow-md transition-all group max-w-[140px]"
                                                 >
                                                     <div className="flex items-center gap-2 mb-1">
@@ -1135,7 +1198,7 @@ const OrderEntry = () => {
                         <div className="bg-purple-50 rounded-xl p-3 mb-4">
                             <p className="text-xs text-purple-600 font-bold uppercase tracking-widest mb-1">ยอดที่ต้องชำระ</p>
                             <p className="text-2xl font-bold text-purple-700">฿{finals.finalToPay.toLocaleString()}</p>
-                            {finals.couponDiscount > 0 ? (
+                            {finals.couponDiscount > 0 && (
                                 <p className="text-[10px] text-green-600 font-bold mt-1">
                                     (รวมส่วนลดคูปอง -฿{finals.couponDiscount})
                                 </p>
