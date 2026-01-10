@@ -6,6 +6,7 @@ import { useAuth } from './contexts/AuthContext';
 import generatePayload from 'promptpay-qr';
 import QRCode from 'react-qr-code';
 import { FiUser, FiSearch, FiGift, FiPlus, FiX, FiAward, FiStar } from 'react-icons/fi';
+import { FaGift } from 'react-icons/fa';
 
 const OrderEntry = () => {
     const { tableId } = useParams();
@@ -1038,6 +1039,24 @@ const OrderEntry = () => {
                 <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowPaymentModal(false)}>
                     <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h3 className="text-xl font-bold text-slate-900 mb-4 text-center">💳 ยืนยันการชำระเงิน</h3>
+
+                        {/* Linked Loyalty Customer Info (Staff View) */}
+                        {loyaltyCustomer && !isCustomer && (
+                            <div className="mb-4 p-3 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-100 rounded-2xl flex items-center gap-3">
+                                {loyaltyCustomer.pictureUrl ? (
+                                    <img src={loyaltyCustomer.pictureUrl} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-purple-200" />
+                                ) : (
+                                    <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-600 font-bold text-lg">
+                                        {loyaltyCustomer.displayName?.charAt(0) || '?'}
+                                    </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[9px] font-bold text-purple-400 uppercase tracking-widest">Loyalty Member</p>
+                                    <p className="text-sm font-bold text-slate-900 truncate">{loyaltyCustomer.displayName || 'Unknown'}</p>
+                                </div>
+                                <span className="px-2 py-1 bg-purple-100 text-purple-600 text-[9px] font-bold rounded-lg uppercase tracking-wider">Member</span>
+                            </div>
+                        )}
 
                         <div className="bg-slate-50 rounded-2xl p-4 mb-6 space-y-2">
                             <div className="flex justify-between">

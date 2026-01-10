@@ -892,6 +892,24 @@ const initDatabasePG = async () => {
             console.log('Added winback_coupon_valid_days setting');
         }
 
+        // --- MIGRATION 24: Drop FK Constraint on order_item_options for Global Option Support ---
+        try {
+            console.log('📦 Running Migration 24: Drop order_item_options FK constraint...');
+            // Drop the FK constraint (Postgres naming convention: table_column_fkey)
+            await client.query(`
+                ALTER TABLE order_item_options 
+                DROP CONSTRAINT IF EXISTS order_item_options_option_id_fkey
+            `);
+            // Add global_option_id column if it doesn't exist (for distinguishing source)
+            await client.query(`
+                ALTER TABLE order_item_options 
+                ADD COLUMN IF NOT EXISTS global_option_id INTEGER REFERENCES global_options(id)
+            `);
+            console.log('✅ Migration 24: FK constraint dropped, global_option_id added');
+        } catch (migrationErr24) {
+            console.log('Migration 24 note:', migrationErr24.message);
+        }
+
         // Final Commit for all migrations and seeds
         // await client.query('COMMIT'); // Removed to avoid double commit if line 329 already committed
     } catch (e) {

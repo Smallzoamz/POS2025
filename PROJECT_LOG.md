@@ -140,3 +140,8 @@
 - [2026-01-10 18:05:00] | File: src/LineOrderManagement.jsx | Line: 335 | Keyword: Coupon Display | Status: Modified | Change: Added 'Applied Coupon' indicator and detail block to Order Card and Modal for staff visibility.
 - [2026-01-10 18:10:00] | File: electron/server.js | Line: 3020 | Keyword: sendLineFlexMessage | Status: Modified | Change: Updated LINE notification to include Coupon details in the customer confirmation message.
 - [2026-01-10 18:12:00] | File: src/OrderEntry.jsx | Line: 1201 | Keyword: Syntax Fix | Status: Fixed | Change: Fixed malformed ternary operator syntax in QR Payment Modal preventing rendering.
+- [2026-01-10 18:38:00] | File: electron/server.js | Line: 3049 | Keyword: sendLineFlexMessage | Status: Modified | Change: Updated LINE notification to show coupon_code alongside title so customers know which coupon was used.
+- [2026-01-10 18:39:00] | File: electron/server.js | Line: 2839 | Keyword: GET /api/line_orders | Status: Modified | Change: Added debug logging to track which orders have linked coupons.
+- [2026-01-10 18:41:00] | File: src/OrderEntry.jsx | Line: 9 | Keyword: FaGift import | Status: Fixed | Change: Added missing `FaGift` import from react-icons/fa to fix ReferenceError during checkout.
+- [2026-01-10 18:43:00] | File: src/OrderEntry.jsx | Line: 1043 | Keyword: Loyalty Customer Display | Status: Created | Change: Added Loyalty Member info block in Payment Modal to show linked customer name, picture, and member badge for staff view.
+- [2026-01-10 18:49:00] | File: electron/db_pg.js | Line: 894 | Keyword: Migration 24 | Status: Created | Change: Added migration to drop FK constraint on `order_item_options.option_id` and add `global_option_id` column to support Global Options in Takeaway orders.

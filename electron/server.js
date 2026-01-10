@@ -2840,6 +2840,9 @@ async function startServer() {
                     order.applied_coupon = couponRes.rows[0];
                     // Also populate legacy fields if needed
                     order.coupon_code = couponRes.rows[0].coupon_code;
+                    console.log(`🎁 Order #${order.id} has coupon: ${order.coupon_code}`);
+                } else {
+                    console.log(`📦 Order #${order.id}: No linked coupon found`);
                 }
             }
             res.json(lineOrders);
@@ -3046,10 +3049,11 @@ async function startServer() {
                 "margin": "md",
                 "contents": [
                     { "type": "text", "text": "🎁 คูปองส่วนลด", "size": "xs", "color": "#A020F0", "weight": "bold" },
-                    { "type": "text", "text": couponInfo.title, "size": "xs", "align": "end", "color": "#A020F0" }
+                    { "type": "text", "text": `${couponInfo.coupon_code} | ${couponInfo.title}`, "size": "xs", "align": "end", "color": "#A020F0" }
                 ]
             });
         }
+
 
         detailsContents.push({
             "type": "box",
