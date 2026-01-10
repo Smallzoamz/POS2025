@@ -3460,6 +3460,63 @@ async function startServer() {
         }
     });
 
+    // Pay Order (Dine-in / General)
+    app.post('/api/orders/:id/pay', async (req, res) => {
+        const { id } = req.params;
+        const {
+            paymentMethod,
+            discountAmount,
+            couponCode,
+            couponDetails
+        } = req.body;
+
+        try {
+            await query(
+                `UPDATE orders 
+                 SET status = 'paid', 
+                     payment_method = $1, 
+                     discount_amount = $2,
+                     coupon_code = $3,
+                     coupon_details = $4,
+                     updated_at = CURRENT_TIMESTAMP 
+                 WHERE id = $5`,
+                [
+                    paymentMethod || 'cash',
+                    discountAmount || 0,
+                    couponCode || null,
+                    couponDetails ? JSON.stringify(couponDetails) : null,
+                    id
+                ]
+            );
+
+            // Earn Loyalty Points
+            const orderRes = await query("SELECT customer_id, total_amount, subtotal FROM orders WHERE id = $1", [id]);
+            const order = orderRes.rows[0];
+
+            if (order && order.customer_id) {
+                // Calculate eligible amount (usually based on subtotal or total after discount)
+                // Using total_amount (which should be the final paid amount)
+                const pointAmount = parseFloat(order.total_amount) - (parseFloat(discountAmount) || 0);
+                if (pointAmount > 0) {
+                    await earnLoyaltyPoints(order.customer_id, pointAmount, id, null);
+                }
+            }
+
+            // If table order, clear table status
+            if (order?.table_name) {
+                await query("UPDATE tables SET status = 'available' WHERE name = $1", [order.table_name]);
+            }
+
+            io.emit('order-update');
+            io.emit('table-update', { id: null, status: 'refresh' });
+
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     // Complete/Pickup Order
     app.post('/api/orders/:id/complete', async (req, res) => {
         const { id } = req.params;

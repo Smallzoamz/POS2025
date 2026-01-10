@@ -328,22 +328,7 @@ const LineOrder = () => {
             const cartAmt = customerInfo.preOrderFood ? cartTotal : 0;
 
             // Calculate final total with coupon
-            let couponDiscount = 0;
-            if (selectedCoupon) {
-                const title = selectedCoupon.promotion_title || '';
-                // Try multiple patterns: "ลด X", "X บาท", "-฿X", "X%"
-                const numericMatch = title.match(/(\d+)\s*(?:บาท|฿|baht)/i);
-                const ldMatch = title.match(/ลด\s*(\d+)/);
-                const pctMatch = title.match(/(\d+)%/);
-
-                if (numericMatch) {
-                    couponDiscount = parseInt(numericMatch[1]);
-                } else if (ldMatch) {
-                    couponDiscount = parseInt(ldMatch[1]);
-                } else if (pctMatch) {
-                    couponDiscount = Math.floor(cartAmt * (parseInt(pctMatch[1]) / 100));
-                }
-            }
+            const couponDiscount = getCouponDiscountAmount(selectedCoupon);
             const finalTotal = Math.max(0, cartAmt - couponDiscount);
 
             const res = await fetch('/api/public/line-orders', {
