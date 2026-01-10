@@ -209,20 +209,33 @@ const LineOrderManagement = () => {
     // Calculate Discount Amount
     const getCouponDiscount = () => {
         if (!appliedCoupon) return 0;
+
+        // First: Check if coupon has explicit discount_amount property
+        if (appliedCoupon.discount_amount && parseFloat(appliedCoupon.discount_amount) > 0) {
+            return parseFloat(appliedCoupon.discount_amount);
+        }
+
         // Try multiple patterns to extract discount value
         const title = appliedCoupon.title || '';
         const patterns = [
+            /ราคา\s*(\d+)\s*\.?-?/i,  // "ราคา 35.-" or "ราคา 35"
             /-฿(\d+)/,        // "-฿50"
             /-(\d+)\s*บาท/,   // "-50 บาท"
             /(\d+)\s*บาท/,    // "50 บาท"
             /ลด\s*(\d+)/,     // "ลด 50"
             /฿(\d+)/,         // "฿50"
-            /(\d+)/           // Fallback: any number
         ];
         for (const p of patterns) {
             const match = title.match(p);
             if (match) return parseInt(match[1]);
         }
+
+        // Fallback: use LAST number in title (not first, to avoid matching "1 แก้ว")
+        const allNumbers = title.match(/(\d+)/g);
+        if (allNumbers && allNumbers.length > 0) {
+            return parseInt(allNumbers[allNumbers.length - 1]);
+        }
+
         return 0;
     };
 

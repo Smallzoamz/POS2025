@@ -3440,8 +3440,18 @@ async function startServer() {
                 ORDER BY created_at DESC
             `);
             const ordersWithItems = await Promise.all(result.rows.map(async (order) => {
-                const items = await query("SELECT * FROM order_items WHERE order_id = $1", [order.id]);
-                return { ...order, items: items.rows };
+                const itemsResult = await query("SELECT * FROM order_items WHERE order_id = $1", [order.id]);
+
+                // Fetch options for each item
+                const itemsWithOptions = await Promise.all(itemsResult.rows.map(async (item) => {
+                    const optionsResult = await query(
+                        "SELECT id, option_name as name, price_modifier FROM order_item_options WHERE order_item_id = $1",
+                        [item.id]
+                    );
+                    return { ...item, options: optionsResult.rows };
+                }));
+
+                return { ...order, items: itemsWithOptions };
             }));
             res.json(ordersWithItems);
         } catch (err) {

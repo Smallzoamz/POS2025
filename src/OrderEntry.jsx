@@ -440,24 +440,36 @@ const OrderEntry = () => {
 
     // Calculation Logic
     const calculateFinal = () => {
-        // Only calculate on ordered items (not cart)
-        const subtotal = orderedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        // item.price already includes options (base + all selected options)
+        // So we just multiply by quantity - DO NOT add options again!
+        const subtotal = orderedItems.reduce((sum, item) => {
+            const itemPrice = parseFloat(item.price) || 0;
+            return sum + (itemPrice * (item.quantity || 1));
+        }, 0);
 
-        // Coupon Discount Logic (Support multiple Thai formats: -฿XX, XX บาท, ลด XX)
+        // Coupon Discount Logic (Support multiple Thai formats)
         let couponDiscount = 0;
         if (appliedCoupon) {
-            // Robust parsing: Look for various amount patterns
-            const patterns = [
-                /-฿(\d+)/,            // -฿50
-                /(\d+)\s*บาท/,        // 50 บาท
-                /ลด\s*(\d+)/          // ลด 50
-            ];
+            // First check if coupon has explicit discount_amount
+            if (appliedCoupon.discount_amount && parseFloat(appliedCoupon.discount_amount) > 0) {
+                couponDiscount = parseFloat(appliedCoupon.discount_amount);
+            } else {
+                // Fallback: Parse from title using various patterns
+                const patterns = [
+                    /ราคา\s*(\d+)\s*\.-?/i,     // ราคา 35.- or ราคา 35
+                    /ราคา\s*(\d+)/i,             // ราคา 35
+                    /-฿(\d+)/,                   // -฿50
+                    /(\d+)\s*บาท/,               // 50 บาท
+                    /ลด\s*(\d+)/,                // ลด 50
+                    /฿\s*(\d+)/                  // ฿50
+                ];
 
-            for (const p of patterns) {
-                const match = appliedCoupon.title.match(p);
-                if (match) {
-                    couponDiscount = parseInt(match[1]);
-                    break;
+                for (const p of patterns) {
+                    const match = appliedCoupon.title.match(p);
+                    if (match) {
+                        couponDiscount = parseInt(match[1]);
+                        break;
+                    }
                 }
             }
         }
@@ -1159,6 +1171,25 @@ const OrderEntry = () => {
                                     {couponError && <p className="text-[10px] text-red-500 font-bold pl-2">⚠️ {couponError}</p>}
                                 </div>
                             )}
+                        </div>
+
+                        {/* Payment Method Selector */}
+                        <div className="mb-4">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">วิธีชำระเงิน</label>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setPaymentMethod('cash')}
+                                    className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${paymentMethod === 'cash' ? 'bg-emerald-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
+                                >
+                                    💵 เงินสด
+                                </button>
+                                <button
+                                    onClick={() => setPaymentMethod('transfer')}
+                                    className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${paymentMethod === 'transfer' ? 'bg-purple-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
+                                >
+                                    📲 QR/โอน
+                                </button>
+                            </div>
                         </div>
 
                         {paymentMethod === 'cash' && (

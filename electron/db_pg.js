@@ -910,6 +910,19 @@ const initDatabasePG = async () => {
             console.log('Migration 24 note:', migrationErr24.message);
         }
 
+        // --- MIGRATION 25: Add coupon_code and coupon_details to orders ---
+        try {
+            console.log('📦 Running Migration 25: Add coupon columns to orders...');
+            await client.query(`
+                ALTER TABLE orders 
+                ADD COLUMN IF NOT EXISTS coupon_code TEXT,
+                ADD COLUMN IF NOT EXISTS coupon_details JSONB
+            `);
+            console.log('✅ Migration 25: coupon_code and coupon_details added to orders');
+        } catch (migrationErr25) {
+            console.log('Migration 25 note:', migrationErr25.message);
+        }
+
         // Final Commit for all migrations and seeds
         // await client.query('COMMIT'); // Removed to avoid double commit if line 329 already committed
     } catch (e) {

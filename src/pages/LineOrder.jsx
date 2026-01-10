@@ -267,6 +267,12 @@ const LineOrder = () => {
     // Centralized Discount Calculation Helper
     const getCouponDiscountAmount = (coupon) => {
         if (!coupon) return 0;
+
+        // First: Check if coupon has explicit discount_amount property
+        if (coupon.discount_amount && parseFloat(coupon.discount_amount) > 0) {
+            return parseFloat(coupon.discount_amount);
+        }
+
         const title = coupon.promotion_title || '';
 
         // Check percentage first (e.g., "10%", "ลด 10%")
@@ -275,10 +281,11 @@ const LineOrder = () => {
             return Math.floor(cartTotal * (parseInt(pctMatch[1]) / 100));
         }
 
-        // Check fixed amount patterns
+        // Check fixed amount patterns (ordered by specificity)
         const patterns = [
+            /ราคา\s*(\d+)\s*\.?-?/i,      // "ราคา 35.-" or "ราคา 35"
             /-฿(\d+)/,                    // "-฿50"
-            /-(\d+)\s*บาท/,               // "-50 บาท"
+            /-(\\d+)\s*บาท/,               // "-50 บาท"
             /ลด\s*(\d+)/,                 // "ลด 50"
             /(\d+)\s*บาท/,                // "50 บาท"
             /฿(\d+)/,                     // "฿50"
@@ -290,9 +297,12 @@ const LineOrder = () => {
             if (match) return parseInt(match[1]);
         }
 
-        // Fallback: try to find any number
-        const numMatch = title.match(/(\d+)/);
-        if (numMatch) return parseInt(numMatch[1]);
+        // New: look for last number in title (often the price/discount amount)
+        const allNumbers = title.match(/(\d+)/g);
+        if (allNumbers && allNumbers.length > 0) {
+            // Return the LAST number (usually the discount amount, not quantity)
+            return parseInt(allNumbers[allNumbers.length - 1]);
+        }
 
         return 0;
     };

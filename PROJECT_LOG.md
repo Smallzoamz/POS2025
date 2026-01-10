@@ -145,3 +145,9 @@
 - [2026-01-10 18:41:00] | File: src/OrderEntry.jsx | Line: 9 | Keyword: FaGift import | Status: Fixed | Change: Added missing `FaGift` import from react-icons/fa to fix ReferenceError during checkout.
 - [2026-01-10 18:43:00] | File: src/OrderEntry.jsx | Line: 1043 | Keyword: Loyalty Customer Display | Status: Created | Change: Added Loyalty Member info block in Payment Modal to show linked customer name, picture, and member badge for staff view.
 - [2026-01-10 18:49:00] | File: electron/db_pg.js | Line: 894 | Keyword: Migration 24 | Status: Created | Change: Added migration to drop FK constraint on `order_item_options.option_id` and add `global_option_id` column to support Global Options in Takeaway orders.
+- [2026-01-10 19:02:00] | File: src/OrderEntry.jsx | Line: 1164 | Keyword: Payment Method Selector | Status: Created | Change: Added missing Cash/QR toggle buttons in Payment Modal to restore payment method selection.
+- [2026-01-10 19:05:00] | File: electron/db_pg.js | Line: 913 | Keyword: Migration 25 | Status: Created | Change: Added migration for `coupon_code` and `coupon_details` columns in orders table.
+- [2026-01-10 19:05:00] | File: electron/server.js | Line: 3442 | Keyword: Takeaway Active Orders | Status: Modified | Change: Endpoint `/api/orders/takeaway/active` now includes item options in response.
+- [2026-01-10 19:12:00] | File: src/OrderEntry.jsx | Line: 441 | Keyword: calculateFinal | Status: Modified | Change: Reverted to use item.price directly (already includes options) to avoid double-counting.
+- [2026-01-10 19:12:00] | File: src/pages/LineOrder.jsx | Line: 267 | Keyword: getCouponDiscountAmount | Status: Modified | Change: Added 'ราคา XX.-' pattern, check discount_amount first, use LAST number as fallback.
+- [2026-01-10 19:12:00] | File: src/LineOrderManagement.jsx | Line: 209 | Keyword: getCouponDiscount | Status: Modified | Change: Same coupon parsing fixes applied.
