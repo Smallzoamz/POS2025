@@ -91,3 +91,14 @@
 - [2026-01-09 16:40:00] | File: MenuManagement.jsx | Line: 44 | Keyword: handleSyncToWebsite | Status: Refactored | Change: Refactored Sync button handler to use unified api.syncMenu() service.
 - [2026-01-10 00:35:00] | File: electron/db_pg.js | Line: 666 | Keyword: Migration 20 | Status: Modified | Change: Added Migration 20 to loyalty_customers table (nickname, birthdate, search_keywords) for CRM features.
 
+## 🎂 Auto-Birthday Reward System (Plan 2)
+
+### 2026-01-10
+- [2026-01-10 13:35:00] | File: electron/db_pg.js | Line: 830 | Keyword: Migration 21 | Status: Created | Change: Added Migration 21 for Birthday System (birthday_reward_sent_year, coupon_type, discount_type, discount_value, min_order_amount).
+- [2026-01-10 13:36:00] | File: electron/birthdayScheduler.js | Line: 0 | Keyword: birthdayScheduler | Status: Created | Change: Created Birthday Scheduler module with node-cron (9AM daily), LINE Flex Message, and coupon generation.
+- [2026-01-10 13:37:00] | File: electron/server.js | Line: 11 | Keyword: import | Status: Edited | Change: Added import for birthdayScheduler module.
+- [2026-01-10 13:37:00] | File: electron/server.js | Line: 80 | Keyword: initBirthdayScheduler | Status: Created | Change: Initialize birthday scheduler on server start with pool and io.
+- [2026-01-10 13:38:00] | File: electron/server.js | Line: 500 | Keyword: /api/admin/trigger-birthday-check | Status: Created | Change: Added Admin API for manual birthday check trigger.
+- [2026-01-10 13:38:00] | File: electron/server.js | Line: 520 | Keyword: /api/admin/birthday-customers | Status: Created | Change: Added Admin API to list customers with birthdays this month.
+- [2026-01-10 13:38:00] | File: electron/server.js | Line: 555 | Keyword: /api/admin/birthday-coupons | Status: Created | Change: Added Admin API to list all birthday coupons.
+

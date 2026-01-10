@@ -827,6 +827,31 @@ const initDatabasePG = async () => {
             console.error('Migration 19 error:', migrationErr19.message);
         }
 
+        // --- MIGRATION 21: Birthday Reward System ---
+        try {
+            console.log('📦 Running Migration 21: Birthday Reward System...');
+            // Add birthday_reward_sent_year to track annual reward sending
+            await client.query(`
+                ALTER TABLE loyalty_customers 
+                ADD COLUMN IF NOT EXISTS birthday_reward_sent_year INTEGER
+            `);
+            // Add coupon_type to categorize coupons
+            await client.query(`
+                ALTER TABLE loyalty_coupons 
+                ADD COLUMN IF NOT EXISTS coupon_type TEXT DEFAULT 'manual'
+            `);
+            // Add discount_type and discount_value for flexible coupon values
+            await client.query(`
+                ALTER TABLE loyalty_coupons 
+                ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percent',
+                ADD COLUMN IF NOT EXISTS discount_value DECIMAL(12,2) DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS min_order_amount DECIMAL(12,2) DEFAULT 0
+            `);
+            console.log('✅ Migration 21: Birthday Reward System columns added');
+        } catch (migrationErr21) {
+            console.error('Migration 21 error:', migrationErr21.message);
+        }
+
         // Final Commit for all migrations and seeds
         // await client.query('COMMIT'); // Removed to avoid double commit if line 329 already committed
     } catch (e) {

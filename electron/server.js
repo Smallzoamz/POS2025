@@ -8,6 +8,7 @@ const os = require('os')
 
 // const { db, initDatabase } = require('./db') // Legacy SQLite
 const { pool, query, initDatabasePG, updateCustomerProfile } = require('./db_pg')
+const { initBirthdayScheduler, checkBirthdaysManually } = require('./birthdayScheduler')
 
 
 
@@ -75,6 +76,9 @@ async function startServer() {
             methods: ["GET", "POST"]
         }
     })
+
+    // --- BIRTHDAY SCHEDULER INIT ---
+    initBirthdayScheduler(pool, io);
 
     // --- NOTIFICATION HELPER ---
     const createNotification = async (title, message, type = 'info', meta = null) => {
@@ -487,6 +491,88 @@ async function startServer() {
             await query('DELETE FROM notifications');
             res.json({ success: true });
         } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // =====================================================
+    // BIRTHDAY REWARD ADMIN APIs
+    // =====================================================
+
+    // Manual trigger birthday check (for admin testing)
+    app.post('/api/admin/trigger-birthday-check', async (req, res) => {
+        try {
+            console.log('[Admin] Manual birthday check triggered');
+            const results = await checkBirthdaysManually();
+            res.json({
+                success: true,
+                sent: results.sent,
+                errors: results.errors,
+                message: `ส่งของขวัญวันเกิดให้ ${results.sent} คนเรียบร้อย!`
+            });
+        } catch (err) {
+            console.error('[Admin] Birthday check error:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Get customers with birthdays this month
+    app.get('/api/admin/birthday-customers', async (req, res) => {
+        try {
+            const currentMonth = new Date().getMonth() + 1;
+            const currentYear = new Date().getFullYear();
+
+            const result = await query(`
+                SELECT 
+                    lc.id, 
+                    lc.display_name, 
+                    lc.nickname, 
+                    lc.birthdate,
+                    lc.birthday_reward_sent_year,
+                    lc.is_following,
+                    CASE WHEN lc.birthday_reward_sent_year = $2 THEN true ELSE false END as reward_sent_this_year,
+                    coup.coupon_code as birthday_coupon_code,
+                    coup.status as coupon_status
+                FROM loyalty_customers lc
+                LEFT JOIN loyalty_coupons coup ON coup.customer_id = lc.id AND coup.coupon_type = 'birthday' 
+                    AND EXTRACT(YEAR FROM coup.redeemed_at) = $2
+                WHERE EXTRACT(MONTH FROM lc.birthdate) = $1
+                ORDER BY EXTRACT(DAY FROM lc.birthdate)
+            `, [currentMonth, currentYear]);
+
+            res.json({
+                month: currentMonth,
+                year: currentYear,
+                customers: result.rows
+            });
+        } catch (err) {
+            console.error('[Admin] Get birthday customers error:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Get all birthday coupons
+    app.get('/api/admin/birthday-coupons', async (req, res) => {
+        try {
+            const result = await query(`
+                SELECT 
+                    lc.coupon_code,
+                    lc.status,
+                    lc.discount_type,
+                    lc.discount_value,
+                    lc.redeemed_at,
+                    lc.used_at,
+                    cust.display_name,
+                    cust.nickname
+                FROM loyalty_coupons lc
+                JOIN loyalty_customers cust ON lc.customer_id = cust.id
+                WHERE lc.coupon_type = 'birthday'
+                ORDER BY lc.redeemed_at DESC
+                LIMIT 100
+            `);
+            res.json(result.rows);
+        } catch (err) {
+            console.error('[Admin] Get birthday coupons error:', err);
             res.status(500).json({ error: err.message });
         }
     });
