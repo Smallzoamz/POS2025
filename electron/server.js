@@ -3160,11 +3160,25 @@ async function startServer() {
 
             // 3. Mark coupon as used and link to order
             if (couponCode && couponDiscount > 0) {
-                await client.query(`
+                const updateRes = await client.query(`
                     UPDATE loyalty_coupons 
                     SET status = 'used', used_at = CURRENT_TIMESTAMP, line_order_id = $1 
-                    WHERE coupon_code = $2 AND customer_id = $3
+                    WHERE coupon_code = $2 AND customer_id = $3 AND status = 'active'
                 `, [orderId, couponCode.toUpperCase(), customerId]);
+
+                if (updateRes.rowCount === 0) {
+                    console.warn(`⚠️ Coupon Update Failed: Code=${couponCode}, Cust=${customerId}, Order=${orderId}`);
+                    // Critical: If we applied discount but failed to mark used, we MUST rollback to prevent reuse
+                    throw new Error('ไม่สามารถตัดยอดคูปองได้ (Coupon Update Failed)');
+                }
+
+                // Notification: Coupon Used
+                createNotification(
+                    `🎫 ใช้คูปองส่วนลด`,
+                    `${customerName} ใช้คูปอง ${couponCode} (ลด ฿${couponDiscount})`,
+                    'coupon',
+                    { orderId, couponCode, discount: couponDiscount }
+                );
             }
 
             // Also insert to line_order_items for backwards compatibility
