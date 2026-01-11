@@ -177,4 +177,5 @@
 - \[2026-01-11 19:30:00] | File: src/LineOrderManagement.jsx | Line: 540, 366 | Keyword: Coupon Display | Status: Modified | Change: Added discount info display in Order Detail Modal and Order Card.
 - \[2026-01-11 19:54:00] | File: electron/server.js | Line: 2840 | Keyword: API line_orders | Status: Modified | Change: Fixed coupon data retrieval to use new columns first, fallback to legacy JOIN.
 - \[2026-01-11 19:54:00] | File: src/LineOrderManagement.jsx | Line: 536 | Keyword: Item Price | Status: Modified | Change: Fixed item price calculation to include options price_modifier.
+- \[2026-01-11 20:05:00] | File: electron/server.js | Line: 3225 | Keyword: Coupon Discount | Status: Modified | Change: Improved discount calculation to use discount_value column first, then fallback to multiple regex patterns (ลด, %, ราคา, number).
 

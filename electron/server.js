@@ -3224,19 +3224,44 @@ async function startServer() {
 
                 if (couponCheck.rowCount > 0) {
                     const coupon = couponCheck.rows[0];
-                    const match = coupon.title.match(/ลด\s*(\d+)/);
-                    if (match) {
-                        couponDiscount = parseInt(match[1]);
-                    } else if (coupon.title.includes('%')) {
-                        const pctMatch = coupon.title.match(/(\d+)%/);
-                        if (pctMatch) {
-                            couponDiscount = Math.floor(totalAmount * (parseInt(pctMatch[1]) / 100));
+
+                    // 1. Try to get discount from discount_value column (most reliable)
+                    if (coupon.discount_value && parseFloat(coupon.discount_value) > 0) {
+                        if (coupon.discount_type === 'percent') {
+                            couponDiscount = Math.floor(totalAmount * (parseFloat(coupon.discount_value) / 100));
+                        } else {
+                            couponDiscount = parseFloat(coupon.discount_value);
+                        }
+                    }
+                    // 2. Fallback: Try to parse from title
+                    else {
+                        // Pattern 1: "ลด XX" or "ลด XX บาท"
+                        const matchLod = coupon.title.match(/ลด\s*(\d+)/);
+                        // Pattern 2: "XX%" 
+                        const matchPercent = coupon.title.match(/(\d+)%/);
+                        // Pattern 3: "ราคา XX.-" (fixed price like "ราคา 35.-")
+                        const matchPrice = coupon.title.match(/ราคา\s*(\d+)/);
+                        // Pattern 4: Just any number (last resort)
+                        const allNumbers = coupon.title.match(/\d+/g);
+
+                        if (matchLod) {
+                            couponDiscount = parseInt(matchLod[1]);
+                        } else if (matchPercent) {
+                            couponDiscount = Math.floor(totalAmount * (parseInt(matchPercent[1]) / 100));
+                        } else if (matchPrice) {
+                            // "ราคา 35.-" means discount = totalAmount - 35
+                            couponDiscount = Math.max(0, totalAmount - parseInt(matchPrice[1]));
+                        } else if (allNumbers && allNumbers.length > 0) {
+                            // Use last number as fallback
+                            couponDiscount = parseInt(allNumbers[allNumbers.length - 1]);
                         }
                     }
 
                     if (couponDiscount > 0) {
                         finalTotal = Math.max(0, totalAmount - couponDiscount);
                         console.log(`🎟️ Applied Coupon: ${couponCode} (-฿${couponDiscount})`);
+                    } else {
+                        console.log(`⚠️ Coupon ${couponCode} found but could not determine discount value`);
                     }
                 }
             }
