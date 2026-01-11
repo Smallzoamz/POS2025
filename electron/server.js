@@ -3228,8 +3228,13 @@ async function startServer() {
                     // 1. Try to get discount from discount_value column (most reliable)
                     if (coupon.discount_value && parseFloat(coupon.discount_value) > 0) {
                         if (coupon.discount_type === 'percent') {
+                            // Percentage discount: e.g., 10% off
                             couponDiscount = Math.floor(totalAmount * (parseFloat(coupon.discount_value) / 100));
+                        } else if (coupon.discount_type === 'fixed_price') {
+                            // Fixed price: customer pays only this amount, discount = total - fixed_price
+                            couponDiscount = Math.max(0, totalAmount - parseFloat(coupon.discount_value));
                         } else {
+                            // Fixed discount: e.g., 10 baht off (default)
                             couponDiscount = parseFloat(coupon.discount_value);
                         }
                     }
@@ -4317,12 +4322,12 @@ async function startServer() {
             // 1. Deduct points
             await query('UPDATE loyalty_customers SET points = points - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [promo.points_required, customerId]);
 
-            // 2. Generate Coupon
+            // 2. Generate Coupon with discount settings from promotion
             const couponCode = generateCouponCode();
             await query(`
-                INSERT INTO loyalty_coupons (customer_id, promotion_id, coupon_code)
-                VALUES ($1, $2, $3)
-            `, [customerId, promotionId, couponCode]);
+                INSERT INTO loyalty_coupons (customer_id, promotion_id, coupon_code, discount_type, discount_value)
+                VALUES ($1, $2, $3, $4, $5)
+            `, [customerId, promotionId, couponCode, promo.discount_type || 'none', promo.discount_value || 0]);
 
             // 3. Log transaction
             await query(`
@@ -4419,17 +4424,17 @@ async function startServer() {
     });
 
     app.post('/api/admin/loyalty/promotions', requireAdmin, async (req, res) => {
-        const { title, description, pointsRequired, imageUrl, startDate, endDate } = req.body;
+        const { title, description, pointsRequired, imageUrl, startDate, endDate, discountType, discountValue } = req.body;
         // Convert empty strings to null for DATE columns
         const finalStartDate = startDate === '' ? null : startDate;
         const finalEndDate = endDate === '' ? null : endDate;
 
         try {
             const result = await query(`
-                INSERT INTO loyalty_promotions (title, description, points_required, image_url, start_date, end_date)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO loyalty_promotions (title, description, points_required, image_url, start_date, end_date, discount_type, discount_value)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING *
-            `, [title, description, pointsRequired, imageUrl, finalStartDate, finalEndDate]);
+            `, [title, description, pointsRequired, imageUrl, finalStartDate, finalEndDate, discountType || 'none', discountValue || 0]);
             res.json(result.rows[0]);
         } catch (err) {
             console.error(err);
@@ -4439,7 +4444,7 @@ async function startServer() {
 
     app.put('/api/admin/loyalty/promotions/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
-        const { title, description, pointsRequired, imageUrl, startDate, endDate, isActive } = req.body;
+        const { title, description, pointsRequired, imageUrl, startDate, endDate, isActive, discountType, discountValue } = req.body;
         // Convert empty strings to null for DATE columns
         const finalStartDate = startDate === '' ? null : startDate;
         const finalEndDate = endDate === '' ? null : endDate;
@@ -4448,9 +4453,9 @@ async function startServer() {
             await query(`
                 UPDATE loyalty_promotions 
                 SET title = $1, description = $2, points_required = $3, image_url = $4, 
-                    start_date = $5, end_date = $6, is_active = $7
-                WHERE id = $8
-            `, [title, description, pointsRequired, imageUrl, finalStartDate, finalEndDate, isActive, id]);
+                    start_date = $5, end_date = $6, is_active = $7, discount_type = $8, discount_value = $9
+                WHERE id = $10
+            `, [title, description, pointsRequired, imageUrl, finalStartDate, finalEndDate, isActive, discountType || 'none', discountValue || 0, id]);
             res.json({ success: true });
         } catch (err) {
             console.error(err);

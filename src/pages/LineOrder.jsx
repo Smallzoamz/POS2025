@@ -264,16 +264,31 @@ const LineOrder = () => {
 
     const cartTotal = cart.reduce((sum, item) => sum + ((item.unitPrice || item.price) * item.quantity), 0);
 
-    // Centralized Discount Calculation Helper
+    // Centralized Discount Calculation Helper (Support new discount_type + discount_value system)
     const getCouponDiscountAmount = (coupon) => {
         if (!coupon) return 0;
 
-        // First: Check if coupon has explicit discount_amount property
+        // 1. NEW: Check for discount_type + discount_value (from DB)
+        if (coupon.discount_value && parseFloat(coupon.discount_value) > 0) {
+            if (coupon.discount_type === 'percent') {
+                // Percentage discount: e.g., 10% off
+                return Math.floor(cartTotal * (parseFloat(coupon.discount_value) / 100));
+            } else if (coupon.discount_type === 'fixed_price') {
+                // Fixed price: customer pays only this amount
+                return Math.max(0, cartTotal - parseFloat(coupon.discount_value));
+            } else {
+                // Fixed discount: e.g., 10 baht off (default for 'fixed' type)
+                return parseFloat(coupon.discount_value);
+            }
+        }
+
+        // 2. LEGACY: Check if coupon has explicit discount_amount property
         if (coupon.discount_amount && parseFloat(coupon.discount_amount) > 0) {
             return parseFloat(coupon.discount_amount);
         }
 
-        const title = coupon.promotion_title || '';
+        // 3. FALLBACK: Parse from promotion_title using various patterns
+        const title = coupon.promotion_title || coupon.title || '';
 
         // Check percentage first (e.g., "10%", "ลด 10%")
         const pctMatch = title.match(/(\d+)%/);
@@ -283,10 +298,10 @@ const LineOrder = () => {
 
         // Check fixed amount patterns (ordered by specificity)
         const patterns = [
-            /ราคา\s*(\d+)\s*\.?-?/i,      // "ราคา 35.-" or "ราคา 35"
-            /-฿(\d+)/,                    // "-฿50"
-            /-(\\d+)\s*บาท/,               // "-50 บาท"
             /ลด\s*(\d+)/,                 // "ลด 50"
+            /ราคา\s*(\d+)/,               // "ราคา 35.-"
+            /-฿(\d+)/,                    // "-฿50"
+            /-(\d+)\s*บาท/,               // "-50 บาท"
             /(\d+)\s*บาท/,                // "50 บาท"
             /฿(\d+)/,                     // "฿50"
             /(\d+)\s*(?:off|discount)/i,  // "50 off" or "50 discount"
@@ -297,10 +312,9 @@ const LineOrder = () => {
             if (match) return parseInt(match[1]);
         }
 
-        // New: look for last number in title (often the price/discount amount)
+        // Fallback: look for last number in title
         const allNumbers = title.match(/(\d+)/g);
         if (allNumbers && allNumbers.length > 0) {
-            // Return the LAST number (usually the discount amount, not quantity)
             return parseInt(allNumbers[allNumbers.length - 1]);
         }
 

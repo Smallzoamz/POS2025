@@ -19,7 +19,9 @@ const Promotions = () => {
         imageUrl: '',
         startDate: '',
         endDate: '',
-        isActive: true
+        isActive: true,
+        discountType: 'none',
+        discountValue: 0
     });
 
     useEffect(() => {
@@ -46,7 +48,9 @@ const Promotions = () => {
             imageUrl: promo.image_url || '',
             startDate: promo.start_date ? promo.start_date.split('T')[0] : '',
             endDate: promo.end_date ? promo.end_date.split('T')[0] : '',
-            isActive: promo.is_active
+            isActive: promo.is_active,
+            discountType: promo.discount_type || 'none',
+            discountValue: promo.discount_value || 0
         });
         setShowModal(true);
     };
@@ -86,7 +90,9 @@ const Promotions = () => {
             imageUrl: '',
             startDate: '',
             endDate: '',
-            isActive: true
+            isActive: true,
+            discountType: 'none',
+            discountValue: 0
         });
     };
 
@@ -216,6 +222,48 @@ const Promotions = () => {
                                             <option value="false">ปิดใช้งาน</option>
                                         </select>
                                     </div>
+                                </div>
+                                {/* Discount Settings */}
+                                <div className="bg-orange-50 rounded-2xl p-4 border border-orange-100">
+                                    <h4 className="text-sm font-bold text-orange-600 mb-3 flex items-center gap-2">🎯 ตั้งค่าส่วนลด</h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-600 mb-1">ประเภทส่วนลด</label>
+                                            <select
+                                                className="w-full bg-white border border-orange-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 outline-none transition-all cursor-pointer text-sm"
+                                                value={formData.discountType}
+                                                onChange={e => setFormData({ ...formData, discountType: e.target.value, discountValue: 0 })}
+                                            >
+                                                <option value="none">🚫 ไม่มีส่วนลด (โปรโมชั่นอื่นๆ)</option>
+                                                <option value="fixed">💵 ลดตายตัว (บาท)</option>
+                                                <option value="percent">📊 ลดเป็นเปอร์เซ็นต์ (%)</option>
+                                                <option value="fixed_price">🏷️ ราคาคงที่ (จ่ายเท่านี้)</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                {formData.discountType === 'fixed' && 'จำนวนเงินที่ลด (บาท)'}
+                                                {formData.discountType === 'percent' && 'เปอร์เซ็นต์ที่ลด (%)'}
+                                                {formData.discountType === 'fixed_price' && 'ราคาที่ต้องจ่าย (บาท)'}
+                                                {formData.discountType === 'none' && 'มูลค่า (ไม่ใช้)'}
+                                            </label>
+                                            <input
+                                                type="number"
+                                                className={`w-full bg-white border border-orange-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 outline-none transition-all text-sm ${formData.discountType === 'none' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                value={formData.discountValue}
+                                                onChange={e => setFormData({ ...formData, discountValue: parseFloat(e.target.value) || 0 })}
+                                                disabled={formData.discountType === 'none'}
+                                                placeholder={formData.discountType === 'percent' ? 'เช่น 10' : 'เช่น 50'}
+                                            />
+                                        </div>
+                                    </div>
+                                    {formData.discountType !== 'none' && (
+                                        <p className="text-xs text-orange-600 mt-2 bg-orange-100 p-2 rounded-lg">
+                                            {formData.discountType === 'fixed' && `💵 ลดทันที ${formData.discountValue} บาท จากยอดรวม`}
+                                            {formData.discountType === 'percent' && `📊 ลด ${formData.discountValue}% จากยอดรวม`}
+                                            {formData.discountType === 'fixed_price' && `🏷️ จ่ายเพียง ${formData.discountValue} บาท (ส่วนต่างเป็นส่วนลด)`}
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">คำอธิบาย</label>

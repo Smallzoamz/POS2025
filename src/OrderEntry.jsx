@@ -456,28 +456,48 @@ const OrderEntry = () => {
             return sum + (itemPrice * (item.quantity || 1));
         }, 0);
 
-        // Coupon Discount Logic (Support multiple Thai formats)
+        // Coupon Discount Logic (Support new discount_type + discount_value system)
         let couponDiscount = 0;
         if (appliedCoupon) {
-            // First check if coupon has explicit discount_amount
-            if (appliedCoupon.discount_amount && parseFloat(appliedCoupon.discount_amount) > 0) {
+            // 1. NEW: Check for discount_type + discount_value (from DB)
+            if (appliedCoupon.discount_value && parseFloat(appliedCoupon.discount_value) > 0) {
+                if (appliedCoupon.discount_type === 'percent') {
+                    // Percentage discount: e.g., 10% off
+                    couponDiscount = Math.floor(subtotal * (parseFloat(appliedCoupon.discount_value) / 100));
+                } else if (appliedCoupon.discount_type === 'fixed_price') {
+                    // Fixed price: customer pays only this amount
+                    couponDiscount = Math.max(0, subtotal - parseFloat(appliedCoupon.discount_value));
+                } else {
+                    // Fixed discount: e.g., 10 baht off (default for 'fixed' type)
+                    couponDiscount = parseFloat(appliedCoupon.discount_value);
+                }
+            }
+            // 2. LEGACY: Check if coupon has explicit discount_amount
+            else if (appliedCoupon.discount_amount && parseFloat(appliedCoupon.discount_amount) > 0) {
                 couponDiscount = parseFloat(appliedCoupon.discount_amount);
-            } else {
-                // Fallback: Parse from title using various patterns
+            }
+            // 3. FALLBACK: Parse from title using various patterns
+            else if (appliedCoupon.title) {
                 const patterns = [
-                    /ราคา\s*(\d+)\s*\.-?/i,     // ราคา 35.- or ราคา 35
-                    /ราคา\s*(\d+)/i,             // ราคา 35
+                    /ลด\s*(\d+)/,                // ลด 50
+                    /(\d+)%/,                     // 10% (need special handling)
+                    /ราคา\s*(\d+)/,              // ราคา 35.-
                     /-฿(\d+)/,                   // -฿50
                     /(\d+)\s*บาท/,               // 50 บาท
-                    /ลด\s*(\d+)/,                // ลด 50
                     /฿\s*(\d+)/                  // ฿50
                 ];
 
-                for (const p of patterns) {
-                    const match = appliedCoupon.title.match(p);
-                    if (match) {
-                        couponDiscount = parseInt(match[1]);
-                        break;
+                // Check for percentage first
+                const percentMatch = appliedCoupon.title.match(/(\d+)%/);
+                if (percentMatch) {
+                    couponDiscount = Math.floor(subtotal * (parseInt(percentMatch[1]) / 100));
+                } else {
+                    for (const p of patterns) {
+                        const match = appliedCoupon.title.match(p);
+                        if (match) {
+                            couponDiscount = parseInt(match[1]);
+                            break;
+                        }
                     }
                 }
             }

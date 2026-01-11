@@ -937,6 +937,25 @@ const initDatabasePG = async () => {
             console.log('Migration 26 note:', migrationErr26.message);
         }
 
+        // --- MIGRATION 27: Add discount fields to loyalty_promotions ---
+        // This allows explicit discount configuration instead of parsing from title
+        try {
+            console.log('📦 Running Migration 27: Add discount fields to loyalty_promotions...');
+            await client.query(`
+                ALTER TABLE loyalty_promotions 
+                ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'none',
+                ADD COLUMN IF NOT EXISTS discount_value DECIMAL(12,2) DEFAULT 0
+            `);
+            // discount_type values: 'none', 'fixed', 'percent', 'fixed_price'
+            // - none: No discount (e.g., free item promo)
+            // - fixed: Fixed amount discount (e.g., 10 baht off)
+            // - percent: Percentage discount (e.g., 10% off)
+            // - fixed_price: Fixed total price (e.g., pay only 35 baht)
+            console.log('✅ Migration 27: discount fields added to loyalty_promotions');
+        } catch (migrationErr27) {
+            console.log('Migration 27 note:', migrationErr27.message);
+        }
+
         // Final Commit for all migrations and seeds
         // await client.query('COMMIT'); // Removed to avoid double commit if line 329 already committed
     } catch (e) {

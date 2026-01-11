@@ -178,4 +178,12 @@
 - \[2026-01-11 19:54:00] | File: electron/server.js | Line: 2840 | Keyword: API line_orders | Status: Modified | Change: Fixed coupon data retrieval to use new columns first, fallback to legacy JOIN.
 - \[2026-01-11 19:54:00] | File: src/LineOrderManagement.jsx | Line: 536 | Keyword: Item Price | Status: Modified | Change: Fixed item price calculation to include options price_modifier.
 - \[2026-01-11 20:05:00] | File: electron/server.js | Line: 3225 | Keyword: Coupon Discount | Status: Modified | Change: Improved discount calculation to use discount_value column first, then fallback to multiple regex patterns (ลด, %, ราคา, number).
+- \[2026-01-11 23:36:00] | File: electron/db_pg.js | Line: 939 | Keyword: Migration 27 | Status: Created | Change: Added discount_type and discount_value columns to loyalty_promotions table.
+- \[2026-01-11 23:36:00] | File: electron/server.js | Line: 4421 | Keyword: POST Promotions | Status: Modified | Change: Updated API to accept and save discountType and discountValue.
+- \[2026-01-11 23:36:00] | File: electron/server.js | Line: 4440 | Keyword: PUT Promotions | Status: Modified | Change: Updated API to accept and save discountType and discountValue.
+- \[2026-01-11 23:36:00] | File: electron/server.js | Line: 4320 | Keyword: Redeem Coupon | Status: Modified | Change: Copy discount_type and discount_value from promotion to coupon.
+- \[2026-01-11 23:36:00] | File: src/pages/Promotions.jsx | Line: 15,40,80,226 | Keyword: Discount UI | Status: Modified | Change: Added discount type dropdown and value input in promotion form.
+- \[2026-01-11 23:41:00] | File: electron/server.js | Line: 3230 | Keyword: Coupon Processing | Status: Modified | Change: Added handling for fixed_price discount type (customer pays only fixed amount).
+- \[2026-01-11 23:44:00] | File: src/OrderEntry.jsx | Line: 459 | Keyword: Coupon Discount | Status: Modified | Change: Added support for discount_type + discount_value system (fixed, percent, fixed_price).
+- \[2026-01-11 23:44:00] | File: src/pages/LineOrder.jsx | Line: 267 | Keyword: getCouponDiscountAmount | Status: Modified | Change: Added support for discount_type + discount_value system (fixed, percent, fixed_price).
 
