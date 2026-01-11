@@ -166,3 +166,9 @@
 - \[2026-01-10 20:45:00] | File: src/OrderEntry.jsx | Line: 516 | Keyword: Net Amount Payment | Status: Modified | Change: Updated api.payOrder call to include paidAmount: finalToPay so server saves the Net Amount.
 
 - \[2026-01-10 20:45:00] | File: src/LineOrderManagement.jsx | Line: 140 | Keyword: Net Amount Payment | Status: Modified | Change: Updated payment fetch call to include paidAmount: finalAmount.
+- \[2026-01-10 21:48:00] | File: PROJECT_LOG.md | Line: 35, 167 | Keyword: Markdown Lint Fix | Status: Modified | Change: Fixed list formatting and escaped square brackets in timestamps to resolve lint warnings.
+- \[2026-01-10 21:48:00] | File: index.html | Line: 9 | Keyword: Meta Tag | Status: Modified | Change: Added mobile-web-app-capable meta tag to fix deprecation warning.
+- \[2026-01-10 21:48:00] | File: src/components/AnalyticsDashboard.jsx | Line: 47, 108 | Keyword: Recharts Warning | Status: Modified | Change: Added minHeight to ResponsiveContainer to prevent width/height calculation warnings.
+- \[2026-01-10 21:48:00] | File: src/services/api.js | Line: 10 | Keyword: WebSocket Config | Status: Modified | Change: Forced Socket.io to use port 3000 in dev mode to fix connection errors.
+- \[2026-01-11 13:24:00] | File: src/layouts/MasterLayout.jsx | Line: 41 | Keyword: Notification Sound | Status: Modified | Change: Added audio notification for order-related notifications (order, bill, takeaway, delivery, kitchen, payment). Coupon/member/info notifications excluded.
+

@@ -38,6 +38,14 @@ const MasterLayout = ({ children }) => {
     const canViewUsers = isOwner;
     const canViewFinance = isOwner || user?.role === 'finance';
 
+    // Types that should trigger notification sound (order-related only)
+    const ORDER_NOTIFICATION_TYPES = ['order', 'bill', 'takeaway', 'delivery', 'kitchen', 'payment'];
+
+    const playNotificationSound = () => {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play().catch(e => console.log('Audio play error:', e));
+    };
+
     React.useEffect(() => {
         loadNotifications();
 
@@ -45,6 +53,10 @@ const MasterLayout = ({ children }) => {
         const onDisconnect = () => setIsConnected(false);
         const onNewNotification = (notif) => {
             setNotifications(prev => [notif, ...prev].slice(0, 100));
+            // Play sound only for order-related notifications (not coupon, member, info)
+            if (ORDER_NOTIFICATION_TYPES.includes(notif.type)) {
+                playNotificationSound();
+            }
             // Show toast for a few seconds if drawer is closed
             if (!isNotificationOpen) {
                 setNotification(notif);
