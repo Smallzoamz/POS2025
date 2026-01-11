@@ -923,6 +923,20 @@ const initDatabasePG = async () => {
             console.log('Migration 25 note:', migrationErr25.message);
         }
 
+        // --- MIGRATION 26: Add coupon columns to line_orders ---
+        try {
+            console.log('📦 Running Migration 26: Add coupon columns to line_orders...');
+            await client.query(`
+                ALTER TABLE line_orders 
+                ADD COLUMN IF NOT EXISTS coupon_code TEXT,
+                ADD COLUMN IF NOT EXISTS coupon_discount DECIMAL(12,2) DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS original_amount DECIMAL(12,2)
+            `);
+            console.log('✅ Migration 26: coupon columns added to line_orders');
+        } catch (migrationErr26) {
+            console.log('Migration 26 note:', migrationErr26.message);
+        }
+
         // Final Commit for all migrations and seeds
         // await client.query('COMMIT'); // Removed to avoid double commit if line 329 already committed
     } catch (e) {

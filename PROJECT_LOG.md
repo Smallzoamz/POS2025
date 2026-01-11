@@ -171,4 +171,8 @@
 - \[2026-01-10 21:48:00] | File: src/components/AnalyticsDashboard.jsx | Line: 47, 108 | Keyword: Recharts Warning | Status: Modified | Change: Added minHeight to ResponsiveContainer to prevent width/height calculation warnings.
 - \[2026-01-10 21:48:00] | File: src/services/api.js | Line: 10 | Keyword: WebSocket Config | Status: Modified | Change: Forced Socket.io to use port 3000 in dev mode to fix connection errors.
 - \[2026-01-11 13:24:00] | File: src/layouts/MasterLayout.jsx | Line: 41 | Keyword: Notification Sound | Status: Modified | Change: Added audio notification for order-related notifications (order, bill, takeaway, delivery, kitchen, payment). Coupon/member/info notifications excluded.
+- \[2026-01-11 19:30:00] | File: electron/db_pg.js | Line: 926 | Keyword: Migration 26 | Status: Created | Change: Added coupon_code, coupon_discount, original_amount columns to line_orders table.
+- \[2026-01-11 19:30:00] | File: electron/server.js | Line: 3220 | Keyword: LINE Order Insert | Status: Modified | Change: Updated INSERT query to save coupon data (coupon_code, coupon_discount, original_amount).
+- \[2026-01-11 19:30:00] | File: electron/server.js | Line: 3053 | Keyword: sendLineFlexMessage | Status: Modified | Change: Updated Flex Message to show original amount and discount when coupon applied.
+- \[2026-01-11 19:30:00] | File: src/LineOrderManagement.jsx | Line: 540, 366 | Keyword: Coupon Display | Status: Modified | Change: Added discount info display in Order Detail Modal and Order Card.
 

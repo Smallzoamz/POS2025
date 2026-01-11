@@ -3050,8 +3050,32 @@ async function startServer() {
             { "type": "separator", "margin": "md" }
         ];
 
-        // Add Coupon Row if exists
-        if (couponInfo) {
+        // Add Coupon/Discount Row if coupon was applied (from orderData directly)
+        const hasCoupon = orderData.coupon_code && parseFloat(orderData.coupon_discount || 0) > 0;
+        if (hasCoupon) {
+            // Show original amount (before discount)
+            detailsContents.push({
+                "type": "box",
+                "layout": "horizontal",
+                "margin": "sm",
+                "contents": [
+                    { "type": "text", "text": "ยอดก่อนลด", "size": "xs", "color": "#888888" },
+                    { "type": "text", "text": `฿${parseFloat(orderData.original_amount || 0).toLocaleString()}`, "size": "xs", "align": "end", "color": "#888888", "decoration": "line-through" }
+                ]
+            });
+            // Show coupon discount
+            detailsContents.push({
+                "type": "box",
+                "layout": "horizontal",
+                "margin": "sm",
+                "contents": [
+                    { "type": "text", "text": `🎁 คูปอง: ${orderData.coupon_code}`, "size": "xs", "color": "#A020F0", "weight": "bold" },
+                    { "type": "text", "text": `-฿${parseFloat(orderData.coupon_discount).toLocaleString()}`, "size": "xs", "align": "end", "color": "#1DB446", "weight": "bold" }
+                ]
+            });
+        }
+        // Fallback: Show coupon from legacy JOIN query if no direct data
+        else if (couponInfo) {
             detailsContents.push({
                 "type": "box",
                 "layout": "horizontal",
@@ -3222,15 +3246,16 @@ async function startServer() {
                 (order_type, customer_name, customer_phone, customer_address, 
                  total_amount, status, note, tracking_token, items_json,
                  latitude, longitude, reservation_date, reservation_time, guests_count,
-                 deposit_amount, is_deposit_paid, assigned_table, line_user_id, customer_id)
-                VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                 deposit_amount, is_deposit_paid, assigned_table, line_user_id, customer_id,
+                 coupon_code, coupon_discount, original_amount)
+                VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
                 RETURNING id
             `, [
                 orderType || 'delivery',
                 customerName || '',
                 customerPhone || '',
                 customerAddress || '',
-                finalTotal, // Use calculated total
+                finalTotal, // Use calculated total (after coupon)
                 note || '',
                 trackingToken,
                 itemsJson,
@@ -3243,7 +3268,10 @@ async function startServer() {
                 false, // is_deposit_paid
                 assignedTable || null,
                 lineUserId || null, // $17
-                customerId // $18
+                customerId, // $18
+                couponCode || null, // $19 - coupon_code
+                couponDiscount || 0, // $20 - coupon_discount
+                totalAmount // $21 - original_amount (before discount)
             ]);
 
             const orderId = orderRes.rows[0].id;

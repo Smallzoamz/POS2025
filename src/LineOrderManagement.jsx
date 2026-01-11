@@ -363,9 +363,9 @@ const LineOrderManagement = () => {
                                         <p className="text-[10px] font-bold text-slate-400 line-clamp-1">
                                             👤 {order.customer_name}
                                         </p>
-                                        {order.applied_coupon && (
-                                            <p className="text-[10px] font-bold text-purple-500 flex items-center gap-1 mt-1">
-                                                <span>🎁</span> {order.applied_coupon.coupon_code}
+                                        {order.coupon_code && parseFloat(order.coupon_discount || 0) > 0 && (
+                                            <p className="text-[10px] font-bold text-emerald-400 flex items-center gap-1 mt-1">
+                                                <span>🎁</span> {order.coupon_code} <span className="text-emerald-500">(-฿{parseFloat(order.coupon_discount).toLocaleString()})</span>
                                             </p>
                                         )}
                                     </div>
@@ -537,15 +537,32 @@ const LineOrderManagement = () => {
                                             </div>
                                         ))}
                                     </div>
-                                    <div className="mt-6 pt-6 border-t-2 border-dashed border-white/10 flex justify-between items-end">
-                                        <div>
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Grand Total</p>
-                                            <p className="text-xs text-slate-400 italic">Vat included (If applicable)</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="text-3xl font-black text-white drop-shadow-glow tracking-tighter">
-                                                ฿{selectedOrder.total_amount?.toLocaleString()}
-                                            </span>
+                                    <div className="mt-6 pt-6 border-t-2 border-dashed border-white/10 space-y-3">
+                                        {/* Show discount info if coupon applied */}
+                                        {selectedOrder.coupon_code && parseFloat(selectedOrder.coupon_discount || 0) > 0 && (
+                                            <>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-xs text-slate-400">ยอดก่อนลด</span>
+                                                    <span className="text-sm text-slate-400 line-through">฿{parseFloat(selectedOrder.original_amount || 0).toLocaleString()}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
+                                                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                                                        <span>🎁</span> คูปอง: {selectedOrder.coupon_code}
+                                                    </span>
+                                                    <span className="text-sm font-bold text-emerald-400">-฿{parseFloat(selectedOrder.coupon_discount).toLocaleString()}</span>
+                                                </div>
+                                            </>
+                                        )}
+                                        <div className="flex justify-between items-end">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Grand Total</p>
+                                                <p className="text-xs text-slate-400 italic">Vat included (If applicable)</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="text-3xl font-black text-white drop-shadow-glow tracking-tighter">
+                                                    ฿{selectedOrder.total_amount?.toLocaleString()}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
