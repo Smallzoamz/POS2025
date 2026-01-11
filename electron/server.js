@@ -2837,21 +2837,34 @@ async function startServer() {
                 const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
                 order.items = itemsRes.rows;
 
-                // Fetch linked coupon
-                const couponRes = await query(`
-                    SELECT c.coupon_code, c.promotion_id, p.title, p.description 
-                    FROM loyalty_coupons c
-                    JOIN loyalty_promotions p ON c.promotion_id = p.id
-                    WHERE c.line_order_id = $1 AND c.status = 'used'
-                `, [order.id]);
-
-                if (couponRes.rows.length > 0) {
-                    order.applied_coupon = couponRes.rows[0];
-                    // Also populate legacy fields if needed
-                    order.coupon_code = couponRes.rows[0].coupon_code;
-                    console.log(`🎁 Order #${order.id} has coupon: ${order.coupon_code}`);
+                // Use coupon data from line_orders columns (NEW) or fallback to loyalty_coupons JOIN (LEGACY)
+                if (order.coupon_code && parseFloat(order.coupon_discount || 0) > 0) {
+                    // Data from new columns - just build applied_coupon for UI compatibility
+                    order.applied_coupon = {
+                        coupon_code: order.coupon_code,
+                        title: `ส่วนลด ฿${parseFloat(order.coupon_discount).toLocaleString()}`,
+                        discount_amount: parseFloat(order.coupon_discount)
+                    };
+                    console.log(`🎁 Order #${order.id} has coupon: ${order.coupon_code} (-฿${order.coupon_discount})`);
                 } else {
-                    console.log(`📦 Order #${order.id}: No linked coupon found`);
+                    // Fallback: Fetch linked coupon from loyalty_coupons table (for old orders)
+                    const couponRes = await query(`
+                        SELECT c.coupon_code, c.promotion_id, c.discount_value, p.title, p.description 
+                        FROM loyalty_coupons c
+                        JOIN loyalty_promotions p ON c.promotion_id = p.id
+                        WHERE c.line_order_id = $1 AND c.status = 'used'
+                    `, [order.id]);
+
+                    if (couponRes.rows.length > 0) {
+                        const coupon = couponRes.rows[0];
+                        order.applied_coupon = coupon;
+                        // Populate columns if missing
+                        if (!order.coupon_code) order.coupon_code = coupon.coupon_code;
+                        if (!order.coupon_discount) order.coupon_discount = parseFloat(coupon.discount_value || 0);
+                        console.log(`🎁 Order #${order.id} has legacy coupon: ${order.coupon_code}`);
+                    } else {
+                        console.log(`📦 Order #${order.id}: No coupon`);
+                    }
                 }
             }
             res.json(lineOrders);

@@ -363,9 +363,13 @@ const LineOrderManagement = () => {
                                         <p className="text-[10px] font-bold text-slate-400 line-clamp-1">
                                             👤 {order.customer_name}
                                         </p>
-                                        {order.coupon_code && parseFloat(order.coupon_discount || 0) > 0 && (
+                                        {order.coupon_code && parseFloat(order.coupon_discount || 0) > 0 ? (
                                             <p className="text-[10px] font-bold text-emerald-400 flex items-center gap-1 mt-1">
                                                 <span>🎁</span> {order.coupon_code} <span className="text-emerald-500">(-฿{parseFloat(order.coupon_discount).toLocaleString()})</span>
+                                            </p>
+                                        ) : order.applied_coupon && (
+                                            <p className="text-[10px] font-bold text-purple-400 flex items-center gap-1 mt-1">
+                                                <span>🎁</span> {order.applied_coupon.coupon_code || 'Coupon'}
                                             </p>
                                         )}
                                     </div>
@@ -533,7 +537,11 @@ const LineOrderManagement = () => {
                                                         )}
                                                     </div>
                                                 </div>
-                                                <span className="font-black text-white text-sm">฿{((item.unitPrice || item.price || 0) * (item.quantity || 1)).toLocaleString()}</span>
+                                                <span className="font-black text-white text-sm">฿{(() => {
+                                                    const basePrice = parseFloat(item.unitPrice || item.price || 0);
+                                                    const optionsPrice = (item.options || []).reduce((sum, o) => sum + parseFloat(o.price_modifier || o.price || 0), 0);
+                                                    return ((basePrice + optionsPrice) * (item.quantity || 1)).toLocaleString();
+                                                })()}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -567,8 +575,8 @@ const LineOrderManagement = () => {
                                     </div>
                                 </div>
 
-                                {/* Coupon Info Block */}
-                                {selectedOrder.applied_coupon && (
+                                {/* Coupon Info Block - Show only if older block (no discount in Grand Total) */}
+                                {selectedOrder.applied_coupon && !selectedOrder.coupon_discount && (
                                     <div className="bg-purple-500/10 border border-purple-500/20 rounded-[24px] p-5 flex items-center justify-between">
                                         <div className="flex items-center gap-4">
                                             <div className="w-10 h-10 bg-purple-500 rounded-xl flex items-center justify-center text-white text-xl shadow-lg shadow-purple-500/20">🎁</div>

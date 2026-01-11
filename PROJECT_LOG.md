@@ -175,4 +175,6 @@
 - \[2026-01-11 19:30:00] | File: electron/server.js | Line: 3220 | Keyword: LINE Order Insert | Status: Modified | Change: Updated INSERT query to save coupon data (coupon_code, coupon_discount, original_amount).
 - \[2026-01-11 19:30:00] | File: electron/server.js | Line: 3053 | Keyword: sendLineFlexMessage | Status: Modified | Change: Updated Flex Message to show original amount and discount when coupon applied.
 - \[2026-01-11 19:30:00] | File: src/LineOrderManagement.jsx | Line: 540, 366 | Keyword: Coupon Display | Status: Modified | Change: Added discount info display in Order Detail Modal and Order Card.
+- \[2026-01-11 19:54:00] | File: electron/server.js | Line: 2840 | Keyword: API line_orders | Status: Modified | Change: Fixed coupon data retrieval to use new columns first, fallback to legacy JOIN.
+- \[2026-01-11 19:54:00] | File: src/LineOrderManagement.jsx | Line: 536 | Keyword: Item Price | Status: Modified | Change: Fixed item price calculation to include options price_modifier.
 
