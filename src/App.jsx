@@ -124,6 +124,7 @@ function App() {
 
                     {/* Loyalty System - Admin Management */}
                     <Route path="/admin/promotions" element={<ProtectedRoute roles={['owner', 'admin']}><Promotions /></ProtectedRoute>} />
+                    <Route path="/promotions" element={<Navigate to="/admin/promotions" replace />} />
                 </Routes>
             </Router>
         </AuthProvider>
