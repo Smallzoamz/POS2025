@@ -2739,6 +2739,8 @@ async function startServer() {
     // 2. Incoming Messages Handler
     app.post('/webhook/facebook', async (req, res) => {
         const body = req.body;
+        console.log('🔥 [Facebook] Webhook POST Received!');
+        console.log(JSON.stringify(body, null, 2));
 
         if (body.object === 'page') {
             // Iterate over each entry - there may be multiple if batched
@@ -2978,9 +2980,12 @@ async function startServer() {
         }
 
         if (!pageAccessToken) {
-            console.warn('[Facebook] No Page Access Token configured. Cannot reply.');
+            console.error('[Facebook] Error: Page Access Token is missing in DB Settings!');
             return;
         }
+
+        console.log(`[Facebook] Sending logic for PSID ${sender_psid}...`);
+
 
         const requestBody = {
             "recipient": {
@@ -2990,16 +2995,16 @@ async function startServer() {
         };
 
         try {
-            const res = await fetch(`https://graph.facebook.com/v13.0/me/messages?access_token=${pageAccessToken}`, {
+            const responseJson = await fetch('https://graph.facebook.com/v22.0/me/messages?access_token=' + pageAccessToken, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
+                body: JSON.stringify(requestBody) // Changed request_body to requestBody
             });
-            if (!res.ok) {
-                const errText = await res.text();
-                console.error('[Facebook] Send API Error:', errText);
+            const resData = await responseJson.json();
+            if (resData.error) {
+                console.error('[Facebook] Send API Error:', JSON.stringify(resData.error, null, 2));
             } else {
-                console.log('[Facebook] Reply sent!');
+                console.log('[Facebook] Message Sent Successfully!', resData);
             }
         } catch (err) {
             console.error('[Facebook] Network Error:', err);
@@ -3086,21 +3091,21 @@ async function startServer() {
         res.status(503).json({ error: 'Cloud Tunnel is temporarily disabled for system maintenance.' });
         /*
         const { active } = req.body;
- 
+     
         try {
             if (active) {
                 if (tunnel) return res.json({ success: true, url: cloudUrl });
- 
+     
                 isLaunchingCloud = true;
                 // Start Tunnel
                 tunnel = await localtunnel({ port: port });
                 cloudUrl = tunnel.url;
- 
+     
                 tunnel.on('close', () => {
                     tunnel = null;
                     cloudUrl = null;
                 });
- 
+     
                 isLaunchingCloud = false;
                 res.json({ success: true, url: cloudUrl });
             } else {
