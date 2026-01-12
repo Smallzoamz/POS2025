@@ -2985,15 +2985,15 @@ async function startServer() {
                 "chatBarText": "สั่งอาหาร / เมนู",
                 "areas": [
                     {
-                        "bounds": { "x": 0, "y": 0, "width": 1200, "height": 540 },
+                        "bounds": { "x": 0, "y": 0, "width": 1200, "height": 405 },
                         "action": { "type": "uri", "uri": uriOrder }
                     },
                     {
-                        "bounds": { "x": 0, "y": 540, "width": 600, "height": 270 },
+                        "bounds": { "x": 0, "y": 405, "width": 600, "height": 405 },
                         "action": { "type": "uri", "uri": uriLoyalty }
                     },
                     {
-                        "bounds": { "x": 600, "y": 540, "width": 600, "height": 270 },
+                        "bounds": { "x": 600, "y": 405, "width": 600, "height": 405 },
                         "action": { "type": "uri", "uri": uriPromo }
                     }
                 ]
