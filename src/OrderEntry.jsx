@@ -133,9 +133,7 @@ const OrderEntry = () => {
             // Set Menu
             setCategories(menuData.categories);
             setMenuItems(menuData.products);
-            if (menuData.categories.length > 0) {
-                setSelectedCategory(menuData.categories[0].id);
-            }
+            setSelectedCategory('RECOMMENDED'); // Default to Recommended
 
             // Set Active Order
             if (orderData.order) {

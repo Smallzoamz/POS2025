@@ -74,6 +74,8 @@ const TakeawayOrder = () => {
             setMenuItems([]);
         } finally {
             setLoading(false);
+            // Default to Recommended if available
+            setSelectedCategory('RECOMMENDED');
         }
     };
 
@@ -333,6 +335,12 @@ const TakeawayOrder = () => {
                         >
                             🍽️ ทั้งหมด
                         </button>
+                        <button
+                            onClick={() => setSelectedCategory('RECOMMENDED')}
+                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${selectedCategory === 'RECOMMENDED' ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}
+                        >
+                            🔥 แนะนำ
+                        </button>
                         {Array.isArray(categories) && categories.map(cat => (
                             <button
                                 key={cat.id}
@@ -348,7 +356,11 @@ const TakeawayOrder = () => {
                 {/* Menu Grid */}
                 <div className="flex-1 p-2 pb-32">
                     <div className="grid grid-cols-2 gap-1.5">
-                        {Array.isArray(menuItems) && menuItems.filter(i => !selectedCategory || i.category_id === selectedCategory).map(item => {
+                        {Array.isArray(menuItems) && menuItems.filter(i => {
+                            if (!selectedCategory) return true;
+                            if (selectedCategory === 'RECOMMENDED') return i.is_recommended;
+                            return i.category_id === selectedCategory;
+                        }).map(item => {
                             const inCartCount = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.quantity, 0);
                             return (
                                 <div key={item.id} className={`bg-white rounded-xl p-2 shadow-sm ${loadingOptions ? 'pointer-events-none opacity-70' : ''}`}>
