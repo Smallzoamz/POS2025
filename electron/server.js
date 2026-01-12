@@ -2774,510 +2774,483 @@ async function startServer() {
     async function handleFacebookMessage(sender_psid, received_message) {
         let response;
 
-        // Checks if the message contains text
-        if (received_message.text) {
-            const text = received_message.text.trim();
+        // --- 1. Helper: Smart Keyword Matcher ---
+        const matches = (text, keywords) => {
             const lowerText = text.toLowerCase();
+            return keywords.some(kw => lowerText.includes(kw));
+        };
 
-            // 1. Stock Check Logic (e.g., "มีหมูมั้ย", "มีกุ้งไหม")
-            // Regex to capture the word after "มี" and before "มั้ย/ไหม" or end of string
-            const stockMatch = text.match(/มี(.+)(?:มั้ย|ไหม|รึเปล่า|หรือเปล่า)/i);
+        const KEYWORDS = {
+            stock: ['มี...มั้ย', 'มี...ไหม', 'มี', 'หมด', 'stock', 'available', 'หาไม่เจอ'],
+            hours: ['เปิด', 'ปิด', 'เวลา', 'time', 'hour', 'open', 'close', 'กี่โมง'],
+            menu: ['เมนู', 'รายการ', 'food', 'menu', 'order', 'สั่งอาหาร'],
+            queue: ['คิว', 'รอ', 'queue', 'wait', 'people', 'คนเยอะ'],
+            price: ['ราคา', 'เท่าไหร่', 'price', 'cost', 'how much', 'กี่บาท'],
+            payment: ['โอน', 'จ่าย', 'เลขบัญชี', 'พร้อมเพย์', 'pay', 'bank', 'transfer', 'qr'],
+            wifi: ['wifi', 'ไวไฟ', 'เน็ต', 'net', 'internet', 'password', 'รหัส'],
+            recommend: ['แนะนำ', 'recommend', 'best seller', 'signature', 'อร่อย', 'อะไรดี', 'เด็ด'],
+            greetings: ['สวัสดี', 'hi', 'hello', 'ทัก', 'ดีจ้า']
+        };
 
-            if (stockMatch) {
-                const keyword = stockMatch[1].trim();
-                // Security: Parameterized query to prevent SQL Injection
+        // Check if the message contains text
+        if (received_message.text) {
+            const text = received_message.text;
+
+            // --- 2. Logic Implementation ---
+
+            // A. Stock / Ingredient Check
+            if (KEYWORDS.stock.some(kw => text.includes(kw)) && text.length > 3 && !matches(text, KEYWORDS.price)) {
                 try {
-                    const stockRes = await query(
-                        "SELECT name, total_quantity, unit FROM ingredients WHERE name LIKE $1 LIMIT 5",
-                        [`%${keyword}%`]
-                    );
+                    const keyword = text.replace(/มี|มั้ย|ไหม|stock|available/gi, '').trim();
+                    if (keyword.length > 1) {
+                        const ingredientsRes = await query("SELECT name, total_quantity, unit FROM ingredients WHERE name LIKE $1", [`%${keyword}%`]);
+                        const productsRes = await query("SELECT name, is_available FROM products WHERE name LIKE $1", [`%${keyword}%`]);
 
-                    if (stockRes.rows.length === 0) {
-                        response = { "text": `ขออภัยค่ะ ไม่พบข้อมูลวัตถุดิบ "${keyword}" ในระบบค่ะ 😅` };
-                    } else {
-                        // Check availablity
-                        const availableItems = stockRes.rows.filter(item => parseFloat(item.total_quantity) > 0.5); // Must have at least 0.5 unit to be "In Stock"
-
-                        async function handleFacebookMessage(sender_psid, received_message) {
-                            let response;
-
-                            // --- 1. Helper: Smart Keyword Matcher ---
-                            const matches = (text, keywords) => {
-                                const lowerText = text.toLowerCase();
-                                return keywords.some(kw => lowerText.includes(kw));
-                            };
-
-                            const KEYWORDS = {
-                                stock: ['มี...มั้ย', 'มี...ไหม', 'มี', 'หมด', 'stock', 'available', 'หาไม่เจอ'],
-                                hours: ['เปิด', 'ปิด', 'เวลา', 'time', 'hour', 'open', 'close', 'กี่โมง'],
-                                menu: ['เมนู', 'รายการ', 'food', 'menu', 'order', 'สั่งอาหาร'],
-                                queue: ['คิว', 'รอ', 'queue', 'wait', 'people', 'คนเยอะ'],
-                                price: ['ราคา', 'เท่าไหร่', 'price', 'cost', 'how much', 'กี่บาท'],
-                                payment: ['โอน', 'จ่าย', 'เลขบัญชี', 'พร้อมเพย์', 'pay', 'bank', 'transfer', 'qr'],
-                                wifi: ['wifi', 'ไวไฟ', 'เน็ต', 'net', 'internet', 'password', 'รหัส'],
-                                recommend: ['แนะนำ', 'recommend', 'best seller', 'signature', 'อร่อย', 'อะไรดี', 'เด็ด'],
-                                greetings: ['สวัสดี', 'hi', 'hello', 'ทัก', 'ดีจ้า']
-                            };
-
-                            // Check if the message contains text
-                            if (received_message.text) {
-                                const text = received_message.text;
-
-                                // --- 2. Logic Implementation ---
-
-                                // A. Stock / Ingredient Check
-                                if (KEYWORDS.stock.some(kw => text.includes(kw)) && text.length > 3 && !matches(text, KEYWORDS.price)) {
-                                    try {
-                                        const keyword = text.replace(/มี|มั้ย|ไหม|stock|available/gi, '').trim();
-                                        if (keyword.length > 1) {
-                                            const ingredientsRes = await query("SELECT name, total_quantity, unit FROM ingredients WHERE name LIKE $1", [`%${keyword}%`]);
-                                            const productsRes = await query("SELECT name, is_available FROM products WHERE name LIKE $1", [`%${keyword}%`]);
-
-                                            let msg = "";
-                                            if (ingredientsRes.rows.length > 0) {
-                                                ingredientsRes.rows.forEach(i => {
-                                                    const status = parseFloat(i.total_quantity) > 0 ? "✅ มีค่ะ" : "❌ หมดค่ะ";
-                                                    msg += `${status} ${i.name} (เหลือ ${parseFloat(i.total_quantity)} ${i.unit})\n`;
-                                                });
-                                            }
-                                            if (productsRes.rows.length > 0) {
-                                                productsRes.rows.forEach(p => {
-                                                    const status = p.is_available ? "✅ พร้อมเสิร์ฟ" : "❌ หมดชั่วคราว";
-                                                    msg += `${status} เมนู "${p.name}"\n`;
-                                                });
-                                            }
-
-                                            if (msg) {
-                                                response = { "text": `🔎 ผลการค้นหาสำหรับ "${keyword}":\n\n${msg}` };
-                                            } else {
-                                                response = { "text": `🧐 น้องอันอันหา "${keyword}" ไม่เจอในระบบค่ะ ลองพิมพ์ชื่อใหม่ดูนะคะ` };
-                                            }
-                                        } else {
-                                            response = { "text": "ต้องการเช็ควัตถุดิบตัวไหน พิมพ์บอกได้เลยนะคะ เช่น 'มีหมูกรอบมั้ย'" };
-                                        }
-                                    } catch (e) { console.error(e); response = { "text": "⚠️ ระบบเช็คสต็อกขัดข้องชั่วคราวค่ะ" }; }
-
-                                    // B. Store Hours
-                                } else if (matches(text, KEYWORDS.hours)) {
-                                    try {
-                                        const settingsRes = await query("SELECT key, value FROM settings WHERE key IN ('store_open_time', 'store_close_time')");
-                                        const settings = {};
-                                        settingsRes.rows.forEach(s => settings[s.key] = s.value);
-                                        const open = settings.store_open_time || '09:00';
-                                        const close = settings.store_close_time || '21:00';
-                                        response = { "text": `🕒 **เวลาทำการร้าน**\n\n✅ เปิด: ${open} น.\n❌ ปิด: ${close} น.\n\nแวะมาทานของอร่อยได้ทุกวันเลยนะคะ! 🥰` };
-                                    } catch (e) {
-                                        response = { "text": "ร้านเปิดให้บริการตามปกตินะคะ (09:00 - 21:00)" };
-                                    }
-
-                                    // C. Menu (Dynamic Link)
-                                } else if (matches(text, KEYWORDS.menu)) {
-                                    try {
-                                        const settingsRes = await query("SELECT value FROM settings WHERE key = 'website_sync_url'");
-                                        let menuUrl = "https://yoursite.com";
-                                        if (settingsRes.rows.length > 0 && settingsRes.rows[0].value) {
-                                            const rawUrl = settingsRes.rows[0].value;
-                                            menuUrl = rawUrl.replace('/api/sync-menu', '');
-                                        }
-
-                                        response = {
-                                            "attachment": {
-                                                "type": "template",
-                                                "payload": {
-                                                    "template_type": "button",
-                                                    "text": "🍽️ หิวแล้วใช่มั้ยคะ? กดดูเมนูทั้งหมดแล้วสั่งออนไลน์ได้เลยที่นี่ค่ะ 👇",
-                                                    "buttons": [
-                                                        {
-                                                            "type": "web_url",
-                                                            "url": menuUrl,
-                                                            "title": "📖 ดูเมนูออนไลน์"
-                                                        }
-                                                    ]
-                                                }
-                                            }
-                                        };
-                                    } catch (e) { response = { "text": "ขออภัยค่ะ ลิงค์เมนูขัดข้องชั่วคราว" }; }
-
-                                    // D. Recommendations (Carousel from DB)
-                                } else if (matches(text, KEYWORDS.recommend)) {
-                                    try {
-                                        const recRes = await query("SELECT name, price, image, description FROM products WHERE is_recommended = TRUE LIMIT 5");
-                                        if (recRes.rows.length > 0) {
-                                            const elements = recRes.rows.map(p => ({
-                                                "title": `✨ ${p.name}`,
-                                                "subtitle": `${p.description || 'ความอร่อยที่คุณต้องลอง!'} | 💰 ${parseFloat(p.price)}.-`,
-                                                "image_url": p.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80",
-                                                "buttons": [
-                                                    {
-                                                        "type": "postback",
-                                                        "title": "📌 สนใจเมนูนี้",
-                                                        "payload": `INTERESTED_${p.name}`
-                                                    }
-                                                ]
-                                            }));
-
-                                            response = {
-                                                "attachment": {
-                                                    "type": "template",
-                                                    "payload": {
-                                                        "template_type": "generic",
-                                                        "elements": elements
-                                                    }
-                                                }
-                                            };
-                                        } else {
-                                            // Fallback logic could be handled here if needed.
-                                            response = { "text": "🍽️ เมนูเด็ดของร้านมีเยอะเลยค่ะ! ลองพิมพ์ 'เมนู' เพื่อดูทั้งหมดได้เลยนะคะ" };
-                                        }
-                                    } catch (e) { console.error(e); response = { "text": "ขออภัยค่ะ ระบบแนะนำเมนูขัดข้อง" }; }
-
-                                    // E. Queue
-                                } else if (matches(text, KEYWORDS.queue)) {
-                                    try {
-                                        const ordersRes = await query("SELECT COUNT(*) as count FROM orders WHERE status NOT IN ('paid', 'cancelled')");
-                                        const queueCount = parseInt(ordersRes.rows[0].count || 0);
-                                        let statusIcon = queueCount < 5 ? "🟢" : (queueCount < 10 ? "🟡" : "🔴");
-
-                                        response = { "text": `${statusIcon} **สถานะคิวปัจจุบัน**\n\n📌 รอคิวอยู่: ${queueCount} โต๊ะ\n\n${queueCount === 0 ? "โต๊ะว่างเพียบ! มาได้เลยค่า ⚡" : "อดใจรอนิดนึงนะคะ ความอร่อยกำลังทำงาน 👨‍🍳"}` };
-                                    } catch (e) { response = { "text": "ไม่สามารถตรวจสอบคิวได้ค่ะ" }; }
-
-                                    // F. Price (Multiple keywords)
-                                } else if (matches(text, KEYWORDS.price)) {
-                                    const keyword = text.replace(/ราคา|เท่าไหร่|กี่บาท|price/gi, '').trim();
-                                    if (keyword.length > 1) {
-                                        try {
-                                            const productRes = await query("SELECT name, price FROM products WHERE name LIKE $1 LIMIT 5", [`%${keyword}%`]);
-                                            if (productRes.rows.length > 0) {
-                                                let msg = "💰 **ราคาเมนูที่ค้นหา**\n\n";
-                                                productRes.rows.forEach(p => {
-                                                    msg += `🔹 ${p.name}: ${parseFloat(p.price)} บาท\n`;
-                                                });
-                                                response = { "text": msg };
-                                            } else {
-                                                response = { "text": `❌ ไม่พบเมนู "${keyword}" ค่ะ ลองสะกดใหม่นิดนึงน้า` };
-                                            }
-                                        } catch (e) { console.error(e); }
-                                    } else {
-                                        response = { "text": "🏷️ อยากรู้ราคาเมนูไหน พิมพ์ชื่อมาได้เลยค่ะ เช่น 'ราคากะเพรา'" };
-                                    }
-
-                                    // G. Payment
-                                } else if (matches(text, KEYWORDS.payment)) {
-                                    try {
-                                        const settingsRes = await query("SELECT value FROM settings WHERE key = 'promptpay_number'");
-                                        const promptpay = settingsRes.rows[0]?.value;
-                                        if (promptpay) {
-                                            response = { "text": `💸 **ช่องทางการชำระเงิน**\n\n📱 **PromptPay:** ${promptpay}\n(ชื่อบัญชีร้าน)\n\n📸 ส่งสลิปให้พี่พนักงานตรวจสอบได้เลยค่า` };
-                                        } else {
-                                            response = { "text": "💵 รับชำระเงินสด หรือสอบถาม QR Code ที่หน้าเคาน์เตอร์ได้เลยค่ะ" };
-                                        }
-                                    } catch (e) { response = { "text": "ระบบข้อมูลการชำระเงินขัดข้องค่ะ" }; }
-
-                                    // H. WiFi
-                                } else if (matches(text, KEYWORDS.wifi)) {
-                                    try {
-                                        const settingsRes = await query("SELECT value FROM settings WHERE key = 'wifi_password'");
-                                        const wifiPass = settingsRes.rows[0]?.value;
-                                        if (wifiPass) {
-                                            response = { "text": `📶 **Free WiFi**\n\n🔑 Password: ${wifiPass}\n\nเล่นเน็ตให้สนุกนะคะ! (อย่าลืมรีวิวร้านให้ด้วยน้า ⭐)` };
-                                        } else {
-                                            response = { "text": "📶 ทางร้านมี WiFi ฟรีให้บริการค่ะ รบกวนสอบถามรหัสจากพี่พนักงานนะคะ" };
-                                        }
-                                    } catch (e) { }
-
-                                    // I. Greetings / Fallback
-                                } else {
-                                    if (matches(text, KEYWORDS.greetings)) {
-                                        response = { "text": "สวัสดีค่า! 🙏 น้องอันอัน ยินดีต้อนรับค่ะ 💖\n\nมีอะไรให้ช่วยมั้ยคะ? ถามเรื่อง เมนู, โปรโมชั่น, หรือจองคิว ได้เลยน้า" };
-                                    } else {
-                                        response = {
-                                            "text": `🤖 น้องอันอันยังไม่เข้าใจคำว่า "${text}" ง่ะ 🥺\n\nลองถามใหม่ได้มั้ยคะ? เช่น:\n- "ขอรหัส wifi"\n- "ร้านเปิดกี่โมง"\n- "แนะนำเมนู"\n- "ราคากะเพรา"`
-                                        };
-                                    }
-                                }
-
-                            } else if (received_message.attachments) {
-                                let attachment_url = received_message.attachments[0].payload.url;
-                                response = {
-                                    "attachment": {
-                                        "type": "template",
-                                        "payload": {
-                                            "template_type": "generic",
-                                            "elements": [{
-                                                "title": "ได้รับรูปภาพแล้วค่ะ 📸",
-                                                "subtitle": "เป็นสลิปโอนเงินใช่ไหมคะ?",
-                                                "image_url": attachment_url,
-                                                "buttons": [
-                                                    { "type": "postback", "title": "✅ ใช่ (สลิปโอนเงิน)", "payload": "yes" },
-                                                    { "type": "postback", "title": "❌ ไม่ใช่", "payload": "no" }
-                                                ],
-                                            }]
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Send the response message
-                            callSendFacebookAPI(sender_psid, response);
-                        }
-
-                        async function handleFacebookPostback(sender_psid, received_postback) {
-                            let response;
-
-                            // Get the payload for the postback
-                            let payload = received_postback.payload;
-
-                            // Set the response based on the postback payload
-                            if (payload === 'yes') {
-                                response = { "text": "ขอบคุณที่ยืนยันค่ะ!" }
-                            } else if (payload === 'no') {
-                                response = { "text": "ขออภัยด้วยค่ะ ลองส่งภาพมาใหม่นะ." }
-                            }
-                            // Send the message to acknowledge the postback
-                            callSendFacebookAPI(sender_psid, response);
-                        }
-
-                        async function callSendFacebookAPI(sender_psid, response) {
-                            // Fetch Page Access Token from DB
-                            let pageAccessToken = '';
-                            try {
-                                const settingsRes = await query("SELECT value FROM settings WHERE key = 'facebook_page_access_token'");
-                                if (settingsRes.rows.length > 0) {
-                                    pageAccessToken = settingsRes.rows[0].value;
-                                }
-                            } catch (e) {
-                                console.error("Error fetching FB page token:", e);
-                                return;
-                            }
-
-                            if (!pageAccessToken) {
-                                console.error('[Facebook] Error: Page Access Token is missing in DB Settings!');
-                                return;
-                            }
-
-                            console.log(`[Facebook] Sending logic for PSID ${sender_psid}...`);
-
-
-                            const requestBody = {
-                                "recipient": {
-                                    "id": sender_psid
-                                },
-                                "message": response
-                            };
-
-                            try {
-                                const responseJson = await fetch('https://graph.facebook.com/v22.0/me/messages?access_token=' + pageAccessToken, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(requestBody) // Changed request_body to requestBody
-                                });
-                                const resData = await responseJson.json();
-                                if (resData.error) {
-                                    console.error('[Facebook] Send API Error:', JSON.stringify(resData.error, null, 2));
-                                } else {
-                                    console.log('[Facebook] Message Sent Successfully!', resData);
-                                }
-                            } catch (err) {
-                                console.error('[Facebook] Network Error:', err);
-                            }
-                        }
-
-
-                        // Create LINE Order
-                        app.post('/api/line_orders', async (req, res) => {
-                            const { customer_name, contact_number, delivery_address, items, total_amount, order_type, delivery_location } = req.body;
-                            const client = await pool.connect();
-
-                            try {
-                                await client.query('BEGIN');
-
-                                const result = await client.query(
-                                    `INSERT INTO line_orders (customer_name, contact_number, delivery_address, total_amount, status, order_type, delivery_location) 
-                 VALUES ($1, $2, $3, $4, 'pending', $5, $6) RETURNING id`,
-                                    [customer_name, contact_number, delivery_address, total_amount, order_type || 'delivery', delivery_location || null]
-                                );
-                                const lineOrderId = result.rows[0].id;
-
-                                for (const item of items) {
-                                    await client.query(
-                                        'INSERT INTO line_order_items (line_order_id, product_id, product_name, price, quantity) VALUES ($1, $2, $3, $4, $5)',
-                                        [lineOrderId, item.id, item.name, item.price, item.quantity]
-                                    );
-                                }
-
-                                await client.query('COMMIT');
-                                io.emit('line-order-new');
-                                res.json({ success: true, id: lineOrderId });
-                            } catch (err) {
-                                await client.query('ROLLBACK');
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            } finally {
-                                client.release();
-                            }
-                        });
-
-                        app.get('/', (req, res) => {
-                            res.send('POS Master Station Server is Running.')
-                        })
-
-                        app.get('/api/status', (req, res) => {
-                            res.json({ status: 'online', time: new Date() })
-                        })
-
-                        // --- NETWORK & CLOUD ENDPOINTS ---
-                        app.get('/api/network/status', async (req, res) => {
-                            let publicIp = '...';
-                            try {
-                                // Fetch public IP to bypass localtunnel interstitial
-                                const ipRes = await fetch('https://api.ipify.org?format=json');
-                                const ipData = await ipRes.json();
-                                publicIp = ipData.ip;
-                            } catch (e) {
-                                console.error("Failed to fetch public IP", e);
-                            }
-
-                            // Fetch Public URL if configured in settings
-                            let configuredPublicUrl = cloudUrl;
-                            try {
-                                const publicUrlRes = await query("SELECT value FROM settings WHERE key = 'public_url'");
-                                if (publicUrlRes.rows.length > 0 && publicUrlRes.rows[0].value) {
-                                    configuredPublicUrl = publicUrlRes.rows[0].value;
-                                }
-                            } catch (err) {
-                                console.error("Failed to fetch public_url from settings", err);
-                            }
-
-                            res.json({
-                                localIp: getLocalIp(),
-                                publicIp: publicIp,
-                                port: port,
-                                cloudUrl: configuredPublicUrl,
-                                isCloudActive: !!configuredPublicUrl,
-                                isLaunching: isLaunchingCloud
+                        let msg = "";
+                        if (ingredientsRes.rows.length > 0) {
+                            ingredientsRes.rows.forEach(i => {
+                                const status = parseFloat(i.total_quantity) > 0 ? "✅ มีค่ะ" : "❌ หมดค่ะ";
+                                msg += `${status} ${i.name} (เหลือ ${parseFloat(i.total_quantity)} ${i.unit})\n`;
                             });
-                        });
+                        }
+                        if (productsRes.rows.length > 0) {
+                            productsRes.rows.forEach(p => {
+                                const status = p.is_available ? "✅ พร้อมเสิร์ฟ" : "❌ หมดชั่วคราว";
+                                msg += `${status} เมนู "${p.name}"\n`;
+                            });
+                        }
 
-                        app.post('/api/network/cloud-toggle', async (req, res) => {
-                            res.status(503).json({ error: 'Cloud Tunnel is temporarily disabled for system maintenance.' });
-                            /*
-                            const { active } = req.body;
-                         
-                            try {
-                                if (active) {
-                                    if (tunnel) return res.json({ success: true, url: cloudUrl });
-                         
-                                    isLaunchingCloud = true;
-                                    // Start Tunnel
-                                    tunnel = await localtunnel({ port: port });
-                                    cloudUrl = tunnel.url;
-                         
-                                    tunnel.on('close', () => {
-                                        tunnel = null;
-                                        cloudUrl = null;
-                                    });
-                         
-                                    isLaunchingCloud = false;
-                                    res.json({ success: true, url: cloudUrl });
-                                } else {
-                                    if (tunnel) {
-                                        await tunnel.close();
-                                        tunnel = null;
-                                        cloudUrl = null;
+                        if (msg) {
+                            response = { "text": `🔎 ผลการค้นหาสำหรับ "${keyword}":\n\n${msg}` };
+                        } else {
+                            response = { "text": `🧐 น้องอันอันหา "${keyword}" ไม่เจอในระบบค่ะ ลองพิมพ์ชื่อใหม่ดูนะคะ` };
+                        }
+                    } else {
+                        response = { "text": "ต้องการเช็ควัตถุดิบตัวไหน พิมพ์บอกได้เลยนะคะ เช่น 'มีหมูกรอบมั้ย'" };
+                    }
+                } catch (e) { console.error(e); response = { "text": "⚠️ ระบบเช็คสต็อกขัดข้องชั่วคราวค่ะ" }; }
+
+                // B. Store Hours
+            } else if (matches(text, KEYWORDS.hours)) {
+                try {
+                    const settingsRes = await query("SELECT key, value FROM settings WHERE key IN ('store_open_time', 'store_close_time')");
+                    const settings = {};
+                    settingsRes.rows.forEach(s => settings[s.key] = s.value);
+                    const open = settings.store_open_time || '09:00';
+                    const close = settings.store_close_time || '21:00';
+                    response = { "text": `🕒 **เวลาทำการร้าน**\n\n✅ เปิด: ${open} น.\n❌ ปิด: ${close} น.\n\nแวะมาทานของอร่อยได้ทุกวันเลยนะคะ! 🥰` };
+                } catch (e) {
+                    response = { "text": "ร้านเปิดให้บริการตามปกตินะคะ (09:00 - 21:00)" };
+                }
+
+                // C. Menu (Dynamic Link)
+            } else if (matches(text, KEYWORDS.menu)) {
+                try {
+                    const settingsRes = await query("SELECT value FROM settings WHERE key = 'website_sync_url'");
+                    let menuUrl = "https://yoursite.com";
+                    if (settingsRes.rows.length > 0 && settingsRes.rows[0].value) {
+                        const rawUrl = settingsRes.rows[0].value;
+                        menuUrl = rawUrl.replace('/api/sync-menu', '');
+                    }
+
+                    response = {
+                        "attachment": {
+                            "type": "template",
+                            "payload": {
+                                "template_type": "button",
+                                "text": "🍽️ หิวแล้วใช่มั้ยคะ? กดดูเมนูทั้งหมดแล้วสั่งออนไลน์ได้เลยที่นี่ค่ะ 👇",
+                                "buttons": [
+                                    {
+                                        "type": "web_url",
+                                        "url": menuUrl,
+                                        "title": "📖 ดูเมนูออนไลน์"
                                     }
-                                    res.json({ success: true });
+                                ]
+                            }
+                        }
+                    };
+                } catch (e) { response = { "text": "ขออภัยค่ะ ลิงค์เมนูขัดข้องชั่วคราว" }; }
+
+                // D. Recommendations (Carousel from DB)
+            } else if (matches(text, KEYWORDS.recommend)) {
+                try {
+                    const recRes = await query("SELECT name, price, image, description FROM products WHERE is_recommended = TRUE LIMIT 5");
+                    if (recRes.rows.length > 0) {
+                        const elements = recRes.rows.map(p => ({
+                            "title": `✨ ${p.name}`,
+                            "subtitle": `${p.description || 'ความอร่อยที่คุณต้องลอง!'} | 💰 ${parseFloat(p.price)}.-`,
+                            "image_url": p.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80",
+                            "buttons": [
+                                {
+                                    "type": "postback",
+                                    "title": "📌 สนใจเมนูนี้",
+                                    "payload": `INTERESTED_${p.name}`
                                 }
-                            } catch (err) {
-                                isLaunchingCloud = false;
-                                console.error("Cloud Tunnel Error:", err);
-                                res.status(500).json({ error: err.message });
+                            ]
+                        }));
+
+                        response = {
+                            "attachment": {
+                                "type": "template",
+                                "payload": {
+                                    "template_type": "generic",
+                                    "elements": elements
+                                }
                             }
-                            */
-                        });
+                        };
+                    } else {
+                        // Fallback logic could be handled here if needed.
+                        response = { "text": "🍽️ เมนูเด็ดของร้านมีเยอะเลยค่ะ! ลองพิมพ์ 'เมนู' เพื่อดูทั้งหมดได้เลยนะคะ" };
+                    }
+                } catch (e) { console.error(e); response = { "text": "ขออภัยค่ะ ระบบแนะนำเมนูขัดข้อง" }; }
 
-                        // ============================================
-                        // === LINE ORDER API (Public + Admin) ===
-                        // ============================================
+                // E. Queue
+            } else if (matches(text, KEYWORDS.queue)) {
+                try {
+                    const ordersRes = await query("SELECT COUNT(*) as count FROM orders WHERE status NOT IN ('paid', 'cancelled')");
+                    const queueCount = parseInt(ordersRes.rows[0].count || 0);
+                    let statusIcon = queueCount < 5 ? "🟢" : (queueCount < 10 ? "🟡" : "🔴");
 
-                        // PUBLIC: Get Menu for LINE Order Page
-                        app.get('/api/public/menu', async (req, res) => {
-                            try {
-                                const productsRes = await query('SELECT * FROM products');
-                                const categoriesRes = await query('SELECT * FROM categories ORDER BY sort_order');
-                                res.json({ products: productsRes.rows, categories: categoriesRes.rows });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+                    response = { "text": `${statusIcon} **สถานะคิวปัจจุบัน**\n\n📌 รอคิวอยู่: ${queueCount} โต๊ะ\n\n${queueCount === 0 ? "โต๊ะว่างเพียบ! มาได้เลยค่า ⚡" : "อดใจรอนิดนึงนะคะ ความอร่อยกำลังทำงาน 👨‍🍳"}` };
+                } catch (e) { response = { "text": "ไม่สามารถตรวจสอบคิวได้ค่ะ" }; }
 
-                        // Get All LINE Orders
-                        app.get('/api/line_orders', async (req, res) => {
-                            try {
-                                const lineOrdersRes = await query("SELECT * FROM line_orders ORDER BY created_at DESC");
-                                const lineOrders = lineOrdersRes.rows;
-                                for (let order of lineOrders) {
-                                    const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
-                                    order.items = itemsRes.rows;
+                // F. Price (Multiple keywords)
+            } else if (matches(text, KEYWORDS.price)) {
+                const keyword = text.replace(/ราคา|เท่าไหร่|กี่บาท|price/gi, '').trim();
+                if (keyword.length > 1) {
+                    try {
+                        const productRes = await query("SELECT name, price FROM products WHERE name LIKE $1 LIMIT 5", [`%${keyword}%`]);
+                        if (productRes.rows.length > 0) {
+                            let msg = "💰 **ราคาเมนูที่ค้นหา**\n\n";
+                            productRes.rows.forEach(p => {
+                                msg += `🔹 ${p.name}: ${parseFloat(p.price)} บาท\n`;
+                            });
+                            response = { "text": msg };
+                        } else {
+                            response = { "text": `❌ ไม่พบเมนู "${keyword}" ค่ะ ลองสะกดใหม่นิดนึงน้า` };
+                        }
+                    } catch (e) { console.error(e); }
+                } else {
+                    response = { "text": "🏷️ อยากรู้ราคาเมนูไหน พิมพ์ชื่อมาได้เลยค่ะ เช่น 'ราคากะเพรา'" };
+                }
 
-                                    // Use coupon data from line_orders columns (NEW) or fallback to loyalty_coupons JOIN (LEGACY)
-                                    if (order.coupon_code && parseFloat(order.coupon_discount || 0) > 0) {
-                                        // Data from new columns - just build applied_coupon for UI compatibility
-                                        order.applied_coupon = {
-                                            coupon_code: order.coupon_code,
-                                            title: `ส่วนลด ฿${parseFloat(order.coupon_discount).toLocaleString()}`,
-                                            discount_amount: parseFloat(order.coupon_discount)
-                                        };
-                                        console.log(`🎁 Order #${order.id} has coupon: ${order.coupon_code} (-฿${order.coupon_discount})`);
-                                    } else {
-                                        // Fallback: Fetch linked coupon from loyalty_coupons table (for old orders)
-                                        const couponRes = await query(`
+                // G. Payment
+            } else if (matches(text, KEYWORDS.payment)) {
+                try {
+                    const settingsRes = await query("SELECT value FROM settings WHERE key = 'promptpay_number'");
+                    const promptpay = settingsRes.rows[0]?.value;
+                    if (promptpay) {
+                        response = { "text": `💸 **ช่องทางการชำระเงิน**\n\n📱 **PromptPay:** ${promptpay}\n(ชื่อบัญชีร้าน)\n\n📸 ส่งสลิปให้พี่พนักงานตรวจสอบได้เลยค่า` };
+                    } else {
+                        response = { "text": "💵 รับชำระเงินสด หรือสอบถาม QR Code ที่หน้าเคาน์เตอร์ได้เลยค่ะ" };
+                    }
+                } catch (e) { response = { "text": "ระบบข้อมูลการชำระเงินขัดข้องค่ะ" }; }
+
+                // H. WiFi
+            } else if (matches(text, KEYWORDS.wifi)) {
+                try {
+                    const settingsRes = await query("SELECT value FROM settings WHERE key = 'wifi_password'");
+                    const wifiPass = settingsRes.rows[0]?.value;
+                    if (wifiPass) {
+                        response = { "text": `📶 **Free WiFi**\n\n🔑 Password: ${wifiPass}\n\nเล่นเน็ตให้สนุกนะคะ! (อย่าลืมรีวิวร้านให้ด้วยน้า ⭐)` };
+                    } else {
+                        response = { "text": "📶 ทางร้านมี WiFi ฟรีให้บริการค่ะ รบกวนสอบถามรหัสจากพี่พนักงานนะคะ" };
+                    }
+                } catch (e) { }
+
+                // I. Greetings / Fallback
+            } else {
+                if (matches(text, KEYWORDS.greetings)) {
+                    response = { "text": "สวัสดีค่า! 🙏 น้องอันอัน ยินดีต้อนรับค่ะ 💖\n\nมีอะไรให้ช่วยมั้ยคะ? ถามเรื่อง เมนู, โปรโมชั่น, หรือจองคิว ได้เลยน้า" };
+                } else {
+                    response = {
+                        "text": `🤖 น้องอันอันยังไม่เข้าใจคำว่า "${text}" ง่ะ 🥺\n\nลองถามใหม่ได้มั้ยคะ? เช่น:\n- "ขอรหัส wifi"\n- "ร้านเปิดกี่โมง"\n- "แนะนำเมนู"\n- "ราคากะเพรา"`
+                    };
+                }
+            }
+
+        } else if (received_message.attachments) {
+            let attachment_url = received_message.attachments[0].payload.url;
+            response = {
+                "attachment": {
+                    "type": "template",
+                    "payload": {
+                        "template_type": "generic",
+                        "elements": [{
+                            "title": "ได้รับรูปภาพแล้วค่ะ 📸",
+                            "subtitle": "เป็นสลิปโอนเงินใช่ไหมคะ?",
+                            "image_url": attachment_url,
+                            "buttons": [
+                                { "type": "postback", "title": "✅ ใช่ (สลิปโอนเงิน)", "payload": "yes" },
+                                { "type": "postback", "title": "❌ ไม่ใช่", "payload": "no" }
+                            ],
+                        }]
+                    }
+                }
+            }
+        }
+
+        // Send the response message
+        callSendFacebookAPI(sender_psid, response);
+    }
+
+    async function handleFacebookPostback(sender_psid, received_postback) {
+        let response;
+
+        // Get the payload for the postback
+        let payload = received_postback.payload;
+
+        // Set the response based on the postback payload
+        if (payload === 'yes') {
+            response = { "text": "ขอบคุณที่ยืนยันค่ะ!" }
+        } else if (payload === 'no') {
+            response = { "text": "ขออภัยด้วยค่ะ ลองส่งภาพมาใหม่นะ." }
+        }
+        // Send the message to acknowledge the postback
+        callSendFacebookAPI(sender_psid, response);
+    }
+
+    async function callSendFacebookAPI(sender_psid, response) {
+        // Fetch Page Access Token from DB
+        let pageAccessToken = '';
+        try {
+            const settingsRes = await query("SELECT value FROM settings WHERE key = 'facebook_page_access_token'");
+            if (settingsRes.rows.length > 0) {
+                pageAccessToken = settingsRes.rows[0].value;
+            }
+        } catch (e) {
+            console.error("Error fetching FB page token:", e);
+            return;
+        }
+
+        if (!pageAccessToken) {
+            console.error('[Facebook] Error: Page Access Token is missing in DB Settings!');
+            return;
+        }
+
+        console.log(`[Facebook] Sending logic for PSID ${sender_psid}...`);
+
+
+        const requestBody = {
+            "recipient": {
+                "id": sender_psid
+            },
+            "message": response
+        };
+
+        try {
+            const responseJson = await fetch('https://graph.facebook.com/v22.0/me/messages?access_token=' + pageAccessToken, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody) // Changed request_body to requestBody
+            });
+            const resData = await responseJson.json();
+            if (resData.error) {
+                console.error('[Facebook] Send API Error:', JSON.stringify(resData.error, null, 2));
+            } else {
+                console.log('[Facebook] Message Sent Successfully!', resData);
+            }
+        } catch (err) {
+            console.error('[Facebook] Network Error:', err);
+        }
+    }
+
+
+    // Create LINE Order
+    app.post('/api/line_orders', async (req, res) => {
+        const { customer_name, contact_number, delivery_address, items, total_amount, order_type, delivery_location } = req.body;
+        const client = await pool.connect();
+
+        try {
+            await client.query('BEGIN');
+
+            const result = await client.query(
+                `INSERT INTO line_orders (customer_name, contact_number, delivery_address, total_amount, status, order_type, delivery_location) 
+                 VALUES ($1, $2, $3, $4, 'pending', $5, $6) RETURNING id`,
+                [customer_name, contact_number, delivery_address, total_amount, order_type || 'delivery', delivery_location || null]
+            );
+            const lineOrderId = result.rows[0].id;
+
+            for (const item of items) {
+                await client.query(
+                    'INSERT INTO line_order_items (line_order_id, product_id, product_name, price, quantity) VALUES ($1, $2, $3, $4, $5)',
+                    [lineOrderId, item.id, item.name, item.price, item.quantity]
+                );
+            }
+
+            await client.query('COMMIT');
+            io.emit('line-order-new');
+            res.json({ success: true, id: lineOrderId });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
+
+    app.get('/', (req, res) => {
+        res.send('POS Master Station Server is Running.')
+    })
+
+    app.get('/api/status', (req, res) => {
+        res.json({ status: 'online', time: new Date() })
+    })
+
+    // --- NETWORK & CLOUD ENDPOINTS ---
+    app.get('/api/network/status', async (req, res) => {
+        let publicIp = '...';
+        try {
+            // Fetch public IP to bypass localtunnel interstitial
+            const ipRes = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipRes.json();
+            publicIp = ipData.ip;
+        } catch (e) {
+            console.error("Failed to fetch public IP", e);
+        }
+
+        // Fetch Public URL if configured in settings
+        let configuredPublicUrl = cloudUrl;
+        try {
+            const publicUrlRes = await query("SELECT value FROM settings WHERE key = 'public_url'");
+            if (publicUrlRes.rows.length > 0 && publicUrlRes.rows[0].value) {
+                configuredPublicUrl = publicUrlRes.rows[0].value;
+            }
+        } catch (err) {
+            console.error("Failed to fetch public_url from settings", err);
+        }
+
+        res.json({
+            localIp: getLocalIp(),
+            publicIp: publicIp,
+            port: port,
+            cloudUrl: configuredPublicUrl,
+            isCloudActive: !!configuredPublicUrl,
+            isLaunching: isLaunchingCloud
+        });
+    });
+
+    app.post('/api/network/cloud-toggle', async (req, res) => {
+        res.status(503).json({ error: 'Cloud Tunnel is temporarily disabled for system maintenance.' });
+        /*
+        const { active } = req.body;
+     
+        try {
+            if (active) {
+                if (tunnel) return res.json({ success: true, url: cloudUrl });
+     
+                isLaunchingCloud = true;
+                // Start Tunnel
+                tunnel = await localtunnel({ port: port });
+                cloudUrl = tunnel.url;
+     
+                tunnel.on('close', () => {
+                    tunnel = null;
+                    cloudUrl = null;
+                });
+     
+                isLaunchingCloud = false;
+                res.json({ success: true, url: cloudUrl });
+            } else {
+                if (tunnel) {
+                    await tunnel.close();
+                    tunnel = null;
+                    cloudUrl = null;
+                }
+                res.json({ success: true });
+            }
+        } catch (err) {
+            isLaunchingCloud = false;
+            console.error("Cloud Tunnel Error:", err);
+            res.status(500).json({ error: err.message });
+        }
+        */
+    });
+
+    // ============================================
+    // === LINE ORDER API (Public + Admin) ===
+    // ============================================
+
+    // PUBLIC: Get Menu for LINE Order Page
+    app.get('/api/public/menu', async (req, res) => {
+        try {
+            const productsRes = await query('SELECT * FROM products');
+            const categoriesRes = await query('SELECT * FROM categories ORDER BY sort_order');
+            res.json({ products: productsRes.rows, categories: categoriesRes.rows });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Get All LINE Orders
+    app.get('/api/line_orders', async (req, res) => {
+        try {
+            const lineOrdersRes = await query("SELECT * FROM line_orders ORDER BY created_at DESC");
+            const lineOrders = lineOrdersRes.rows;
+            for (let order of lineOrders) {
+                const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
+                order.items = itemsRes.rows;
+
+                // Use coupon data from line_orders columns (NEW) or fallback to loyalty_coupons JOIN (LEGACY)
+                if (order.coupon_code && parseFloat(order.coupon_discount || 0) > 0) {
+                    // Data from new columns - just build applied_coupon for UI compatibility
+                    order.applied_coupon = {
+                        coupon_code: order.coupon_code,
+                        title: `ส่วนลด ฿${parseFloat(order.coupon_discount).toLocaleString()}`,
+                        discount_amount: parseFloat(order.coupon_discount)
+                    };
+                    console.log(`🎁 Order #${order.id} has coupon: ${order.coupon_code} (-฿${order.coupon_discount})`);
+                } else {
+                    // Fallback: Fetch linked coupon from loyalty_coupons table (for old orders)
+                    const couponRes = await query(`
                         SELECT c.coupon_code, c.promotion_id, c.discount_value, p.title, p.description 
                         FROM loyalty_coupons c
                         JOIN loyalty_promotions p ON c.promotion_id = p.id
                         WHERE c.line_order_id = $1 AND c.status = 'used'
                     `, [order.id]);
 
-                                        if (couponRes.rows.length > 0) {
-                                            const coupon = couponRes.rows[0];
-                                            order.applied_coupon = coupon;
-                                            // Populate columns if missing
-                                            if (!order.coupon_code) order.coupon_code = coupon.coupon_code;
-                                            if (!order.coupon_discount) order.coupon_discount = parseFloat(coupon.discount_value || 0);
-                                            console.log(`🎁 Order #${order.id} has legacy coupon: ${order.coupon_code}`);
-                                        } else {
-                                            console.log(`📦 Order #${order.id}: No coupon`);
-                                        }
-                                    }
-                                }
-                                res.json(lineOrders);
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+                    if (couponRes.rows.length > 0) {
+                        const coupon = couponRes.rows[0];
+                        order.applied_coupon = coupon;
+                        // Populate columns if missing
+                        if (!order.coupon_code) order.coupon_code = coupon.coupon_code;
+                        if (!order.coupon_discount) order.coupon_discount = parseFloat(coupon.discount_value || 0);
+                        console.log(`🎁 Order #${order.id} has legacy coupon: ${order.coupon_code}`);
+                    } else {
+                        console.log(`📦 Order #${order.id}: No coupon`);
+                    }
+                }
+            }
+            res.json(lineOrders);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // PUBLIC: Get Shop Settings for LINE Order Page
-                        app.get('/api/public/settings', async (req, res) => {
-                            try {
-                                const result = await query("SELECT * FROM settings");
-                                const settingsObj = {};
-                                result.rows.forEach(s => settingsObj[s.key] = s.value);
-                                res.json(settingsObj);
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+    // PUBLIC: Get Shop Settings for LINE Order Page
+    app.get('/api/public/settings', async (req, res) => {
+        try {
+            const result = await query("SELECT * FROM settings");
+            const settingsObj = {};
+            result.rows.forEach(s => settingsObj[s.key] = s.value);
+            res.json(settingsObj);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // PUBLIC: Get Available Tables for Reservation
-                        app.get('/api/public/available-tables', async (req, res) => {
-                            const { date, guests } = req.query;
-                            try {
-                                // Find tables that:
-                                // 1. Have enough seats
-                                // 2. Are not already reserved on that specific date
-                                const result = await query(`
+    // PUBLIC: Get Available Tables for Reservation
+    app.get('/api/public/available-tables', async (req, res) => {
+        const { date, guests } = req.query;
+        try {
+            // Find tables that:
+            // 1. Have enough seats
+            // 2. Are not already reserved on that specific date
+            const result = await query(`
                 SELECT * FROM tables 
                 WHERE seats >= $1 
                 AND name NOT IN (
@@ -3288,541 +3261,541 @@ async function startServer() {
                 )
                 ORDER BY seats ASC
             `, [guests || 1, date || '']);
-                                res.json(result.rows);
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json(result.rows);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // (Duplicate /api/public/menu removed)
+    // (Duplicate /api/public/menu removed)
 
-                        // --- ADMIN: LINE Settings ---
-                        app.post('/api/admin/line/settings', async (req, res) => {
-                            const { channelId, channelSecret, accessToken, liffId, liffIdLoyalty } = req.body;
-                            try {
-                                await query("BEGIN");
-                                // Upsert settings
-                                const keys = {
-                                    'line_channel_id': channelId,
-                                    'line_channel_secret': channelSecret,
-                                    'line_channel_access_token': accessToken,
-                                    'line_liff_id': liffId,
-                                    'line_liff_id_loyalty': liffIdLoyalty
-                                };
+    // --- ADMIN: LINE Settings ---
+    app.post('/api/admin/line/settings', async (req, res) => {
+        const { channelId, channelSecret, accessToken, liffId, liffIdLoyalty } = req.body;
+        try {
+            await query("BEGIN");
+            // Upsert settings
+            const keys = {
+                'line_channel_id': channelId,
+                'line_channel_secret': channelSecret,
+                'line_channel_access_token': accessToken,
+                'line_liff_id': liffId,
+                'line_liff_id_loyalty': liffIdLoyalty
+            };
 
-                                for (const [key, value] of Object.entries(keys)) {
-                                    await query(`
+            for (const [key, value] of Object.entries(keys)) {
+                await query(`
                     INSERT INTO settings (key, value) VALUES ($1, $2)
                     ON CONFLICT (key) DO UPDATE SET value = $2
                 `, [key, value || '']);
-                                }
-                                await query("COMMIT");
-                                console.log('✅ LINE Settings updated via Admin API');
-                                res.json({ success: true });
-                            } catch (err) {
-                                await query("ROLLBACK");
-                                console.error(err);
-                                res.status(500).json({ error: 'Failed to save LINE settings' });
+            }
+            await query("COMMIT");
+            console.log('✅ LINE Settings updated via Admin API');
+            res.json({ success: true });
+        } catch (err) {
+            await query("ROLLBACK");
+            console.error(err);
+            res.status(500).json({ error: 'Failed to save LINE settings' });
+        }
+    });
+
+    // --- ADMIN: Auto-Setup Rich Menu ---
+    app.post('/api/admin/line/setup-richmenu', async (req, res) => {
+        try {
+            // 1. Get Credentials
+            const settingsRes = await query("SELECT * FROM settings WHERE key IN ('line_channel_access_token', 'line_liff_id', 'line_liff_id_loyalty')");
+            const settings = {};
+            settingsRes.rows.forEach(s => settings[s.key] = s.value);
+            const token = settings.line_channel_access_token;
+            const liffId = settings.line_liff_id;
+            const liffIdLoyalty = settings.line_liff_id_loyalty;
+
+            if (!token) return res.status(400).json({ error: 'LINE Access Token not configured.' });
+
+            // 2. Define Rich Menu Object
+            // Hybrid Logic:
+            // - If User provides 2 IDs (Order & Loyalty), assume they are configured to point to respective pages. Use raw LIFF URL.
+            // - If User provides 1 ID, assume Single App Strategy. Append paths.
+
+            let uriOrder, uriLoyalty, uriPromo;
+
+            if (liffIdLoyalty) {
+                // Dual App Strategy
+                uriOrder = `https://liff.line.me/${liffId}`;
+                uriLoyalty = `https://liff.line.me/${liffIdLoyalty}`;
+                uriPromo = `https://liff.line.me/${liffIdLoyalty}?tab=promotions`; // Still append param for promo tab
+            } else {
+                // Single App Strategy
+                const baseUrl = `https://liff.line.me/${liffId}`;
+                uriOrder = `${baseUrl}/line-order`;
+                uriLoyalty = `${baseUrl}/loyalty`;
+                uriPromo = `${baseUrl}/loyalty?tab=promotions`;
+            }
+
+            const richMenuObject = {
+                "size": { "width": 1200, "height": 810 },
+                "selected": true,
+                "name": "POS Default Menu",
+                "chatBarText": "สั่งอาหาร / เมนู",
+                "areas": [
+                    {
+                        "bounds": { "x": 0, "y": 0, "width": 1200, "height": 405 },
+                        "action": { "type": "uri", "uri": uriOrder }
+                    },
+                    {
+                        "bounds": { "x": 0, "y": 405, "width": 600, "height": 405 },
+                        "action": { "type": "uri", "uri": uriLoyalty }
+                    },
+                    {
+                        "bounds": { "x": 600, "y": 405, "width": 600, "height": 405 },
+                        "action": { "type": "uri", "uri": uriPromo }
+                    }
+                ]
+            };
+
+            // 3. Create Rich Menu
+            console.log('Creating Rich Menu...');
+            const createRes = await fetch('https://api.line.me/v2/bot/richmenu', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(richMenuObject)
+            });
+            const createData = await createRes.json();
+            if (!createRes.ok) throw new Error(createData.message || 'Failed to create Rich Menu');
+            const richMenuId = createData.richMenuId;
+            console.log('✅ Rich Menu Created:', richMenuId);
+
+            // 4. Upload Image
+            const imagePath = path.join(__dirname, '../public/assets/rich_menu_default.png');
+            if (!fs.existsSync(imagePath)) throw new Error('Default Rich Menu Image not found');
+
+            const imageBuffer = fs.readFileSync(imagePath);
+
+            console.log('Uploading Image...');
+            const uploadRes = await fetch(`https://api-data.line.me/v2/bot/richmenu/${richMenuId}/content`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'image/png'
+                },
+                body: imageBuffer // node-fetch supports Buffer
+            });
+            if (!uploadRes.ok) {
+                const errorBody = await uploadRes.text();
+                console.error('LINE Upload Error:', errorBody);
+                throw new Error(`Failed to upload Rich Menu Image: ${errorBody}`);
+            }
+            console.log('✅ Image Uploaded');
+
+            // 5. Set Default
+            console.log('Setting as Default...');
+            const defaultRes = await fetch(`https://api.line.me/v2/bot/user/all/richmenu/${richMenuId}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (!defaultRes.ok) throw new Error('Failed to set Default Rich Menu');
+            console.log('✅ Rich Menu Set as Default');
+
+            // Save to DB (Update legacy id if needed, or just log it)
+            // await query("INSERT INTO settings (key, value) VALUES ('active_rich_menu_id', $1) ON CONFLICT (key) DO UPDATE SET value = $1", [richMenuId]);
+
+            res.json({ success: true, richMenuId });
+
+        } catch (err) {
+            console.error('❌ Auto-Setup Error:', err.message);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // --- LINE Messaging API Helper ---
+    const sendLineFlexMessage = async (to, orderData) => {
+        // Fetch Token from Database
+        let token = process.env.LINE_CHANNEL_ACCESS_TOKEN; // Fallback
+        try {
+            const tokenRes = await query("SELECT value FROM settings WHERE key = 'line_channel_access_token'");
+            if (tokenRes.rows.length > 0 && tokenRes.rows[0].value) {
+                token = tokenRes.rows[0].value;
+            }
+        } catch (err) {
+            console.error('Failed to fetch line_channel_access_token:', err);
+        }
+
+        if (!token || !to) {
+            console.log('⚠️ Skipping LINE Message: No token or lineUserId' + (!token ? ' (Not configured in Settings)' : ''));
+            return;
+        }
+
+        const { order_type, id, customer_name, customer_phone, total_amount, items_json } = orderData;
+        const trackingUrl = `https://pos-backend-8cud.onrender.com/tracking/${orderData.tracking_token}`;
+
+        // Fetch Shop Name
+        const shopNameRes = await query("SELECT value FROM settings WHERE key = 'shop_name'");
+        const shopName = shopNameRes.rows[0]?.value || 'Tasty Station';
+
+        let items = [];
+        try { items = JSON.parse(items_json || '[]'); } catch (e) { items = []; }
+
+        // Build Item List String with Options and Prices
+        const itemsList = items.map(item => {
+            let line = `- ${item.name || item.product_name} x${item.quantity}`;
+            if (item.options && item.options.length > 0) {
+                const optDetails = item.options.map(o => {
+                    const optName = o.name || o.option_name;
+                    const price = parseFloat(o.price_modifier || o.price || 0);
+                    return price > 0 ? `${optName}(฿${price})` : optName;
+                }).join(', ');
+                line += ` [+${optDetails}]`;
+            }
+            return line;
+        }).join('\n');
+
+        let bubbleContent = {
+            "type": "bubble",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    { "type": "text", "text": "ยืนยันออเดอร์สำเร็จ", "weight": "bold", "color": "#1DB446", "size": "sm" },
+                    { "type": "text", "text": shopName, "weight": "bold", "size": "xxl", "margin": "md" },
+                    { "type": "text", "text": `Order ID: #${id}`, "size": "xs", "color": "#aaaaaa" }
+                ]
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    { "type": "separator", "margin": "md" },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "xxl",
+                        "spacing": "sm",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    { "type": "text", "text": "ลูกค้า", "size": "sm", "color": "#555555", "flex": 0 },
+                                    { "type": "text", "text": customer_name || '-', "size": "sm", "color": "#111111", "align": "end" }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    { "type": "text", "text": "ที่อยู่/เบอร์โทร", "size": "sm", "color": "#555555", "flex": 0 },
+                                    { "type": "text", "text": customer_phone || '-', "size": "sm", "color": "#111111", "align": "end" }
+                                ]
                             }
-                        });
+                        ]
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    { "type": "text", "text": "ขอบคุณที่ใช้บริการค่ะ! 🙏✨", "style": "italic", "size": "xs", "color": "#aaaaaa", "align": "center" }
+                ]
+            }
+        };
 
-                        // --- ADMIN: Auto-Setup Rich Menu ---
-                        app.post('/api/admin/line/setup-richmenu', async (req, res) => {
-                            try {
-                                // 1. Get Credentials
-                                const settingsRes = await query("SELECT * FROM settings WHERE key IN ('line_channel_access_token', 'line_liff_id', 'line_liff_id_loyalty')");
-                                const settings = {};
-                                settingsRes.rows.forEach(s => settings[s.key] = s.value);
-                                const token = settings.line_channel_access_token;
-                                const liffId = settings.line_liff_id;
-                                const liffIdLoyalty = settings.line_liff_id_loyalty;
+        // Customize Body based on Order Type
+        if (order_type === 'reservation') {
+            bubbleContent.body.contents.push({
+                "type": "box",
+                "layout": "vertical",
+                "margin": "md",
+                "contents": [
+                    { "type": "text", "text": "📌 รายละเอียดการจอง", "weight": "bold", "size": "sm" },
+                    { "type": "text", "text": `วันที่: ${orderData.reservation_date || '-'}`, "size": "sm", "margin": "xs" },
+                    { "type": "text", "text": `เวลา: ${orderData.reservation_time || '-'}`, "size": "sm" },
+                    { "type": "text", "text": `จำนวน: ${orderData.guests_count || '-'} ท่าน`, "size": "sm" },
+                    { "type": "text", "text": `โต๊ะที่จอง: ${orderData.assigned_table || 'พนักงานจะจัดให้เมื่อถึงร้าน'}`, "size": "sm", "color": "#06C755", "weight": "bold" }
+                ]
+            });
+        } else if (order_type === 'delivery') {
+            bubbleContent.body.contents.push({
+                "type": "box",
+                "layout": "vertical",
+                "margin": "md",
+                "contents": [
+                    { "type": "text", "text": "🚀 รายละเอียดการจัดส่ง", "weight": "bold", "size": "sm" },
+                    { "type": "text", "text": orderData.customer_address || '-', "size": "sm", "wrap": true, "margin": "xs" },
+                    { "type": "separator", "margin": "md" }
+                ]
+            });
+            bubbleContent.footer.contents.unshift({
+                "type": "button",
+                "action": { "type": "uri", "label": "ติดตามสถานะไรเดอร์", "uri": trackingUrl },
+                "style": "primary",
+                "color": "#06C755"
+            });
+        } else if (order_type === 'takeaway') {
+            bubbleContent.body.contents.push({
+                "type": "box",
+                "layout": "vertical",
+                "margin": "md",
+                "contents": [
+                    { "type": "text", "text": "🥡 รับกลับบ้าน", "weight": "bold", "size": "sm" },
+                    { "type": "text", "text": `รหัสรับอาหาร: #${id}`, "size": "sm", "margin": "xs" },
+                    { "type": "text", "text": `นัดรับเวลา: ${orderData.reservation_time || 'เร็วที่สุด'}`, "size": "sm" }
+                ]
+            });
+        }
 
-                                if (!token) return res.status(400).json({ error: 'LINE Access Token not configured.' });
-
-                                // 2. Define Rich Menu Object
-                                // Hybrid Logic:
-                                // - If User provides 2 IDs (Order & Loyalty), assume they are configured to point to respective pages. Use raw LIFF URL.
-                                // - If User provides 1 ID, assume Single App Strategy. Append paths.
-
-                                let uriOrder, uriLoyalty, uriPromo;
-
-                                if (liffIdLoyalty) {
-                                    // Dual App Strategy
-                                    uriOrder = `https://liff.line.me/${liffId}`;
-                                    uriLoyalty = `https://liff.line.me/${liffIdLoyalty}`;
-                                    uriPromo = `https://liff.line.me/${liffIdLoyalty}?tab=promotions`; // Still append param for promo tab
-                                } else {
-                                    // Single App Strategy
-                                    const baseUrl = `https://liff.line.me/${liffId}`;
-                                    uriOrder = `${baseUrl}/line-order`;
-                                    uriLoyalty = `${baseUrl}/loyalty`;
-                                    uriPromo = `${baseUrl}/loyalty?tab=promotions`;
-                                }
-
-                                const richMenuObject = {
-                                    "size": { "width": 1200, "height": 810 },
-                                    "selected": true,
-                                    "name": "POS Default Menu",
-                                    "chatBarText": "สั่งอาหาร / เมนู",
-                                    "areas": [
-                                        {
-                                            "bounds": { "x": 0, "y": 0, "width": 1200, "height": 405 },
-                                            "action": { "type": "uri", "uri": uriOrder }
-                                        },
-                                        {
-                                            "bounds": { "x": 0, "y": 405, "width": 600, "height": 405 },
-                                            "action": { "type": "uri", "uri": uriLoyalty }
-                                        },
-                                        {
-                                            "bounds": { "x": 600, "y": 405, "width": 600, "height": 405 },
-                                            "action": { "type": "uri", "uri": uriPromo }
-                                        }
-                                    ]
-                                };
-
-                                // 3. Create Rich Menu
-                                console.log('Creating Rich Menu...');
-                                const createRes = await fetch('https://api.line.me/v2/bot/richmenu', {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${token}`
-                                    },
-                                    body: JSON.stringify(richMenuObject)
-                                });
-                                const createData = await createRes.json();
-                                if (!createRes.ok) throw new Error(createData.message || 'Failed to create Rich Menu');
-                                const richMenuId = createData.richMenuId;
-                                console.log('✅ Rich Menu Created:', richMenuId);
-
-                                // 4. Upload Image
-                                const imagePath = path.join(__dirname, '../public/assets/rich_menu_default.png');
-                                if (!fs.existsSync(imagePath)) throw new Error('Default Rich Menu Image not found');
-
-                                const imageBuffer = fs.readFileSync(imagePath);
-
-                                console.log('Uploading Image...');
-                                const uploadRes = await fetch(`https://api-data.line.me/v2/bot/richmenu/${richMenuId}/content`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Authorization': `Bearer ${token}`,
-                                        'Content-Type': 'image/png'
-                                    },
-                                    body: imageBuffer // node-fetch supports Buffer
-                                });
-                                if (!uploadRes.ok) {
-                                    const errorBody = await uploadRes.text();
-                                    console.error('LINE Upload Error:', errorBody);
-                                    throw new Error(`Failed to upload Rich Menu Image: ${errorBody}`);
-                                }
-                                console.log('✅ Image Uploaded');
-
-                                // 5. Set Default
-                                console.log('Setting as Default...');
-                                const defaultRes = await fetch(`https://api.line.me/v2/bot/user/all/richmenu/${richMenuId}`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Authorization': `Bearer ${token}`
-                                    }
-                                });
-                                if (!defaultRes.ok) throw new Error('Failed to set Default Rich Menu');
-                                console.log('✅ Rich Menu Set as Default');
-
-                                // Save to DB (Update legacy id if needed, or just log it)
-                                // await query("INSERT INTO settings (key, value) VALUES ('active_rich_menu_id', $1) ON CONFLICT (key) DO UPDATE SET value = $1", [richMenuId]);
-
-                                res.json({ success: true, richMenuId });
-
-                            } catch (err) {
-                                console.error('❌ Auto-Setup Error:', err.message);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
-
-                        // --- LINE Messaging API Helper ---
-                        const sendLineFlexMessage = async (to, orderData) => {
-                            // Fetch Token from Database
-                            let token = process.env.LINE_CHANNEL_ACCESS_TOKEN; // Fallback
-                            try {
-                                const tokenRes = await query("SELECT value FROM settings WHERE key = 'line_channel_access_token'");
-                                if (tokenRes.rows.length > 0 && tokenRes.rows[0].value) {
-                                    token = tokenRes.rows[0].value;
-                                }
-                            } catch (err) {
-                                console.error('Failed to fetch line_channel_access_token:', err);
-                            }
-
-                            if (!token || !to) {
-                                console.log('⚠️ Skipping LINE Message: No token or lineUserId' + (!token ? ' (Not configured in Settings)' : ''));
-                                return;
-                            }
-
-                            const { order_type, id, customer_name, customer_phone, total_amount, items_json } = orderData;
-                            const trackingUrl = `https://pos-backend-8cud.onrender.com/tracking/${orderData.tracking_token}`;
-
-                            // Fetch Shop Name
-                            const shopNameRes = await query("SELECT value FROM settings WHERE key = 'shop_name'");
-                            const shopName = shopNameRes.rows[0]?.value || 'Tasty Station';
-
-                            let items = [];
-                            try { items = JSON.parse(items_json || '[]'); } catch (e) { items = []; }
-
-                            // Build Item List String with Options and Prices
-                            const itemsList = items.map(item => {
-                                let line = `- ${item.name || item.product_name} x${item.quantity}`;
-                                if (item.options && item.options.length > 0) {
-                                    const optDetails = item.options.map(o => {
-                                        const optName = o.name || o.option_name;
-                                        const price = parseFloat(o.price_modifier || o.price || 0);
-                                        return price > 0 ? `${optName}(฿${price})` : optName;
-                                    }).join(', ');
-                                    line += ` [+${optDetails}]`;
-                                }
-                                return line;
-                            }).join('\n');
-
-                            let bubbleContent = {
-                                "type": "bubble",
-                                "header": {
-                                    "type": "box",
-                                    "layout": "vertical",
-                                    "contents": [
-                                        { "type": "text", "text": "ยืนยันออเดอร์สำเร็จ", "weight": "bold", "color": "#1DB446", "size": "sm" },
-                                        { "type": "text", "text": shopName, "weight": "bold", "size": "xxl", "margin": "md" },
-                                        { "type": "text", "text": `Order ID: #${id}`, "size": "xs", "color": "#aaaaaa" }
-                                    ]
-                                },
-                                "body": {
-                                    "type": "box",
-                                    "layout": "vertical",
-                                    "contents": [
-                                        { "type": "separator", "margin": "md" },
-                                        {
-                                            "type": "box",
-                                            "layout": "vertical",
-                                            "margin": "xxl",
-                                            "spacing": "sm",
-                                            "contents": [
-                                                {
-                                                    "type": "box",
-                                                    "layout": "horizontal",
-                                                    "contents": [
-                                                        { "type": "text", "text": "ลูกค้า", "size": "sm", "color": "#555555", "flex": 0 },
-                                                        { "type": "text", "text": customer_name || '-', "size": "sm", "color": "#111111", "align": "end" }
-                                                    ]
-                                                },
-                                                {
-                                                    "type": "box",
-                                                    "layout": "horizontal",
-                                                    "contents": [
-                                                        { "type": "text", "text": "ที่อยู่/เบอร์โทร", "size": "sm", "color": "#555555", "flex": 0 },
-                                                        { "type": "text", "text": customer_phone || '-', "size": "sm", "color": "#111111", "align": "end" }
-                                                    ]
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                },
-                                "footer": {
-                                    "type": "box",
-                                    "layout": "vertical",
-                                    "spacing": "sm",
-                                    "contents": [
-                                        { "type": "text", "text": "ขอบคุณที่ใช้บริการค่ะ! 🙏✨", "style": "italic", "size": "xs", "color": "#aaaaaa", "align": "center" }
-                                    ]
-                                }
-                            };
-
-                            // Customize Body based on Order Type
-                            if (order_type === 'reservation') {
-                                bubbleContent.body.contents.push({
-                                    "type": "box",
-                                    "layout": "vertical",
-                                    "margin": "md",
-                                    "contents": [
-                                        { "type": "text", "text": "📌 รายละเอียดการจอง", "weight": "bold", "size": "sm" },
-                                        { "type": "text", "text": `วันที่: ${orderData.reservation_date || '-'}`, "size": "sm", "margin": "xs" },
-                                        { "type": "text", "text": `เวลา: ${orderData.reservation_time || '-'}`, "size": "sm" },
-                                        { "type": "text", "text": `จำนวน: ${orderData.guests_count || '-'} ท่าน`, "size": "sm" },
-                                        { "type": "text", "text": `โต๊ะที่จอง: ${orderData.assigned_table || 'พนักงานจะจัดให้เมื่อถึงร้าน'}`, "size": "sm", "color": "#06C755", "weight": "bold" }
-                                    ]
-                                });
-                            } else if (order_type === 'delivery') {
-                                bubbleContent.body.contents.push({
-                                    "type": "box",
-                                    "layout": "vertical",
-                                    "margin": "md",
-                                    "contents": [
-                                        { "type": "text", "text": "🚀 รายละเอียดการจัดส่ง", "weight": "bold", "size": "sm" },
-                                        { "type": "text", "text": orderData.customer_address || '-', "size": "sm", "wrap": true, "margin": "xs" },
-                                        { "type": "separator", "margin": "md" }
-                                    ]
-                                });
-                                bubbleContent.footer.contents.unshift({
-                                    "type": "button",
-                                    "action": { "type": "uri", "label": "ติดตามสถานะไรเดอร์", "uri": trackingUrl },
-                                    "style": "primary",
-                                    "color": "#06C755"
-                                });
-                            } else if (order_type === 'takeaway') {
-                                bubbleContent.body.contents.push({
-                                    "type": "box",
-                                    "layout": "vertical",
-                                    "margin": "md",
-                                    "contents": [
-                                        { "type": "text", "text": "🥡 รับกลับบ้าน", "weight": "bold", "size": "sm" },
-                                        { "type": "text", "text": `รหัสรับอาหาร: #${id}`, "size": "sm", "margin": "xs" },
-                                        { "type": "text", "text": `นัดรับเวลา: ${orderData.reservation_time || 'เร็วที่สุด'}`, "size": "sm" }
-                                    ]
-                                });
-                            }
-
-                            // Fetch Coupon Info
-                            let couponInfo = null;
-                            try {
-                                const couponRes = await query(`
+        // Fetch Coupon Info
+        let couponInfo = null;
+        try {
+            const couponRes = await query(`
                 SELECT c.coupon_code, p.title 
                 FROM loyalty_coupons c
                 JOIN loyalty_promotions p ON c.promotion_id = p.id
                 WHERE c.line_order_id = $1 AND c.status = 'used'
             `, [id]);
-                                couponInfo = couponRes.rows[0];
-                            } catch (e) {
-                                console.error('Failed to fetch coupon for Line Msg:', e);
-                            }
+            couponInfo = couponRes.rows[0];
+        } catch (e) {
+            console.error('Failed to fetch coupon for Line Msg:', e);
+        }
 
-                            // Add Items and Total
-                            const detailsContents = [
-                                { "type": "text", "text": "📦 รายการอาหาร", "weight": "bold", "size": "sm" },
-                                { "type": "text", "text": itemsList || 'ไม่ได้ระบุรายการ', "size": "xs", "color": "#888888", "wrap": true, "margin": "xs" },
-                                { "type": "separator", "margin": "md" }
-                            ];
+        // Add Items and Total
+        const detailsContents = [
+            { "type": "text", "text": "📦 รายการอาหาร", "weight": "bold", "size": "sm" },
+            { "type": "text", "text": itemsList || 'ไม่ได้ระบุรายการ', "size": "xs", "color": "#888888", "wrap": true, "margin": "xs" },
+            { "type": "separator", "margin": "md" }
+        ];
 
-                            // Add Coupon/Discount Row if coupon was applied (from orderData directly)
-                            const hasCoupon = orderData.coupon_code && parseFloat(orderData.coupon_discount || 0) > 0;
-                            if (hasCoupon) {
-                                // Show original amount (before discount)
-                                detailsContents.push({
-                                    "type": "box",
-                                    "layout": "horizontal",
-                                    "margin": "sm",
-                                    "contents": [
-                                        { "type": "text", "text": "ยอดก่อนลด", "size": "xs", "color": "#888888" },
-                                        { "type": "text", "text": `฿${parseFloat(orderData.original_amount || 0).toLocaleString()}`, "size": "xs", "align": "end", "color": "#888888", "decoration": "line-through" }
-                                    ]
-                                });
-                                // Show coupon discount
-                                detailsContents.push({
-                                    "type": "box",
-                                    "layout": "horizontal",
-                                    "margin": "sm",
-                                    "contents": [
-                                        { "type": "text", "text": `🎁 คูปอง: ${orderData.coupon_code}`, "size": "xs", "color": "#A020F0", "weight": "bold" },
-                                        { "type": "text", "text": `-฿${parseFloat(orderData.coupon_discount).toLocaleString()}`, "size": "xs", "align": "end", "color": "#1DB446", "weight": "bold" }
-                                    ]
-                                });
-                            }
-                            // Fallback: Show coupon from legacy JOIN query if no direct data
-                            else if (couponInfo) {
-                                detailsContents.push({
-                                    "type": "box",
-                                    "layout": "horizontal",
-                                    "margin": "md",
-                                    "contents": [
-                                        { "type": "text", "text": "🎁 คูปองส่วนลด", "size": "xs", "color": "#A020F0", "weight": "bold" },
-                                        { "type": "text", "text": `${couponInfo.coupon_code} | ${couponInfo.title}`, "size": "xs", "align": "end", "color": "#A020F0" }
-                                    ]
-                                });
-                            }
+        // Add Coupon/Discount Row if coupon was applied (from orderData directly)
+        const hasCoupon = orderData.coupon_code && parseFloat(orderData.coupon_discount || 0) > 0;
+        if (hasCoupon) {
+            // Show original amount (before discount)
+            detailsContents.push({
+                "type": "box",
+                "layout": "horizontal",
+                "margin": "sm",
+                "contents": [
+                    { "type": "text", "text": "ยอดก่อนลด", "size": "xs", "color": "#888888" },
+                    { "type": "text", "text": `฿${parseFloat(orderData.original_amount || 0).toLocaleString()}`, "size": "xs", "align": "end", "color": "#888888", "decoration": "line-through" }
+                ]
+            });
+            // Show coupon discount
+            detailsContents.push({
+                "type": "box",
+                "layout": "horizontal",
+                "margin": "sm",
+                "contents": [
+                    { "type": "text", "text": `🎁 คูปอง: ${orderData.coupon_code}`, "size": "xs", "color": "#A020F0", "weight": "bold" },
+                    { "type": "text", "text": `-฿${parseFloat(orderData.coupon_discount).toLocaleString()}`, "size": "xs", "align": "end", "color": "#1DB446", "weight": "bold" }
+                ]
+            });
+        }
+        // Fallback: Show coupon from legacy JOIN query if no direct data
+        else if (couponInfo) {
+            detailsContents.push({
+                "type": "box",
+                "layout": "horizontal",
+                "margin": "md",
+                "contents": [
+                    { "type": "text", "text": "🎁 คูปองส่วนลด", "size": "xs", "color": "#A020F0", "weight": "bold" },
+                    { "type": "text", "text": `${couponInfo.coupon_code} | ${couponInfo.title}`, "size": "xs", "align": "end", "color": "#A020F0" }
+                ]
+            });
+        }
 
 
-                            detailsContents.push({
-                                "type": "box",
-                                "layout": "horizontal",
-                                "margin": "md",
-                                "contents": [
-                                    { "type": "text", "text": "ยอดรวมทั้งสิ้น", "weight": "bold", "size": "md" },
-                                    { "type": "text", "text": `฿${total_amount.toLocaleString()}`, "weight": "bold", "size": "md", "align": "end", "color": "#D32F2F" }
-                                ]
-                            });
+        detailsContents.push({
+            "type": "box",
+            "layout": "horizontal",
+            "margin": "md",
+            "contents": [
+                { "type": "text", "text": "ยอดรวมทั้งสิ้น", "weight": "bold", "size": "md" },
+                { "type": "text", "text": `฿${total_amount.toLocaleString()}`, "weight": "bold", "size": "md", "align": "end", "color": "#D32F2F" }
+            ]
+        });
 
-                            bubbleContent.body.contents.push({
-                                "type": "box",
-                                "layout": "vertical",
-                                "margin": "lg",
-                                "contents": detailsContents
-                            });
+        bubbleContent.body.contents.push({
+            "type": "box",
+            "layout": "vertical",
+            "margin": "lg",
+            "contents": detailsContents
+        });
 
-                            try {
-                                console.log(`📡 Sending LINE Push to: ${to}`);
-                                const response = await fetch('https://api.line.me/v2/bot/message/push', {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${token}`
-                                    },
-                                    body: JSON.stringify({
-                                        to: to,
-                                        messages: [
-                                            {
-                                                "type": "flex",
-                                                "altText": `ยืนยันออเดอร์ #${id} - ${shopName}`,
-                                                "contents": bubbleContent
-                                            }
-                                        ]
-                                    })
-                                });
-                                const resData = await response.json();
-                                if (response.ok) {
-                                    console.log('✅ LINE Message Sent Successfully:', resData);
-                                } else {
-                                    console.error('❌ LINE Messaging API Error:', resData);
-                                }
-                            } catch (err) {
-                                console.error('❌ Failed to fetch LINE Messaging API:', err.message);
-                            }
-                        };
+        try {
+            console.log(`📡 Sending LINE Push to: ${to}`);
+            const response = await fetch('https://api.line.me/v2/bot/message/push', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    to: to,
+                    messages: [
+                        {
+                            "type": "flex",
+                            "altText": `ยืนยันออเดอร์ #${id} - ${shopName}`,
+                            "contents": bubbleContent
+                        }
+                    ]
+                })
+            });
+            const resData = await response.json();
+            if (response.ok) {
+                console.log('✅ LINE Message Sent Successfully:', resData);
+            } else {
+                console.error('❌ LINE Messaging API Error:', resData);
+            }
+        } catch (err) {
+            console.error('❌ Failed to fetch LINE Messaging API:', err.message);
+        }
+    };
 
-                        // PUBLIC: Create LINE Order (Customer Submission)
-                        app.post('/api/public/line-orders', async (req, res) => {
-                            console.log('📦 Incoming LINE Order:', req.body.customerName, '| Type:', req.body.orderType, '| UserID:', req.body.lineUserId);
-                            const client = await pool.connect();
-                            try {
-                                await client.query('BEGIN');
+    // PUBLIC: Create LINE Order (Customer Submission)
+    app.post('/api/public/line-orders', async (req, res) => {
+        console.log('📦 Incoming LINE Order:', req.body.customerName, '| Type:', req.body.orderType, '| UserID:', req.body.lineUserId);
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
 
-                                // 0. CHECK STORE STATUS
-                                const storeStatus = await getStoreStatus();
-                                if (storeStatus.status === 'closed') {
-                                    await client.query('ROLLBACK');
-                                    return res.status(403).json({ error: storeStatus.message, status: 'closed' });
-                                }
-                                if (storeStatus.status === 'last_order') {
-                                    await client.query('ROLLBACK');
-                                    return res.status(403).json({ error: storeStatus.message, status: 'last_order' });
-                                }
+            // 0. CHECK STORE STATUS
+            const storeStatus = await getStoreStatus();
+            if (storeStatus.status === 'closed') {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: storeStatus.message, status: 'closed' });
+            }
+            if (storeStatus.status === 'last_order') {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: storeStatus.message, status: 'last_order' });
+            }
 
-                                const {
-                                    orderType, customerName, customerPhone, customerAddress,
-                                    latitude, longitude, reservationDate, reservationTime,
-                                    guestsCount, assignedTable, items, totalAmount, note,
-                                    lineUserId // Capture from LIFF
-                                } = req.body;
+            const {
+                orderType, customerName, customerPhone, customerAddress,
+                latitude, longitude, reservationDate, reservationTime,
+                guestsCount, assignedTable, items, totalAmount, note,
+                lineUserId // Capture from LIFF
+            } = req.body;
 
-                                // Validate minimum order for delivery
-                                if (orderType === 'delivery') {
-                                    const settingsRes = await client.query("SELECT value FROM settings WHERE key = 'minimum_delivery_order'");
-                                    const minOrder = parseFloat(settingsRes.rows[0]?.value) || 100;
-                                    if (totalAmount < minOrder) {
-                                        await client.query('ROLLBACK');
-                                        return res.status(400).json({ error: `ยอดสั่งซื้อขั้นต่ำสำหรับ Delivery คือ ฿${minOrder}` });
-                                    }
-                                }
+            // Validate minimum order for delivery
+            if (orderType === 'delivery') {
+                const settingsRes = await client.query("SELECT value FROM settings WHERE key = 'minimum_delivery_order'");
+                const minOrder = parseFloat(settingsRes.rows[0]?.value) || 100;
+                if (totalAmount < minOrder) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: `ยอดสั่งซื้อขั้นต่ำสำหรับ Delivery คือ ฿${minOrder}` });
+                }
+            }
 
-                                // Lookup customer_id automatically if lineUserId provided
-                                let customerId = null;
-                                if (lineUserId) {
-                                    const customerLookup = await client.query("SELECT id FROM loyalty_customers WHERE line_user_id = $1", [lineUserId]);
-                                    if (customerLookup.rowCount > 0) {
-                                        customerId = customerLookup.rows[0].id;
-                                    }
-                                }
+            // Lookup customer_id automatically if lineUserId provided
+            let customerId = null;
+            if (lineUserId) {
+                const customerLookup = await client.query("SELECT id FROM loyalty_customers WHERE line_user_id = $1", [lineUserId]);
+                if (customerLookup.rowCount > 0) {
+                    customerId = customerLookup.rows[0].id;
+                }
+            }
 
-                                // (Deposit calculation moved to after coupon processing)
+            // (Deposit calculation moved to after coupon processing)
 
-                                // 1. Associate Phone with LINE Account (Loyalty)
-                                if (lineUserId && customerPhone) {
-                                    // Update phone if it's null or empty
-                                    await client.query(`
+            // 1. Associate Phone with LINE Account (Loyalty)
+            if (lineUserId && customerPhone) {
+                // Update phone if it's null or empty
+                await client.query(`
                     UPDATE loyalty_customers 
                     SET phone = $1, updated_at = CURRENT_TIMESTAMP 
                     WHERE line_user_id = $2 AND (phone IS NULL OR phone = '')
                 `, [customerPhone, lineUserId]);
-                                }
+            }
 
-                                // 2. Coupon Processing
-                                let couponDiscount = 0;
-                                let finalTotal = totalAmount;
-                                const { couponCode } = req.body;
+            // 2. Coupon Processing
+            let couponDiscount = 0;
+            let finalTotal = totalAmount;
+            const { couponCode } = req.body;
 
-                                if (couponCode && customerId) {
-                                    // Verify coupon is active and belongs to this customer
-                                    const couponCheck = await client.query(`
+            if (couponCode && customerId) {
+                // Verify coupon is active and belongs to this customer
+                const couponCheck = await client.query(`
                     SELECT c.*, p.title, p.description
                     FROM loyalty_coupons c
                     JOIN loyalty_promotions p ON c.promotion_id = p.id
                     WHERE c.coupon_code = $1 AND c.customer_id = $2 AND c.status = 'active'
                 `, [couponCode.toUpperCase(), customerId]);
 
-                                    if (couponCheck.rowCount > 0) {
-                                        const coupon = couponCheck.rows[0];
+                if (couponCheck.rowCount > 0) {
+                    const coupon = couponCheck.rows[0];
 
-                                        // 1. Try to get discount from discount_value column (most reliable)
-                                        if (coupon.discount_value && parseFloat(coupon.discount_value) > 0) {
-                                            if (coupon.discount_type === 'percent') {
-                                                // Percentage discount: e.g., 10% off
-                                                couponDiscount = Math.floor(totalAmount * (parseFloat(coupon.discount_value) / 100));
-                                            } else if (coupon.discount_type === 'fixed_price') {
-                                                // Fixed price: customer pays only this amount, discount = total - fixed_price
-                                                couponDiscount = Math.max(0, totalAmount - parseFloat(coupon.discount_value));
-                                            } else {
-                                                // Fixed discount: e.g., 10 baht off (default)
-                                                couponDiscount = parseFloat(coupon.discount_value);
-                                            }
-                                        }
-                                        // 2. Fallback: Try to parse from title
-                                        else {
-                                            // Pattern 1: "ลด XX" or "ลด XX บาท"
-                                            const matchLod = coupon.title.match(/ลด\s*(\d+)/);
-                                            // Pattern 2: "XX%" 
-                                            const matchPercent = coupon.title.match(/(\d+)%/);
-                                            // Pattern 3: "ราคา XX.-" (fixed price like "ราคา 35.-")
-                                            const matchPrice = coupon.title.match(/ราคา\s*(\d+)/);
-                                            // Pattern 4: Just any number (last resort)
-                                            const allNumbers = coupon.title.match(/\d+/g);
+                    // 1. Try to get discount from discount_value column (most reliable)
+                    if (coupon.discount_value && parseFloat(coupon.discount_value) > 0) {
+                        if (coupon.discount_type === 'percent') {
+                            // Percentage discount: e.g., 10% off
+                            couponDiscount = Math.floor(totalAmount * (parseFloat(coupon.discount_value) / 100));
+                        } else if (coupon.discount_type === 'fixed_price') {
+                            // Fixed price: customer pays only this amount, discount = total - fixed_price
+                            couponDiscount = Math.max(0, totalAmount - parseFloat(coupon.discount_value));
+                        } else {
+                            // Fixed discount: e.g., 10 baht off (default)
+                            couponDiscount = parseFloat(coupon.discount_value);
+                        }
+                    }
+                    // 2. Fallback: Try to parse from title
+                    else {
+                        // Pattern 1: "ลด XX" or "ลด XX บาท"
+                        const matchLod = coupon.title.match(/ลด\s*(\d+)/);
+                        // Pattern 2: "XX%" 
+                        const matchPercent = coupon.title.match(/(\d+)%/);
+                        // Pattern 3: "ราคา XX.-" (fixed price like "ราคา 35.-")
+                        const matchPrice = coupon.title.match(/ราคา\s*(\d+)/);
+                        // Pattern 4: Just any number (last resort)
+                        const allNumbers = coupon.title.match(/\d+/g);
 
-                                            if (matchLod) {
-                                                couponDiscount = parseInt(matchLod[1]);
-                                            } else if (matchPercent) {
-                                                couponDiscount = Math.floor(totalAmount * (parseInt(matchPercent[1]) / 100));
-                                            } else if (matchPrice) {
-                                                // "ราคา 35.-" means discount = totalAmount - 35
-                                                couponDiscount = Math.max(0, totalAmount - parseInt(matchPrice[1]));
-                                            } else if (allNumbers && allNumbers.length > 0) {
-                                                // Use last number as fallback
-                                                couponDiscount = parseInt(allNumbers[allNumbers.length - 1]);
-                                            }
-                                        }
+                        if (matchLod) {
+                            couponDiscount = parseInt(matchLod[1]);
+                        } else if (matchPercent) {
+                            couponDiscount = Math.floor(totalAmount * (parseInt(matchPercent[1]) / 100));
+                        } else if (matchPrice) {
+                            // "ราคา 35.-" means discount = totalAmount - 35
+                            couponDiscount = Math.max(0, totalAmount - parseInt(matchPrice[1]));
+                        } else if (allNumbers && allNumbers.length > 0) {
+                            // Use last number as fallback
+                            couponDiscount = parseInt(allNumbers[allNumbers.length - 1]);
+                        }
+                    }
 
-                                        if (couponDiscount > 0) {
-                                            finalTotal = Math.max(0, totalAmount - couponDiscount);
-                                            console.log(`🎟️ Applied Coupon: ${couponCode} (-฿${couponDiscount})`);
-                                        } else {
-                                            console.log(`⚠️ Coupon ${couponCode} found but could not determine discount value`);
-                                        }
-                                    }
-                                }
+                    if (couponDiscount > 0) {
+                        finalTotal = Math.max(0, totalAmount - couponDiscount);
+                        console.log(`🎟️ Applied Coupon: ${couponCode} (-฿${couponDiscount})`);
+                    } else {
+                        console.log(`⚠️ Coupon ${couponCode} found but could not determine discount value`);
+                    }
+                }
+            }
 
-                                // Calculate Deposit (50% for reservations with items) - Moved to use Final Total
-                                let depositAmount = 0;
-                                if (orderType === 'reservation' && items && items.length > 0) {
-                                    depositAmount = finalTotal * 0.5;
-                                }
+            // Calculate Deposit (50% for reservations with items) - Moved to use Final Total
+            let depositAmount = 0;
+            if (orderType === 'reservation' && items && items.length > 0) {
+                depositAmount = finalTotal * 0.5;
+            }
 
-                                // 2.5 STOCK DEDUCTION (Centralized)
-                                // This will throw if stock is insufficient
-                                await processStockDeduction(items, client);
+            // 2.5 STOCK DEDUCTION (Centralized)
+            // This will throw if stock is insufficient
+            await processStockDeduction(items, client);
 
-                                // Generate tracking token for delivery (Case-insensitive check)
-                                const trackingToken = (orderType && orderType.toLowerCase() === 'delivery')
-                                    ? 'TRK' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 8).toUpperCase()
-                                    : null;
+            // Generate tracking token for delivery (Case-insensitive check)
+            const trackingToken = (orderType && orderType.toLowerCase() === 'delivery')
+                ? 'TRK' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 8).toUpperCase()
+                : null;
 
-                                // Convert items to JSON string for items_json column
-                                const itemsJson = JSON.stringify(items || []);
+            // Convert items to JSON string for items_json column
+            const itemsJson = JSON.stringify(items || []);
 
-                                // Insert order with correct column names from actual schema
-                                const orderRes = await client.query(`
+            // Insert order with correct column names from actual schema
+            const orderRes = await client.query(`
                 INSERT INTO line_orders 
                 (order_type, customer_name, customer_phone, customer_address, 
                  total_amount, status, note, tracking_token, items_json,
@@ -3832,588 +3805,588 @@ async function startServer() {
                 VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
                 RETURNING id
             `, [
-                                    orderType || 'delivery',
-                                    customerName || '',
-                                    customerPhone || '',
-                                    customerAddress || '',
-                                    finalTotal, // Use calculated total (after coupon)
-                                    note || '',
-                                    trackingToken,
-                                    itemsJson,
-                                    latitude || null,
-                                    longitude || null,
-                                    reservationDate || null,
-                                    reservationTime || null,
-                                    guestsCount || null,
-                                    depositAmount,
-                                    false, // is_deposit_paid
-                                    assignedTable || null,
-                                    lineUserId || null, // $17
-                                    customerId, // $18
-                                    couponCode || null, // $19 - coupon_code
-                                    couponDiscount || 0, // $20 - coupon_discount
-                                    totalAmount // $21 - original_amount (before discount)
-                                ]);
+                orderType || 'delivery',
+                customerName || '',
+                customerPhone || '',
+                customerAddress || '',
+                finalTotal, // Use calculated total (after coupon)
+                note || '',
+                trackingToken,
+                itemsJson,
+                latitude || null,
+                longitude || null,
+                reservationDate || null,
+                reservationTime || null,
+                guestsCount || null,
+                depositAmount,
+                false, // is_deposit_paid
+                assignedTable || null,
+                lineUserId || null, // $17
+                customerId, // $18
+                couponCode || null, // $19 - coupon_code
+                couponDiscount || 0, // $20 - coupon_discount
+                totalAmount // $21 - original_amount (before discount)
+            ]);
 
-                                const orderId = orderRes.rows[0].id;
+            const orderId = orderRes.rows[0].id;
 
-                                // 3. Mark coupon as used and link to order
-                                if (couponCode && couponDiscount > 0) {
-                                    const updateRes = await client.query(`
+            // 3. Mark coupon as used and link to order
+            if (couponCode && couponDiscount > 0) {
+                const updateRes = await client.query(`
                     UPDATE loyalty_coupons 
                     SET status = 'used', used_at = CURRENT_TIMESTAMP, line_order_id = $1 
                     WHERE coupon_code = $2 AND customer_id = $3 AND status = 'active'
                 `, [orderId, couponCode.toUpperCase(), customerId]);
 
-                                    if (updateRes.rowCount === 0) {
-                                        console.warn(`⚠️ Coupon Update Failed: Code=${couponCode}, Cust=${customerId}, Order=${orderId}`);
-                                        // Critical: If we applied discount but failed to mark used, we MUST rollback to prevent reuse
-                                        throw new Error('ไม่สามารถตัดยอดคูปองได้ (Coupon Update Failed)');
-                                    }
+                if (updateRes.rowCount === 0) {
+                    console.warn(`⚠️ Coupon Update Failed: Code=${couponCode}, Cust=${customerId}, Order=${orderId}`);
+                    // Critical: If we applied discount but failed to mark used, we MUST rollback to prevent reuse
+                    throw new Error('ไม่สามารถตัดยอดคูปองได้ (Coupon Update Failed)');
+                }
 
-                                    // Notification: Coupon Used
-                                    createNotification(
-                                        `🎫 ใช้คูปองส่วนลด`,
-                                        `${customerName} ใช้คูปอง ${couponCode} (ลด ฿${couponDiscount})`,
-                                        'coupon',
-                                        { orderId, couponCode, discount: couponDiscount }
-                                    );
-                                }
+                // Notification: Coupon Used
+                createNotification(
+                    `🎫 ใช้คูปองส่วนลด`,
+                    `${customerName} ใช้คูปอง ${couponCode} (ลด ฿${couponDiscount})`,
+                    'coupon',
+                    { orderId, couponCode, discount: couponDiscount }
+                );
+            }
 
-                                // Also insert to line_order_items for backwards compatibility
-                                if (items && items.length > 0) {
-                                    for (const item of items) {
-                                        try {
-                                            await client.query(`
+            // Also insert to line_order_items for backwards compatibility
+            if (items && items.length > 0) {
+                for (const item of items) {
+                    try {
+                        await client.query(`
                             INSERT INTO line_order_items (line_order_id, product_id, product_name, quantity, price, options)
                             VALUES ($1, $2, $3, $4, $5, $6)
                         `, [orderId, item.id, item.name, item.quantity, item.price, JSON.stringify(item.options || [])]);
-                                        } catch (itemErr) {
-                                            console.log('Item insert note:', itemErr.message);
-                                        }
-                                    }
-                                }
+                    } catch (itemErr) {
+                        console.log('Item insert note:', itemErr.message);
+                    }
+                }
+            }
 
-                                await client.query('COMMIT');
+            await client.query('COMMIT');
 
-                                // Trigger LINE Notification (Async - outside transaction)
-                                if (lineUserId) {
-                                    console.log(`🔔 Triggering LINE message for User: ${lineUserId}`);
-                                    query("SELECT * FROM line_orders WHERE id = $1", [orderId]).then(fullOrderRes => {
-                                        if (fullOrderRes.rows[0]) {
-                                            sendLineFlexMessage(lineUserId, fullOrderRes.rows[0]);
-                                        }
-                                    }).catch(err => console.error('Error fetching order for LINE notification:', err));
-                                }
+            // Trigger LINE Notification (Async - outside transaction)
+            if (lineUserId) {
+                console.log(`🔔 Triggering LINE message for User: ${lineUserId}`);
+                query("SELECT * FROM line_orders WHERE id = $1", [orderId]).then(fullOrderRes => {
+                    if (fullOrderRes.rows[0]) {
+                        sendLineFlexMessage(lineUserId, fullOrderRes.rows[0]);
+                    }
+                }).catch(err => console.error('Error fetching order for LINE notification:', err));
+            }
 
-                                // Emit socket event
-                                if (orderType !== 'reservation' || (items && items.length > 0)) {
-                                    io.emit('new-line-order', { orderId, orderType, customerName, totalAmount, depositAmount });
-                                    createNotification(
-                                        `ออเดอร์ LINE ใหม่ - ${customerName}`,
-                                        `ประเภท: ${orderType === 'delivery' ? '🚚 ส่งถึงบ้าน' : (orderType === 'takeaway' ? '🛍️ รับเองที่ร้าน' : '📅 จองโต๊ะ')} (ยอด: ${totalAmount}.-)`,
-                                        'order',
-                                        { orderId, orderType, customerName }
-                                    );
-                                }
+            // Emit socket event
+            if (orderType !== 'reservation' || (items && items.length > 0)) {
+                io.emit('new-line-order', { orderId, orderType, customerName, totalAmount, depositAmount });
+                createNotification(
+                    `ออเดอร์ LINE ใหม่ - ${customerName}`,
+                    `ประเภท: ${orderType === 'delivery' ? '🚚 ส่งถึงบ้าน' : (orderType === 'takeaway' ? '🛍️ รับเองที่ร้าน' : '📅 จองโต๊ะ')} (ยอด: ${totalAmount}.-)`,
+                    'order',
+                    { orderId, orderType, customerName }
+                );
+            }
 
-                                res.json({ success: true, orderId, trackingToken, depositAmount });
-                            } catch (err) {
-                                await client.query('ROLLBACK');
-                                console.error('Public line-orders error:', err);
-                                res.status(500).json({ error: err.message });
-                            } finally {
-                                client.release();
-                            }
-                        });
+            res.json({ success: true, orderId, trackingToken, depositAmount });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error('Public line-orders error:', err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
 
-                        // PUBLIC: Get Display Settings
-                        app.get('/api/public/settings', async (req, res) => {
-                            try {
-                                const result = await query("SELECT * FROM settings");
-                                const settings = {};
-                                result.rows.forEach(row => { settings[row.key] = row.value; });
-                                res.json(settings);
-                            } catch (err) {
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+    // PUBLIC: Get Display Settings
+    app.get('/api/public/settings', async (req, res) => {
+        try {
+            const result = await query("SELECT * FROM settings");
+            const settings = {};
+            result.rows.forEach(row => { settings[row.key] = row.value; });
+            res.json(settings);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // PUBLIC: Register Takeaway Order (Customers ordering from QR)
-                        app.post('/api/public/takeaway-orders', async (req, res) => {
-                            const client = await pool.connect();
-                            try {
-                                await client.query('BEGIN');
+    // PUBLIC: Register Takeaway Order (Customers ordering from QR)
+    app.post('/api/public/takeaway-orders', async (req, res) => {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
 
-                                // 0. CHECK STORE STATUS
-                                const storeStatus = await getStoreStatus();
-                                if (storeStatus.status === 'closed') {
-                                    await client.query('ROLLBACK');
-                                    return res.status(403).json({ error: storeStatus.message, status: 'closed' });
-                                }
-                                if (storeStatus.status === 'last_order') {
-                                    await client.query('ROLLBACK');
-                                    return res.status(403).json({ error: storeStatus.message, status: 'last_order' });
-                                }
+            // 0. CHECK STORE STATUS
+            const storeStatus = await getStoreStatus();
+            if (storeStatus.status === 'closed') {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: storeStatus.message, status: 'closed' });
+            }
+            if (storeStatus.status === 'last_order') {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: storeStatus.message, status: 'last_order' });
+            }
 
-                                const {
-                                    customer_name, customer_phone, items, total_amount
-                                } = req.body;
+            const {
+                customer_name, customer_phone, items, total_amount
+            } = req.body;
 
-                                // 1. STOCK DEDUCTION (Centralized)
-                                // Expects items to have product_id/id and options/selectedOptions
-                                await processStockDeduction(items, client);
+            // 1. STOCK DEDUCTION (Centralized)
+            // Expects items to have product_id/id and options/selectedOptions
+            await processStockDeduction(items, client);
 
-                                // 2. Insert into main orders table as 'takeaway'
-                                const orderRes = await client.query(`
+            // 2. Insert into main orders table as 'takeaway'
+            const orderRes = await client.query(`
                 INSERT INTO orders 
                 (order_type, status, total_amount, subtotal, grand_total, customer_name, customer_phone)
                 VALUES ($1, 'cooking', $2, $2, $2, $3, $4)
                 RETURNING id
             `, ['takeaway', total_amount, customer_name, customer_phone]);
 
-                                const orderId = orderRes.rows[0].id;
+            const orderId = orderRes.rows[0].id;
 
-                                // 3. Insert items
-                                if (items && items.length > 0) {
-                                    for (const item of items) {
-                                        const finalPrice = item.unitPrice || item.price;
-                                        const itemResult = await client.query(`
+            // 3. Insert items
+            if (items && items.length > 0) {
+                for (const item of items) {
+                    const finalPrice = item.unitPrice || item.price;
+                    const itemResult = await client.query(`
                         INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
                         VALUES ($1, $2, $3, $4, $5)
                         RETURNING id
                     `, [orderId, item.product_id, item.product_name, finalPrice, item.quantity]);
 
-                                        const orderItemId = itemResult.rows[0].id;
+                    const orderItemId = itemResult.rows[0].id;
 
-                                        // 4. Insert options
-                                        if (item.options && item.options.length > 0) {
-                                            for (const opt of item.options) {
-                                                await client.query(
-                                                    'INSERT INTO order_item_options (order_item_id, option_id, option_name, price_modifier) VALUES ($1, $2, $3, $4)',
-                                                    [orderItemId, opt.id, opt.name, opt.price_modifier || 0]
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
+                    // 4. Insert options
+                    if (item.options && item.options.length > 0) {
+                        for (const opt of item.options) {
+                            await client.query(
+                                'INSERT INTO order_item_options (order_item_id, option_id, option_name, price_modifier) VALUES ($1, $2, $3, $4)',
+                                [orderItemId, opt.id, opt.name, opt.price_modifier || 0]
+                            );
+                        }
+                    }
+                }
+            }
 
-                                await client.query('COMMIT');
+            await client.query('COMMIT');
 
-                                // 5. Success Notifications (Outside transaction)
-                                io.emit('new-order', { orderId, orderType: 'takeaway', customerName: customer_name });
-                                createNotification(
-                                    `ออเดอร์ Takeaway ใหม่!`,
-                                    `ลูกค้าคุณ ${customer_name} สั่งอาหารกลับบ้าน (ยอด: ${total_amount}.-)`,
-                                    'takeaway',
-                                    { orderId, customerName: customer_name }
-                                );
+            // 5. Success Notifications (Outside transaction)
+            io.emit('new-order', { orderId, orderType: 'takeaway', customerName: customer_name });
+            createNotification(
+                `ออเดอร์ Takeaway ใหม่!`,
+                `ลูกค้าคุณ ${customer_name} สั่งอาหารกลับบ้าน (ยอด: ${total_amount}.-)`,
+                'takeaway',
+                { orderId, customerName: customer_name }
+            );
 
-                                res.json({ success: true, orderId });
-                            } catch (err) {
-                                await client.query('ROLLBACK');
-                                console.error('Public takeaway-order error:', err);
-                                res.status(500).json({ error: err.message });
-                            } finally {
-                                client.release();
-                            }
-                        });
+            res.json({ success: true, orderId });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error('Public takeaway-order error:', err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
 
-                        // Mark order as served
-                        app.post('/api/kitchen/orders/:id/serve', async (req, res) => {
-                            const { id } = req.params;
-                            try {
-                                await query("UPDATE order_items SET status = 'served' WHERE order_id = $1", [id]);
+    // Mark order as served
+    app.post('/api/kitchen/orders/:id/serve', async (req, res) => {
+        const { id } = req.params;
+        try {
+            await query("UPDATE order_items SET status = 'served' WHERE order_id = $1", [id]);
 
-                                // If it's a takeaway order, mark the whole order as ready
-                                const orderRes = await query("SELECT order_type, table_name FROM orders WHERE id = $1", [id]);
-                                const order = orderRes.rows[0];
-                                if (order?.order_type === 'takeaway') {
-                                    await query("UPDATE orders SET status = 'ready' WHERE id = $1", [id]);
+            // If it's a takeaway order, mark the whole order as ready
+            const orderRes = await query("SELECT order_type, table_name FROM orders WHERE id = $1", [id]);
+            const order = orderRes.rows[0];
+            if (order?.order_type === 'takeaway') {
+                await query("UPDATE orders SET status = 'ready' WHERE id = $1", [id]);
 
-                                    // Create notification for takeaway ready
-                                    createNotification(
-                                        `ออเดอร์ Takeaway พร้อมแล้ว!`,
-                                        `ลูกค้าคุณ ${order.table_name} (ออเดอร์ #${id}) พร้อมสำหรับการรับของแล้ว`,
-                                        'takeaway',
-                                        { orderId: id, customerName: order.table_name }
-                                    );
-                                }
+                // Create notification for takeaway ready
+                createNotification(
+                    `ออเดอร์ Takeaway พร้อมแล้ว!`,
+                    `ลูกค้าคุณ ${order.table_name} (ออเดอร์ #${id}) พร้อมสำหรับการรับของแล้ว`,
+                    'takeaway',
+                    { orderId: id, customerName: order.table_name }
+                );
+            }
 
-                                io.emit('kitchen-update');
-                                io.emit('order-update'); // Notify TablePlan
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            io.emit('kitchen-update');
+            io.emit('order-update'); // Notify TablePlan
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // Get Active Takeaway Orders (Ready for pickup)
-                        app.get('/api/orders/takeaway/active', async (req, res) => {
-                            try {
-                                const result = await query(`
+    // Get Active Takeaway Orders (Ready for pickup)
+    app.get('/api/orders/takeaway/active', async (req, res) => {
+        try {
+            const result = await query(`
                 SELECT * FROM orders 
                 WHERE order_type = 'takeaway' AND status = 'ready'
                 ORDER BY created_at DESC
             `);
-                                const ordersWithItems = await Promise.all(result.rows.map(async (order) => {
-                                    const itemsResult = await query("SELECT * FROM order_items WHERE order_id = $1", [order.id]);
+            const ordersWithItems = await Promise.all(result.rows.map(async (order) => {
+                const itemsResult = await query("SELECT * FROM order_items WHERE order_id = $1", [order.id]);
 
-                                    // Fetch options for each item
-                                    const itemsWithOptions = await Promise.all(itemsResult.rows.map(async (item) => {
-                                        const optionsResult = await query(
-                                            "SELECT id, option_name as name, price_modifier FROM order_item_options WHERE order_item_id = $1",
-                                            [item.id]
-                                        );
-                                        return { ...item, options: optionsResult.rows };
-                                    }));
+                // Fetch options for each item
+                const itemsWithOptions = await Promise.all(itemsResult.rows.map(async (item) => {
+                    const optionsResult = await query(
+                        "SELECT id, option_name as name, price_modifier FROM order_item_options WHERE order_item_id = $1",
+                        [item.id]
+                    );
+                    return { ...item, options: optionsResult.rows };
+                }));
 
-                                    return { ...order, items: itemsWithOptions };
-                                }));
-                                res.json(ordersWithItems);
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+                return { ...order, items: itemsWithOptions };
+            }));
+            res.json(ordersWithItems);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // Pay Order (Dine-in / General) - [DUPLICATE REMOVED]
-                        // Consolidate logic to the endpoint (approx line 1608) to avoid conflicts.
-                        // Logic from here (updating discount_amount and Loyalty Points) is merged/handled there.
+    // Pay Order (Dine-in / General) - [DUPLICATE REMOVED]
+    // Consolidate logic to the endpoint (approx line 1608) to avoid conflicts.
+    // Logic from here (updating discount_amount and Loyalty Points) is merged/handled there.
 
-                        // Complete/Pickup Order
-                        app.post('/api/orders/:id/complete', async (req, res) => {
-                            const { id } = req.params;
-                            const { paymentMethod } = req.body;
-                            try {
-                                await query(
-                                    "UPDATE orders SET status = 'completed', payment_method = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
-                                    [paymentMethod || 'cash', id]
-                                );
+    // Complete/Pickup Order
+    app.post('/api/orders/:id/complete', async (req, res) => {
+        const { id } = req.params;
+        const { paymentMethod } = req.body;
+        try {
+            await query(
+                "UPDATE orders SET status = 'completed', payment_method = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+                [paymentMethod || 'cash', id]
+            );
 
-                                // Earn Loyalty Points (Fetch customer info first)
-                                const orderRes = await query("SELECT customer_id, total_amount FROM orders WHERE id = $1", [id]);
-                                const order = orderRes.rows[0];
-                                if (order && order.customer_id) {
-                                    await earnLoyaltyPoints(order.customer_id, order.total_amount, id, null);
-                                }
+            // Earn Loyalty Points (Fetch customer info first)
+            const orderRes = await query("SELECT customer_id, total_amount FROM orders WHERE id = $1", [id]);
+            const order = orderRes.rows[0];
+            if (order && order.customer_id) {
+                await earnLoyaltyPoints(order.customer_id, order.total_amount, id, null);
+            }
 
-                                io.emit('order-update');
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            io.emit('order-update');
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // ADMIN: Get All LINE Orders
-                        // This endpoint is replaced by the new /api/line_orders above.
-                        // The original content for this endpoint was:
-                        // app.get('/api/line-orders', (req, res) => { ... });
+    // ADMIN: Get All LINE Orders
+    // This endpoint is replaced by the new /api/line_orders above.
+    // The original content for this endpoint was:
+    // app.get('/api/line-orders', (req, res) => { ... });
 
-                        // ADMIN: Get Single LINE Order
-                        app.get('/api/line-orders/:id', async (req, res) => {
-                            const { id } = req.params;
-                            try {
-                                const result = await query('SELECT * FROM line_orders WHERE id = $1', [id]);
-                                const order = result.rows[0];
-                                if (!order) {
-                                    return res.status(404).json({ error: 'Order not found' });
-                                }
-                                const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [id]);
-                                order.items = itemsRes.rows;
-                                res.json(order);
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+    // ADMIN: Get Single LINE Order
+    app.get('/api/line-orders/:id', async (req, res) => {
+        const { id } = req.params;
+        try {
+            const result = await query('SELECT * FROM line_orders WHERE id = $1', [id]);
+            const order = result.rows[0];
+            if (!order) {
+                return res.status(404).json({ error: 'Order not found' });
+            }
+            const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [id]);
+            order.items = itemsRes.rows;
+            res.json(order);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // ADMIN: Confirm LINE Order
-                        app.post('/api/line-orders/:id/confirm', async (req, res) => {
-                            const { id } = req.params;
-                            try {
-                                await query("UPDATE line_orders SET status = 'confirmed', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
-                                io.emit('line-order-update', { orderId: id, status: 'confirmed' });
+    // ADMIN: Confirm LINE Order
+    app.post('/api/line-orders/:id/confirm', async (req, res) => {
+        const { id } = req.params;
+        try {
+            await query("UPDATE line_orders SET status = 'confirmed', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
+            io.emit('line-order-update', { orderId: id, status: 'confirmed' });
 
-                                // Notification: Order confirmed
-                                const orderRes = await query("SELECT customer_name, order_type FROM line_orders WHERE id = $1", [id]);
-                                const orderInfo = orderRes.rows[0];
-                                createNotification(
-                                    `✅ ออเดอร์ยืนยันแล้ว #${id}`,
-                                    `${orderInfo?.customer_name || 'ลูกค้า'} - ${orderInfo?.order_type === 'delivery' ? '🚚 เดลิเวอรี่' : '🛍️ Takeaway'}`,
-                                    'order',
-                                    { orderId: id, status: 'confirmed' }
-                                );
+            // Notification: Order confirmed
+            const orderRes = await query("SELECT customer_name, order_type FROM line_orders WHERE id = $1", [id]);
+            const orderInfo = orderRes.rows[0];
+            createNotification(
+                `✅ ออเดอร์ยืนยันแล้ว #${id}`,
+                `${orderInfo?.customer_name || 'ลูกค้า'} - ${orderInfo?.order_type === 'delivery' ? '🚚 เดลิเวอรี่' : '🛍️ Takeaway'}`,
+                'order',
+                { orderId: id, status: 'confirmed' }
+            );
 
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // ADMIN: Mark as Preparing
-                        app.post('/api/line-orders/:id/preparing', async (req, res) => {
-                            const { id } = req.params;
-                            try {
-                                await query("UPDATE line_orders SET status = 'preparing', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
-                                io.emit('line-order-update', { orderId: id, status: 'preparing' });
+    // ADMIN: Mark as Preparing
+    app.post('/api/line-orders/:id/preparing', async (req, res) => {
+        const { id } = req.params;
+        try {
+            await query("UPDATE line_orders SET status = 'preparing', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
+            io.emit('line-order-update', { orderId: id, status: 'preparing' });
 
-                                // Notification: Kitchen preparing
-                                createNotification(
-                                    `👨‍🍳 ครัวกำลังทำ #${id}`,
-                                    `ออเดอร์กำลังอยู่ระหว่างการจัดเตรียม`,
-                                    'kitchen',
-                                    { orderId: id, status: 'preparing' }
-                                );
+            // Notification: Kitchen preparing
+            createNotification(
+                `👨‍🍳 ครัวกำลังทำ #${id}`,
+                `ออเดอร์กำลังอยู่ระหว่างการจัดเตรียม`,
+                'kitchen',
+                { orderId: id, status: 'preparing' }
+            );
 
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // ADMIN: Mark as Ready
-                        app.post('/api/line-orders/:id/ready', async (req, res) => {
-                            const { id } = req.params;
-                            try {
-                                await query("UPDATE line_orders SET status = 'ready', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
-                                io.emit('line-order-update', { orderId: id, status: 'ready' });
+    // ADMIN: Mark as Ready
+    app.post('/api/line-orders/:id/ready', async (req, res) => {
+        const { id } = req.params;
+        try {
+            await query("UPDATE line_orders SET status = 'ready', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
+            io.emit('line-order-update', { orderId: id, status: 'ready' });
 
-                                // Notification: Order ready for pickup/delivery
-                                createNotification(
-                                    `✅ อาหารพร้อมแล้ว #${id}`,
-                                    `รอไรเดอร์มารับ หรือลูกค้ามารับสินค้า`,
-                                    'delivery',
-                                    { orderId: id, status: 'ready' }
-                                );
+            // Notification: Order ready for pickup/delivery
+            createNotification(
+                `✅ อาหารพร้อมแล้ว #${id}`,
+                `รอไรเดอร์มารับ หรือลูกค้ามารับสินค้า`,
+                'delivery',
+                { orderId: id, status: 'ready' }
+            );
 
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        app.post('/api/line-orders/:id/pay', async (req, res) => {
-                            const { id } = req.params;
-                            const { paymentMethod, paidAmount } = req.body;
-                            try {
-                                await query(
-                                    "UPDATE line_orders SET status = 'completed', payment_method = $1, total_amount = COALESCE($2, total_amount), updated_at = CURRENT_TIMESTAMP WHERE id = $3",
-                                    [paymentMethod || 'cash', paidAmount || null, id]
-                                );
+    app.post('/api/line-orders/:id/pay', async (req, res) => {
+        const { id } = req.params;
+        const { paymentMethod, paidAmount } = req.body;
+        try {
+            await query(
+                "UPDATE line_orders SET status = 'completed', payment_method = $1, total_amount = COALESCE($2, total_amount), updated_at = CURRENT_TIMESTAMP WHERE id = $3",
+                [paymentMethod || 'cash', paidAmount || null, id]
+            );
 
-                                // Earn Loyalty Points (Fetch customer info first)
-                                const orderRes = await query("SELECT customer_id, total_amount FROM line_orders WHERE id = $1", [id]);
-                                const order = orderRes.rows[0];
-                                if (order && order.customer_id) {
-                                    console.log(`💎 Awarding points for completed LINE order: #${id}`);
-                                    await earnLoyaltyPoints(order.customer_id, order.total_amount, null, id);
-                                }
+            // Earn Loyalty Points (Fetch customer info first)
+            const orderRes = await query("SELECT customer_id, total_amount FROM line_orders WHERE id = $1", [id]);
+            const order = orderRes.rows[0];
+            if (order && order.customer_id) {
+                console.log(`💎 Awarding points for completed LINE order: #${id}`);
+                await earnLoyaltyPoints(order.customer_id, order.total_amount, null, id);
+            }
 
-                                io.emit('line-order-update', { orderId: id, status: 'completed' });
-                                io.emit('delivery-order-update', { orderId: id, status: 'completed' });
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            io.emit('line-order-update', { orderId: id, status: 'completed' });
+            io.emit('delivery-order-update', { orderId: id, status: 'completed' });
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // ADMIN: Toggle Deposit Paid Status
-                        app.post('/api/line-orders/:id/toggle-deposit', async (req, res) => {
-                            const { id } = req.params;
-                            const { isPaid } = req.body;
-                            try {
-                                await query("UPDATE line_orders SET is_deposit_paid = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [isPaid, id]);
-                                io.emit('line-order-update', { orderId: id });
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+    // ADMIN: Toggle Deposit Paid Status
+    app.post('/api/line-orders/:id/toggle-deposit', async (req, res) => {
+        const { id } = req.params;
+        const { isPaid } = req.body;
+        try {
+            await query("UPDATE line_orders SET is_deposit_paid = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [isPaid, id]);
+            io.emit('line-order-update', { orderId: id });
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // ADMIN: Assign Table to Reservation
-                        app.post('/api/line-orders/:id/assign-table', async (req, res) => {
-                            const { id } = req.params;
-                            const { tableName } = req.body;
-                            try {
-                                await query("UPDATE line_orders SET assigned_table = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [tableName, id]);
-                                io.emit('table-update', { id: null, status: 'refresh' });
-                                io.emit('line-order-update', { orderId: id });
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+    // ADMIN: Assign Table to Reservation
+    app.post('/api/line-orders/:id/assign-table', async (req, res) => {
+        const { id } = req.params;
+        const { tableName } = req.body;
+        try {
+            await query("UPDATE line_orders SET assigned_table = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [tableName, id]);
+            io.emit('table-update', { id: null, status: 'refresh' });
+            io.emit('line-order-update', { orderId: id });
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // ADMIN: Check-in LINE Reservation to POS
-                        app.post('/api/line-orders/:id/check-in', async (req, res) => {
-                            const { id } = req.params;
-                            try {
-                                await query('BEGIN');
+    // ADMIN: Check-in LINE Reservation to POS
+    app.post('/api/line-orders/:id/check-in', async (req, res) => {
+        const { id } = req.params;
+        try {
+            await query('BEGIN');
 
-                                // 1. Get reservation details
-                                const lineOrderRes = await query("SELECT * FROM line_orders WHERE id = $1", [id]);
-                                if (lineOrderRes.rowCount === 0) {
-                                    await query('ROLLBACK');
-                                    return res.status(404).json({ error: 'ไม่พบรายการจอง' });
-                                }
-                                const lineOrder = lineOrderRes.rows[0];
+            // 1. Get reservation details
+            const lineOrderRes = await query("SELECT * FROM line_orders WHERE id = $1", [id]);
+            if (lineOrderRes.rowCount === 0) {
+                await query('ROLLBACK');
+                return res.status(404).json({ error: 'ไม่พบรายการจอง' });
+            }
+            const lineOrder = lineOrderRes.rows[0];
 
-                                if (!lineOrder.assigned_table) {
-                                    await query('ROLLBACK');
-                                    return res.status(400).json({ error: 'กรุณาระบุโต๊ะก่อน Check-in ค่ะ' });
-                                }
+            if (!lineOrder.assigned_table) {
+                await query('ROLLBACK');
+                return res.status(400).json({ error: 'กรุณาระบุโต๊ะก่อน Check-in ค่ะ' });
+            }
 
-                                // 2. Check if table is already occupied in POS
-                                const tableCheck = await query("SELECT status FROM tables WHERE name = $1", [lineOrder.assigned_table]);
-                                if (tableCheck.rows[0]?.status !== 'available') {
-                                    await query('ROLLBACK');
-                                    return res.status(400).json({ error: `โต๊ะ ${lineOrder.assigned_table} ไม่ว่างค่ะ กรุณาเคลียร์โต๊ะก่อน` });
-                                }
+            // 2. Check if table is already occupied in POS
+            const tableCheck = await query("SELECT status FROM tables WHERE name = $1", [lineOrder.assigned_table]);
+            if (tableCheck.rows[0]?.status !== 'available') {
+                await query('ROLLBACK');
+                return res.status(400).json({ error: `โต๊ะ ${lineOrder.assigned_table} ไม่ว่างค่ะ กรุณาเคลียร์โต๊ะก่อน` });
+            }
 
-                                // 3. Create POS order
-                                const posOrderRes = await query(`
+            // 3. Create POS order
+            const posOrderRes = await query(`
                 INSERT INTO orders (table_name, order_type, status, line_order_id)
                 VALUES ($1, 'dine_in', 'cooking', $2)
                 RETURNING id
             `, [lineOrder.assigned_table, id]);
-                                const posOrderId = posOrderRes.rows[0].id;
+            const posOrderId = posOrderRes.rows[0].id;
 
-                                // 4. Update table status
-                                await query("UPDATE tables SET status = 'occupied' WHERE name = $1", [lineOrder.assigned_table]);
+            // 4. Update table status
+            await query("UPDATE tables SET status = 'occupied' WHERE name = $1", [lineOrder.assigned_table]);
 
-                                // 5. Update LINE order status to 'ready' (as requested: Check-in sets to Ready)
-                                await query("UPDATE line_orders SET status = 'ready' WHERE id = $1", [id]);
+            // 5. Update LINE order status to 'ready' (as requested: Check-in sets to Ready)
+            await query("UPDATE line_orders SET status = 'ready' WHERE id = $1", [id]);
 
-                                // 6. Get pre-order items from line_order_items table
-                                const itemsRes = await query("SELECT product_id, product_name, price, quantity FROM line_order_items WHERE line_order_id = $1", [id]);
-                                const items = itemsRes.rows;
+            // 6. Get pre-order items from line_order_items table
+            const itemsRes = await query("SELECT product_id, product_name, price, quantity FROM line_order_items WHERE line_order_id = $1", [id]);
+            const items = itemsRes.rows;
 
-                                for (const item of items) {
-                                    await query(`
+            for (const item of items) {
+                await query(`
                     INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
                     VALUES ($1, $2, $3, $4, $5)
                 `, [posOrderId, item.product_id, item.product_name, item.price, item.quantity]);
-                                }
+            }
 
-                                await query('COMMIT');
-                                res.json({ success: true, posOrderId, tableName: lineOrder.assigned_table });
+            await query('COMMIT');
+            res.json({ success: true, posOrderId, tableName: lineOrder.assigned_table });
 
-                                // Notify via socket
-                                io.emit('table-update');
-                                io.emit('line-order-update');
-                            } catch (err) {
-                                await query('ROLLBACK');
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            // Notify via socket
+            io.emit('table-update');
+            io.emit('line-order-update');
+        } catch (err) {
+            await query('ROLLBACK');
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // ADMIN: Complete LINE Order
-                        app.post('/api/line-orders/:id/complete', async (req, res) => {
-                            const { id } = req.params;
-                            try {
-                                await query("UPDATE line_orders SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
+    // ADMIN: Complete LINE Order
+    app.post('/api/line-orders/:id/complete', async (req, res) => {
+        const { id } = req.params;
+        try {
+            await query("UPDATE line_orders SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
 
-                                // Earn Loyalty Points (Fetch customer info first)
-                                const orderRes = await query("SELECT customer_id, total_amount FROM line_orders WHERE id = $1", [id]);
-                                const order = orderRes.rows[0];
-                                if (order && order.customer_id) {
-                                    console.log(`💎 Awarding points for completed LINE order: #${id}`);
-                                    await earnLoyaltyPoints(order.customer_id, order.total_amount, null, id);
-                                }
+            // Earn Loyalty Points (Fetch customer info first)
+            const orderRes = await query("SELECT customer_id, total_amount FROM line_orders WHERE id = $1", [id]);
+            const order = orderRes.rows[0];
+            if (order && order.customer_id) {
+                console.log(`💎 Awarding points for completed LINE order: #${id}`);
+                await earnLoyaltyPoints(order.customer_id, order.total_amount, null, id);
+            }
 
-                                io.emit('line-order-update', { orderId: id, status: 'completed' });
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            io.emit('line-order-update', { orderId: id, status: 'completed' });
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // ADMIN: Cancel LINE Order
-                        app.post('/api/line-orders/:id/cancel', async (req, res) => {
-                            const { id } = req.params;
-                            try {
-                                await query("UPDATE line_orders SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
-                                io.emit('line-order-update', { orderId: id, status: 'cancelled' });
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+    // ADMIN: Cancel LINE Order
+    app.post('/api/line-orders/:id/cancel', async (req, res) => {
+        const { id } = req.params;
+        try {
+            await query("UPDATE line_orders SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
+            io.emit('line-order-update', { orderId: id, status: 'cancelled' });
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // ============================================
-                        // === DELIVERY SYSTEM API ===
-                        // ============================================
+    // ============================================
+    // === DELIVERY SYSTEM API ===
+    // ============================================
 
-                        // Generate unique tracking token
-                        const generateTrackingToken = () => {
-                            return 'TRK' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 8).toUpperCase();
-                        };
+    // Generate unique tracking token
+    const generateTrackingToken = () => {
+        return 'TRK' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 8).toUpperCase();
+    };
 
-                        // Get Delivery Settings (minimum order, delivery fee, etc.)
-                        app.get('/api/delivery/settings', async (req, res) => {
-                            try {
-                                const result = await query("SELECT * FROM settings WHERE key IN ('minimum_delivery_order', 'delivery_fee', 'delivery_enabled')");
-                                const settings = {};
-                                result.rows.forEach(s => settings[s.key] = s.value);
-                                res.json({
-                                    minimumOrder: parseFloat(settings.minimum_delivery_order) || 100,
-                                    deliveryFee: parseFloat(settings.delivery_fee) || 0,
-                                    deliveryEnabled: settings.delivery_enabled !== 'false'
-                                });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+    // Get Delivery Settings (minimum order, delivery fee, etc.)
+    app.get('/api/delivery/settings', async (req, res) => {
+        try {
+            const result = await query("SELECT * FROM settings WHERE key IN ('minimum_delivery_order', 'delivery_fee', 'delivery_enabled')");
+            const settings = {};
+            result.rows.forEach(s => settings[s.key] = s.value);
+            res.json({
+                minimumOrder: parseFloat(settings.minimum_delivery_order) || 100,
+                deliveryFee: parseFloat(settings.delivery_fee) || 0,
+                deliveryEnabled: settings.delivery_enabled !== 'false'
+            });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // Get all Delivery Orders (for Admin)
-                        app.get('/api/delivery-orders', async (req, res) => {
-                            const { status, type } = req.query;
-                            try {
-                                let sql = "SELECT * FROM line_orders WHERE order_type = 'delivery'";
-                                const params = [];
-                                let paramIdx = 1;
+    // Get all Delivery Orders (for Admin)
+    app.get('/api/delivery-orders', async (req, res) => {
+        const { status, type } = req.query;
+        try {
+            let sql = "SELECT * FROM line_orders WHERE order_type = 'delivery'";
+            const params = [];
+            let paramIdx = 1;
 
-                                if (status && status !== 'all') {
-                                    sql += ` AND status = $${paramIdx}`;
-                                    params.push(status);
-                                    paramIdx++;
-                                }
+            if (status && status !== 'all') {
+                sql += ` AND status = $${paramIdx}`;
+                params.push(status);
+                paramIdx++;
+            }
 
-                                sql += " ORDER BY created_at DESC";
+            sql += " ORDER BY created_at DESC";
 
-                                const ordersRes = await query(sql, params);
-                                const orders = ordersRes.rows;
+            const ordersRes = await query(sql, params);
+            const orders = ordersRes.rows;
 
-                                // Get items for each order
-                                for (let order of orders) {
-                                    const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
-                                    order.items = itemsRes.rows;
-                                }
+            // Get items for each order
+            for (let order of orders) {
+                const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
+                order.items = itemsRes.rows;
+            }
 
-                                res.json(orders);
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json(orders);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // Get orders pending for Rider pickup
-                        app.get('/api/delivery-orders/pending-pickup', async (req, res) => {
-                            try {
-                                const ordersRes = await query(`
+    // Get orders pending for Rider pickup
+    app.get('/api/delivery-orders/pending-pickup', async (req, res) => {
+        try {
+            const ordersRes = await query(`
                 SELECT lo.*, u.name as rider_name
                 FROM line_orders lo
                 LEFT JOIN users u ON lo.rider_id = u.id
@@ -4421,57 +4394,57 @@ async function startServer() {
                 AND lo.status = 'ready'
                 ORDER BY lo.created_at ASC
             `);
-                                const orders = ordersRes.rows;
+            const orders = ordersRes.rows;
 
-                                for (let order of orders) {
-                                    const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
-                                    order.items = itemsRes.rows;
-                                }
+            for (let order of orders) {
+                const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
+                order.items = itemsRes.rows;
+            }
 
-                                res.json(orders);
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json(orders);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // Get current rider's active deliveries
-                        app.get('/api/delivery-orders/my-deliveries/:riderId', async (req, res) => {
-                            const { riderId } = req.params;
-                            try {
-                                const ordersRes = await query(`
+    // Get current rider's active deliveries
+    app.get('/api/delivery-orders/my-deliveries/:riderId', async (req, res) => {
+        const { riderId } = req.params;
+        try {
+            const ordersRes = await query(`
                 SELECT * FROM line_orders 
                 WHERE rider_id = $1 
                 AND status IN ('picked_up', 'delivering')
                 ORDER BY delivery_started_at ASC
             `, [riderId]);
-                                const orders = ordersRes.rows;
+            const orders = ordersRes.rows;
 
-                                for (let order of orders) {
-                                    const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
-                                    order.items = itemsRes.rows;
-                                }
+            for (let order of orders) {
+                const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
+                order.items = itemsRes.rows;
+            }
 
-                                res.json(orders);
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json(orders);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // Rider picks up the order
-                        app.post('/api/delivery-orders/:id/pickup', async (req, res) => {
-                            const { id } = req.params;
-                            const { riderId } = req.body;
-                            try {
-                                // Generate tracking token if not exists
-                                const orderRes = await query("SELECT tracking_token FROM line_orders WHERE id = $1", [id]);
-                                let trackingToken = orderRes.rows[0]?.tracking_token;
-                                if (!trackingToken) {
-                                    trackingToken = generateTrackingToken();
-                                }
+    // Rider picks up the order
+    app.post('/api/delivery-orders/:id/pickup', async (req, res) => {
+        const { id } = req.params;
+        const { riderId } = req.body;
+        try {
+            // Generate tracking token if not exists
+            const orderRes = await query("SELECT tracking_token FROM line_orders WHERE id = $1", [id]);
+            let trackingToken = orderRes.rows[0]?.tracking_token;
+            if (!trackingToken) {
+                trackingToken = generateTrackingToken();
+            }
 
-                                await query(`
+            await query(`
                 UPDATE line_orders 
                 SET status = 'picked_up', 
                     rider_id = $1,
@@ -4480,30 +4453,30 @@ async function startServer() {
                 WHERE id = $3
             `, [riderId, trackingToken, id]);
 
-                                io.emit('delivery-order-update', { orderId: id, status: 'picked_up', riderId });
+            io.emit('delivery-order-update', { orderId: id, status: 'picked_up', riderId });
 
-                                // Notification: Rider picked up
-                                const riderRes = await query("SELECT name FROM users WHERE id = $1", [riderId]);
-                                const riderName = riderRes.rows[0]?.name || 'ไรเดอร์';
-                                createNotification(
-                                    `🛵 ไรเดอร์รับงานแล้ว #${id}`,
-                                    `${riderName} กำลังเตรียมจัดส่ง`,
-                                    'delivery',
-                                    { orderId: id, riderId, status: 'picked_up' }
-                                );
+            // Notification: Rider picked up
+            const riderRes = await query("SELECT name FROM users WHERE id = $1", [riderId]);
+            const riderName = riderRes.rows[0]?.name || 'ไรเดอร์';
+            createNotification(
+                `🛵 ไรเดอร์รับงานแล้ว #${id}`,
+                `${riderName} กำลังเตรียมจัดส่ง`,
+                'delivery',
+                { orderId: id, riderId, status: 'picked_up' }
+            );
 
-                                res.json({ success: true, trackingToken });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json({ success: true, trackingToken });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // Rider starts delivery (GPS tracking begins)
-                        app.post('/api/delivery-orders/:id/start-delivery', async (req, res) => {
-                            const { id } = req.params;
-                            try {
-                                await query(`
+    // Rider starts delivery (GPS tracking begins)
+    app.post('/api/delivery-orders/:id/start-delivery', async (req, res) => {
+        const { id } = req.params;
+        try {
+            await query(`
                 UPDATE line_orders 
                 SET status = 'delivering', 
                     delivery_started_at = CURRENT_TIMESTAMP,
@@ -4511,49 +4484,49 @@ async function startServer() {
                 WHERE id = $1
             `, [id]);
 
-                                io.emit('delivery-order-update', { orderId: id, status: 'delivering' });
+            io.emit('delivery-order-update', { orderId: id, status: 'delivering' });
 
-                                // Notification: Delivery started
-                                createNotification(
-                                    `🚀 เริ่มจัดส่งแล้ว #${id}`,
-                                    `ไรเดอร์ออกเดินทางส่งอาหารแล้ว`,
-                                    'delivery',
-                                    { orderId: id, status: 'delivering' }
-                                );
+            // Notification: Delivery started
+            createNotification(
+                `🚀 เริ่มจัดส่งแล้ว #${id}`,
+                `ไรเดอร์ออกเดินทางส่งอาหารแล้ว`,
+                'delivery',
+                { orderId: id, status: 'delivering' }
+            );
 
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // Update Rider GPS location (every 10 seconds)
-                        app.patch('/api/delivery-orders/:id/rider-location', async (req, res) => {
-                            const { id } = req.params;
-                            const { lat, lng } = req.body;
-                            try {
-                                await query(`
+    // Update Rider GPS location (every 10 seconds)
+    app.patch('/api/delivery-orders/:id/rider-location', async (req, res) => {
+        const { id } = req.params;
+        const { lat, lng } = req.body;
+        try {
+            await query(`
                 UPDATE line_orders 
                 SET rider_lat = $1, rider_lng = $2, updated_at = CURRENT_TIMESTAMP 
                 WHERE id = $3
             `, [lat, lng, id]);
 
-                                // Emit to tracking page
-                                io.emit('rider-location-update', { orderId: parseInt(id), lat, lng });
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            // Emit to tracking page
+            io.emit('rider-location-update', { orderId: parseInt(id), lat, lng });
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // Mark order as delivered
-                        app.post('/api/delivery-orders/:id/delivered', async (req, res) => {
-                            const { id } = req.params;
-                            const { paymentMethod } = req.body;
-                            try {
-                                await query(`
+    // Mark order as delivered
+    app.post('/api/delivery-orders/:id/delivered', async (req, res) => {
+        const { id } = req.params;
+        const { paymentMethod } = req.body;
+        try {
+            await query(`
                 UPDATE line_orders 
                 SET status = 'completed', 
                     payment_method = $1,
@@ -4562,37 +4535,37 @@ async function startServer() {
                 WHERE id = $2
             `, [paymentMethod || 'cash', id]);
 
-                                // Earn Loyalty Points (Fetch customer info first)
-                                const orderRes = await query("SELECT customer_id, total_amount FROM line_orders WHERE id = $1", [id]);
-                                const order = orderRes.rows[0];
-                                if (order && order.customer_id) {
-                                    console.log(`💎 Awarding points for delivered LINE order: #${id}`);
-                                    await earnLoyaltyPoints(order.customer_id, order.total_amount, null, id);
-                                }
+            // Earn Loyalty Points (Fetch customer info first)
+            const orderRes = await query("SELECT customer_id, total_amount FROM line_orders WHERE id = $1", [id]);
+            const order = orderRes.rows[0];
+            if (order && order.customer_id) {
+                console.log(`💎 Awarding points for delivered LINE order: #${id}`);
+                await earnLoyaltyPoints(order.customer_id, order.total_amount, null, id);
+            }
 
-                                io.emit('delivery-order-update', { orderId: id, status: 'completed' });
-                                io.emit('line-order-update', { orderId: id, status: 'completed' });
+            io.emit('delivery-order-update', { orderId: id, status: 'completed' });
+            io.emit('line-order-update', { orderId: id, status: 'completed' });
 
-                                // Notification: Delivered successfully
-                                createNotification(
-                                    `✅ ส่งสำเร็จ #${id}`,
-                                    `ลูกค้าได้รับอาหารเรียบร้อยแล้ว (฿${order?.total_amount || 0})`,
-                                    'success',
-                                    { orderId: id, status: 'completed', amount: order?.total_amount }
-                                );
+            // Notification: Delivered successfully
+            createNotification(
+                `✅ ส่งสำเร็จ #${id}`,
+                `ลูกค้าได้รับอาหารเรียบร้อยแล้ว (฿${order?.total_amount || 0})`,
+                'success',
+                { orderId: id, status: 'completed', amount: order?.total_amount }
+            );
 
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // PUBLIC: Get order status by tracking token (for customer tracking page)
-                        app.get('/api/public/tracking/:token', async (req, res) => {
-                            const { token } = req.params;
-                            try {
-                                const orderRes = await query(`
+    // PUBLIC: Get order status by tracking token (for customer tracking page)
+    app.get('/api/public/tracking/:token', async (req, res) => {
+        const { token } = req.params;
+        try {
+            const orderRes = await query(`
                 SELECT 
                     lo.id, lo.status, lo.customer_name, lo.delivery_address,
                     lo.rider_lat, lo.rider_lng, lo.customer_lat, lo.customer_lng,
@@ -4604,63 +4577,63 @@ async function startServer() {
                 WHERE lo.tracking_token = $1
             `, [token]);
 
-                                if (orderRes.rows.length === 0) {
-                                    return res.status(404).json({ error: 'Order not found' });
-                                }
+            if (orderRes.rows.length === 0) {
+                return res.status(404).json({ error: 'Order not found' });
+            }
 
-                                const order = orderRes.rows[0];
+            const order = orderRes.rows[0];
 
-                                // Calculate queue position if still in preparing
-                                if (['confirmed', 'preparing'].includes(order.status)) {
-                                    const queueRes = await query(`
+            // Calculate queue position if still in preparing
+            if (['confirmed', 'preparing'].includes(order.status)) {
+                const queueRes = await query(`
                     SELECT COUNT(*) as position FROM line_orders 
                     WHERE status IN ('confirmed', 'preparing') 
                     AND created_at < (SELECT created_at FROM line_orders WHERE tracking_token = $1)
                 `, [token]);
-                                    order.queue_position = parseInt(queueRes.rows[0].position) + 1;
-                                }
+                order.queue_position = parseInt(queueRes.rows[0].position) + 1;
+            }
 
-                                // Get items
-                                const itemsRes = await query("SELECT product_name, quantity, price FROM line_order_items WHERE line_order_id = $1", [order.id]);
-                                order.items = itemsRes.rows;
+            // Get items
+            const itemsRes = await query("SELECT product_name, quantity, price FROM line_order_items WHERE line_order_id = $1", [order.id]);
+            order.items = itemsRes.rows;
 
-                                res.json(order);
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json(order);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // PUBLIC: Create Delivery Order (from customer page)
-                        app.post('/api/public/delivery-orders', async (req, res) => {
-                            const {
-                                customerName, customerPhone, customerAddress,
-                                latitude, longitude, items, totalAmount, note
-                            } = req.body;
+    // PUBLIC: Create Delivery Order (from customer page)
+    app.post('/api/public/delivery-orders', async (req, res) => {
+        const {
+            customerName, customerPhone, customerAddress,
+            latitude, longitude, items, totalAmount, note
+        } = req.body;
 
-                            const client = await pool.connect();
+        const client = await pool.connect();
 
-                            try {
-                                // Validate minimum order
-                                const settingsRes = await client.query("SELECT value FROM settings WHERE key = 'minimum_delivery_order'");
-                                const minOrder = parseFloat(settingsRes.rows[0]?.value) || 100;
+        try {
+            // Validate minimum order
+            const settingsRes = await client.query("SELECT value FROM settings WHERE key = 'minimum_delivery_order'");
+            const minOrder = parseFloat(settingsRes.rows[0]?.value) || 100;
 
-                                if (totalAmount < minOrder) {
-                                    return res.status(400).json({
-                                        error: `ยอดสั่งขั้นต่ำสำหรับ Delivery คือ ฿${minOrder}`,
-                                        minimumOrder: minOrder
-                                    });
-                                }
+            if (totalAmount < minOrder) {
+                return res.status(400).json({
+                    error: `ยอดสั่งขั้นต่ำสำหรับ Delivery คือ ฿${minOrder}`,
+                    minimumOrder: minOrder
+                });
+            }
 
-                                await client.query('BEGIN');
+            await client.query('BEGIN');
 
-                                // Generate tracking token
-                                const trackingToken = generateTrackingToken();
+            // Generate tracking token
+            const trackingToken = generateTrackingToken();
 
-                                // Serialize items to JSON to preserve options (Global & Local)
-                                const itemsJson = JSON.stringify(items || []);
+            // Serialize items to JSON to preserve options (Global & Local)
+            const itemsJson = JSON.stringify(items || []);
 
-                                const result = await client.query(`
+            const result = await client.query(`
                 INSERT INTO line_orders (
                     order_type, customer_name, customer_phone, delivery_address,
                     customer_lat, customer_lng, total_amount, status, note, tracking_token, items_json
@@ -4668,55 +4641,55 @@ async function startServer() {
                 RETURNING id
             `, ['delivery', customerName, customerPhone, customerAddress, latitude, longitude, totalAmount, note, trackingToken, itemsJson]);
 
-                                const orderId = result.rows[0].id;
+            const orderId = result.rows[0].id;
 
-                                // Insert items
-                                for (const item of items) {
-                                    await client.query(`
+            // Insert items
+            for (const item of items) {
+                await client.query(`
                     INSERT INTO line_order_items (line_order_id, product_id, product_name, price, quantity) 
                     VALUES ($1, $2, $3, $4, $5)
                 `, [orderId, item.id, item.name, item.price, item.quantity]);
-                                }
+            }
 
-                                await client.query('COMMIT');
+            await client.query('COMMIT');
 
-                                io.emit('new-delivery-order', { orderId, customerName });
-                                io.emit('line-order-new'); // For backward compatibility
+            io.emit('new-delivery-order', { orderId, customerName });
+            io.emit('line-order-new'); // For backward compatibility
 
-                                res.json({
-                                    success: true,
-                                    orderId,
-                                    trackingToken,
-                                    trackingUrl: `/tracking/${trackingToken}`
-                                });
-                            } catch (err) {
-                                await client.query('ROLLBACK');
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            } finally {
-                                client.release();
-                            }
-                        });
+            res.json({
+                success: true,
+                orderId,
+                trackingToken,
+                trackingUrl: `/tracking/${trackingToken}`
+            });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
 
-                        // Get users with rider role (for assigning riders)
-                        app.get('/api/riders', async (req, res) => {
-                            try {
-                                const result = await query("SELECT id, name, full_name FROM users WHERE role IN ('rider', 'staff', 'admin', 'owner')");
-                                res.json(result.rows);
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+    // Get users with rider role (for assigning riders)
+    app.get('/api/riders', async (req, res) => {
+        try {
+            const result = await query("SELECT id, name, full_name FROM users WHERE role IN ('rider', 'staff', 'admin', 'owner')");
+            res.json(result.rows);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // --- LOYALTY & PROMOTIONS APIs ---
+    // --- LOYALTY & PROMOTIONS APIs ---
 
-                        // Search Loyalty Customers
-                        app.get('/api/admin/loyalty/customers', requireAdmin, async (req, res) => {
-                            const { query: q } = req.query;
-                            if (!q) return res.json([]);
-                            try {
-                                const result = await query(`
+    // Search Loyalty Customers
+    app.get('/api/admin/loyalty/customers', requireAdmin, async (req, res) => {
+        const { query: q } = req.query;
+        if (!q) return res.json([]);
+        try {
+            const result = await query(`
                 SELECT id, line_user_id, display_name, picture_url, points, phone 
                 FROM loyalty_customers 
                 WHERE display_name ILIKE $1 
@@ -4724,93 +4697,93 @@ async function startServer() {
                 OR phone ILIKE $1
                 LIMIT 10
             `, [`%${q}%`]);
-                                res.json(result.rows);
-                            } catch (err) {
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json(result.rows);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // Link customer to order
-                        app.post('/api/orders/:id/link-customer', async (req, res) => {
-                            const { id } = req.params;
-                            const { customerId } = req.body;
-                            try {
-                                await query('UPDATE orders SET customer_id = $1 WHERE id = $2', [customerId, id]);
-                                res.json({ success: true });
-                            } catch (err) {
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+    // Link customer to order
+    app.post('/api/orders/:id/link-customer', async (req, res) => {
+        const { id } = req.params;
+        const { customerId } = req.body;
+        try {
+            await query('UPDATE orders SET customer_id = $1 WHERE id = $2', [customerId, id]);
+            res.json({ success: true });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // Sync Customer Profile (LINE Login)
-                        app.post('/api/loyalty/sync', async (req, res) => {
-                            const { lineUserId, displayName, pictureUrl } = req.body;
-                            try {
-                                // Check if already exists
-                                const existing = await query('SELECT * FROM loyalty_customers WHERE line_user_id = $1', [lineUserId]);
+    // Sync Customer Profile (LINE Login)
+    app.post('/api/loyalty/sync', async (req, res) => {
+        const { lineUserId, displayName, pictureUrl } = req.body;
+        try {
+            // Check if already exists
+            const existing = await query('SELECT * FROM loyalty_customers WHERE line_user_id = $1', [lineUserId]);
 
-                                // Mock LINE OA check (In production, use Messaging API)
-                                // For now, we'll assume if they sync, they are following OR we set it to true if they use the app
-                                const isFollowing = true;
+            // Mock LINE OA check (In production, use Messaging API)
+            // For now, we'll assume if they sync, they are following OR we set it to true if they use the app
+            const isFollowing = true;
 
-                                if (existing.rowCount > 0) {
-                                    // Update
-                                    const result = await query(
-                                        `UPDATE loyalty_customers 
+            if (existing.rowCount > 0) {
+                // Update
+                const result = await query(
+                    `UPDATE loyalty_customers 
                      SET display_name = $1, picture_url = $2, is_following = $3, updated_at = CURRENT_TIMESTAMP 
                      WHERE line_user_id = $4 
                      RETURNING *`,
-                                        [displayName, pictureUrl, isFollowing, lineUserId]
-                                    );
-                                    res.json(result.rows[0]);
-                                } else {
-                                    // Create
-                                    const result = await query(
-                                        `INSERT INTO loyalty_customers (line_user_id, display_name, picture_url, is_following)
+                    [displayName, pictureUrl, isFollowing, lineUserId]
+                );
+                res.json(result.rows[0]);
+            } else {
+                // Create
+                const result = await query(
+                    `INSERT INTO loyalty_customers (line_user_id, display_name, picture_url, is_following)
                      VALUES ($1, $2, $3, $4)
                      RETURNING *`,
-                                        [lineUserId, displayName, pictureUrl, isFollowing]
-                                    );
+                    [lineUserId, displayName, pictureUrl, isFollowing]
+                );
 
-                                    // Notification: New member registered
-                                    createNotification(
-                                        `🎉 สมาชิกใหม่!`,
-                                        `${displayName} ลงทะเบียนเข้าระบบสะสมแต้ม`,
-                                        'member',
-                                        { customerId: result.rows[0].id, displayName }
-                                    );
+                // Notification: New member registered
+                createNotification(
+                    `🎉 สมาชิกใหม่!`,
+                    `${displayName} ลงทะเบียนเข้าระบบสะสมแต้ม`,
+                    'member',
+                    { customerId: result.rows[0].id, displayName }
+                );
 
-                                    res.json(result.rows[0]);
-                                }
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+                res.json(result.rows[0]);
+            }
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // Get Customer Profile & History
-                        app.get('/api/loyalty/profile/:lineUserId', async (req, res) => {
-                            const { lineUserId } = req.params;
-                            try {
-                                const customerRes = await query('SELECT * FROM loyalty_customers WHERE line_user_id = $1', [lineUserId]);
-                                if (customerRes.rowCount === 0) return res.status(404).json({ error: 'Customer not found' });
+    // Get Customer Profile & History
+    app.get('/api/loyalty/profile/:lineUserId', async (req, res) => {
+        const { lineUserId } = req.params;
+        try {
+            const customerRes = await query('SELECT * FROM loyalty_customers WHERE line_user_id = $1', [lineUserId]);
+            if (customerRes.rowCount === 0) return res.status(404).json({ error: 'Customer not found' });
 
-                                const customer = customerRes.rows[0];
-                                const transactionsRes = await query(
-                                    'SELECT * FROM loyalty_point_transactions WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 20',
-                                    [customer.id]
-                                );
+            const customer = customerRes.rows[0];
+            const transactionsRes = await query(
+                'SELECT * FROM loyalty_point_transactions WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 20',
+                [customer.id]
+            );
 
-                                res.json({ customer, transactions: transactionsRes.rows });
-                            } catch (err) {
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json({ customer, transactions: transactionsRes.rows });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // Get Active Promotions (Customer View)
-                        app.get('/api/loyalty/active-promotions', async (req, res) => {
-                            try {
-                                const result = await query(`
+    // Get Active Promotions (Customer View)
+    app.get('/api/loyalty/active-promotions', async (req, res) => {
+        try {
+            const result = await query(`
                 SELECT p.*, 
                 (SELECT COUNT(*)::int FROM loyalty_coupons c WHERE c.promotion_id = p.id) as redeemed_count
                 FROM loyalty_promotions p
@@ -4819,121 +4792,121 @@ async function startServer() {
                 AND (end_date IS NULL OR end_date >= CURRENT_DATE)
                 ORDER BY points_required ASC
             `);
-                                res.json(result.rows);
-                            } catch (err) {
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json(result.rows);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        const generateCouponCode = () => {
-                            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-                            let code = '';
-                            for (let i = 0; i < 6; i++) {
-                                code += chars.charAt(Math.floor(Math.random() * chars.length));
-                            }
-                            return `ANAN-${code}`;
-                        };
+    const generateCouponCode = () => {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return `ANAN-${code}`;
+    };
 
-                        app.post('/api/loyalty/redeem', async (req, res) => {
-                            const { customerId, promotionId } = req.body;
-                            try {
-                                await query('BEGIN');
+    app.post('/api/loyalty/redeem', async (req, res) => {
+        const { customerId, promotionId } = req.body;
+        try {
+            await query('BEGIN');
 
-                                const promoRes = await query('SELECT * FROM loyalty_promotions WHERE id = $1', [promotionId]);
-                                const promo = promoRes.rows[0];
-                                const customerRes = await query('SELECT id, points, is_following FROM loyalty_customers WHERE id = $1', [customerId]);
-                                const customer = customerRes.rows[0];
+            const promoRes = await query('SELECT * FROM loyalty_promotions WHERE id = $1', [promotionId]);
+            const promo = promoRes.rows[0];
+            const customerRes = await query('SELECT id, points, is_following FROM loyalty_customers WHERE id = $1', [customerId]);
+            const customer = customerRes.rows[0];
 
-                                if (!promo || !customer) {
-                                    await query('ROLLBACK');
-                                    return res.status(404).json({ error: 'Promotion or Customer not found' });
-                                }
+            if (!promo || !customer) {
+                await query('ROLLBACK');
+                return res.status(404).json({ error: 'Promotion or Customer not found' });
+            }
 
-                                if (!customer.is_following) {
-                                    await query('ROLLBACK');
-                                    return res.status(403).json({ error: 'กรุณาติดตาม LINE OA ก่อนแลกรางวัลค่ะ' });
-                                }
+            if (!customer.is_following) {
+                await query('ROLLBACK');
+                return res.status(403).json({ error: 'กรุณาติดตาม LINE OA ก่อนแลกรางวัลค่ะ' });
+            }
 
-                                if (customer.points < promo.points_required) {
-                                    await query('ROLLBACK');
-                                    return res.status(400).json({ error: 'คะแนนไม่เพียงพอค่ะ' });
-                                }
+            if (customer.points < promo.points_required) {
+                await query('ROLLBACK');
+                return res.status(400).json({ error: 'คะแนนไม่เพียงพอค่ะ' });
+            }
 
-                                // --- CHECK LIMITS ---
+            // --- CHECK LIMITS ---
 
-                                // 1. Global Redemption Limit
-                                if (promo.max_redemptions) {
-                                    const totalRedeemedRes = await query('SELECT COUNT(*) FROM loyalty_coupons WHERE promotion_id = $1', [promotionId]);
-                                    const totalRedeemed = parseInt(totalRedeemedRes.rows[0].count);
-                                    if (totalRedeemed >= promo.max_redemptions) {
-                                        await query('ROLLBACK');
-                                        return res.status(400).json({ error: 'ขออภัยค่ะ สิทธิ์แลกรางวัลนี้เต็มแล้ว' });
-                                    }
-                                }
+            // 1. Global Redemption Limit
+            if (promo.max_redemptions) {
+                const totalRedeemedRes = await query('SELECT COUNT(*) FROM loyalty_coupons WHERE promotion_id = $1', [promotionId]);
+                const totalRedeemed = parseInt(totalRedeemedRes.rows[0].count);
+                if (totalRedeemed >= promo.max_redemptions) {
+                    await query('ROLLBACK');
+                    return res.status(400).json({ error: 'ขออภัยค่ะ สิทธิ์แลกรางวัลนี้เต็มแล้ว' });
+                }
+            }
 
-                                // 2. User Redemption Limit
-                                if (promo.user_redemption_limit) {
-                                    const userRedeemedRes = await query('SELECT COUNT(*) FROM loyalty_coupons WHERE promotion_id = $1 AND customer_id = $2', [promotionId, customerId]);
-                                    const userRedeemed = parseInt(userRedeemedRes.rows[0].count);
-                                    if (userRedeemed >= promo.user_redemption_limit) {
-                                        await query('ROLLBACK');
-                                        return res.status(400).json({ error: `คุณใช้สิทธิ์ครบ ${promo.user_redemption_limit} ครั้งแล้วค่ะ` });
-                                    }
-                                }
+            // 2. User Redemption Limit
+            if (promo.user_redemption_limit) {
+                const userRedeemedRes = await query('SELECT COUNT(*) FROM loyalty_coupons WHERE promotion_id = $1 AND customer_id = $2', [promotionId, customerId]);
+                const userRedeemed = parseInt(userRedeemedRes.rows[0].count);
+                if (userRedeemed >= promo.user_redemption_limit) {
+                    await query('ROLLBACK');
+                    return res.status(400).json({ error: `คุณใช้สิทธิ์ครบ ${promo.user_redemption_limit} ครั้งแล้วค่ะ` });
+                }
+            }
 
-                                // 1. Deduct points
-                                await query('UPDATE loyalty_customers SET points = points - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [promo.points_required, customerId]);
+            // 1. Deduct points
+            await query('UPDATE loyalty_customers SET points = points - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [promo.points_required, customerId]);
 
-                                // 2. Generate Coupon with discount settings from promotion
-                                const couponCode = generateCouponCode();
-                                await query(`
+            // 2. Generate Coupon with discount settings from promotion
+            const couponCode = generateCouponCode();
+            await query(`
                 INSERT INTO loyalty_coupons (customer_id, promotion_id, coupon_code, discount_type, discount_value, min_spend_amount)
                 VALUES ($1, $2, $3, $4, $5, $6)
             `, [customerId, promotionId, couponCode, promo.discount_type || 'none', promo.discount_value || 0, promo.min_spend_amount || 0]);
 
-                                // 3. Log transaction
-                                await query(`
+            // 3. Log transaction
+            await query(`
                 INSERT INTO loyalty_point_transactions 
                 (customer_id, type, points, promotion_id, description)
                 VALUES ($1, 'redeem', $2, $3, $4)
             `, [customerId, promo.points_required, promotionId, `แลกรางวัล: ${promo.title} (Code: ${couponCode})`]);
 
-                                await query('COMMIT');
+            await query('COMMIT');
 
-                                // Notification: Coupon redeemed
-                                createNotification(
-                                    `🎁 แลกคูปองสำเร็จ`,
-                                    `ลูกค้าแลกรางวัล "${promo.title}" (Code: ${couponCode})`,
-                                    'coupon',
-                                    { customerId, promotionId, couponCode }
-                                );
+            // Notification: Coupon redeemed
+            createNotification(
+                `🎁 แลกคูปองสำเร็จ`,
+                `ลูกค้าแลกรางวัล "${promo.title}" (Code: ${couponCode})`,
+                'coupon',
+                { customerId, promotionId, couponCode }
+            );
 
-                                res.json({ success: true, newPoints: customer.points - promo.points_required, couponCode });
-                            } catch (err) {
-                                await query('ROLLBACK');
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json({ success: true, newPoints: customer.points - promo.points_required, couponCode });
+        } catch (err) {
+            await query('ROLLBACK');
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        app.get('/api/loyalty/coupons/:customerId', async (req, res) => {
-                            try {
-                                const result = await query(`
+    app.get('/api/loyalty/coupons/:customerId', async (req, res) => {
+        try {
+            const result = await query(`
                 SELECT c.*, p.title as promotion_title, p.description as promotion_description, p.image_url
                 FROM loyalty_coupons c
                 JOIN loyalty_promotions p ON c.promotion_id = p.id
                 WHERE c.customer_id = $1
                 ORDER BY c.redeemed_at DESC
             `, [req.params.customerId]);
-                                res.json(result.rows);
-                            } catch (err) {
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json(result.rows);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        app.post('/api/loyalty/coupons/verify', async (req, res) => {
-                            const { code } = req.body;
-                            try {
-                                const result = await query(`
+    app.post('/api/loyalty/coupons/verify', async (req, res) => {
+        const { code } = req.body;
+        try {
+            const result = await query(`
                 SELECT c.*, p.title, p.description, cust.display_name as customer_name
                 FROM loyalty_coupons c
                 JOIN loyalty_promotions p ON c.promotion_id = p.id
@@ -4941,45 +4914,45 @@ async function startServer() {
                 WHERE c.coupon_code = $1 AND c.status = 'active'
             `, [code.toUpperCase()]);
 
-                                if (result.rowCount === 0) {
-                                    return res.status(404).json({ error: 'รหัสคูปองไม่ถูกต้อง หรือถูกใช้งานไปแล้วค่ะ' });
-                                }
-                                res.json(result.rows[0]);
-                            } catch (err) {
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            if (result.rowCount === 0) {
+                return res.status(404).json({ error: 'รหัสคูปองไม่ถูกต้อง หรือถูกใช้งานไปแล้วค่ะ' });
+            }
+            res.json(result.rows[0]);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // POS: Use Coupon
-                        app.post('/api/loyalty/coupons/use', async (req, res) => {
-                            const { code, orderId, lineOrderId } = req.body;
-                            try {
-                                // First check the coupon
-                                const checkCoupon = await query('SELECT * FROM loyalty_coupons WHERE coupon_code = $1 AND status = \'active\'', [code.toUpperCase()]);
-                                if (checkCoupon.rowCount === 0) {
-                                    return res.status(404).json({ error: 'ไม่พบรหัสคูปอง หรือคูปองถูกใช้ไปแล้ว' });
-                                }
+    // POS: Use Coupon
+    app.post('/api/loyalty/coupons/use', async (req, res) => {
+        const { code, orderId, lineOrderId } = req.body;
+        try {
+            // First check the coupon
+            const checkCoupon = await query('SELECT * FROM loyalty_coupons WHERE coupon_code = $1 AND status = \'active\'', [code.toUpperCase()]);
+            if (checkCoupon.rowCount === 0) {
+                return res.status(404).json({ error: 'ไม่พบรหัสคูปอง หรือคูปองถูกใช้ไปแล้ว' });
+            }
 
-                                const coupon = checkCoupon.rows[0];
+            const coupon = checkCoupon.rows[0];
 
-                                // Verify Min Spend if order total provided
-                                if (coupon.min_spend_amount > 0) {
-                                    // Fetch order total to verify
-                                    let orderTotal = 0;
-                                    if (orderId) {
-                                        const orderRes = await query('SELECT total_amount FROM orders WHERE id = $1', [orderId]);
-                                        if (orderRes.rowCount > 0) orderTotal = parseFloat(orderRes.rows[0].total_amount);
-                                    } else if (lineOrderId) {
-                                        const orderRes = await query('SELECT total_amount FROM line_orders WHERE id = $1', [lineOrderId]);
-                                        if (orderRes.rowCount > 0) orderTotal = parseFloat(orderRes.rows[0].total_amount);
-                                    }
+            // Verify Min Spend if order total provided
+            if (coupon.min_spend_amount > 0) {
+                // Fetch order total to verify
+                let orderTotal = 0;
+                if (orderId) {
+                    const orderRes = await query('SELECT total_amount FROM orders WHERE id = $1', [orderId]);
+                    if (orderRes.rowCount > 0) orderTotal = parseFloat(orderRes.rows[0].total_amount);
+                } else if (lineOrderId) {
+                    const orderRes = await query('SELECT total_amount FROM line_orders WHERE id = $1', [lineOrderId]);
+                    if (orderRes.rowCount > 0) orderTotal = parseFloat(orderRes.rows[0].total_amount);
+                }
 
-                                    if (orderTotal < coupon.min_spend_amount) {
-                                        return res.status(400).json({ error: `คูปองนี้ต้องมียอดขั้นต่ำ ${coupon.min_spend_amount} บาทค่ะ` });
-                                    }
-                                }
+                if (orderTotal < coupon.min_spend_amount) {
+                    return res.status(400).json({ error: `คูปองนี้ต้องมียอดขั้นต่ำ ${coupon.min_spend_amount} บาทค่ะ` });
+                }
+            }
 
-                                const result = await query(`
+            const result = await query(`
                 UPDATE loyalty_coupons 
                 SET status = 'used', 
                     used_at = CURRENT_TIMESTAMP, 
@@ -4989,86 +4962,86 @@ async function startServer() {
                 RETURNING *
             `, [orderId || null, lineOrderId || null, coupon.id]);
 
-                                res.json({ success: true, coupon: result.rows[0] });
-                            } catch (err) {
-                                console.error('Use coupon error:', err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+            res.json({ success: true, coupon: result.rows[0] });
+        } catch (err) {
+            console.error('Use coupon error:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        // ADMIN: Management Promotions
-                        app.get('/api/admin/loyalty/promotions', requireAdmin, async (req, res) => {
-                            try {
-                                const result = await query('SELECT * FROM loyalty_promotions ORDER BY created_at DESC');
-                                res.json(result.rows);
-                            } catch (err) {
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+    // ADMIN: Management Promotions
+    app.get('/api/admin/loyalty/promotions', requireAdmin, async (req, res) => {
+        try {
+            const result = await query('SELECT * FROM loyalty_promotions ORDER BY created_at DESC');
+            res.json(result.rows);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        app.post('/api/admin/loyalty/promotions', requireAdmin, async (req, res) => {
-                            const { title, description, points_required, image_url, start_date, end_date, max_redemptions, user_redemption_limit, min_spend_amount } = req.body;
-                            try {
-                                const result = await query(
-                                    `INSERT INTO loyalty_promotions (title, description, points_required, image_url, start_date, end_date, max_redemptions, user_redemption_limit, min_spend_amount)
+    app.post('/api/admin/loyalty/promotions', requireAdmin, async (req, res) => {
+        const { title, description, points_required, image_url, start_date, end_date, max_redemptions, user_redemption_limit, min_spend_amount } = req.body;
+        try {
+            const result = await query(
+                `INSERT INTO loyalty_promotions (title, description, points_required, image_url, start_date, end_date, max_redemptions, user_redemption_limit, min_spend_amount)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                  RETURNING *`,
-                                    [title, description, points_required, image_url, start_date || null, end_date || null, max_redemptions || null, user_redemption_limit || null, min_spend_amount || 0]
-                                );
-                                res.json(result.rows[0]);
-                            } catch (err) {
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+                [title, description, points_required, image_url, start_date || null, end_date || null, max_redemptions || null, user_redemption_limit || null, min_spend_amount || 0]
+            );
+            res.json(result.rows[0]);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        app.put('/api/admin/loyalty/promotions/:id', requireAdmin, async (req, res) => {
-                            const { id } = req.params;
-                            const { title, description, points_required, image_url, start_date, end_date, is_active, max_redemptions, user_redemption_limit, min_spend_amount } = req.body;
-                            try {
-                                const result = await query(
-                                    `UPDATE loyalty_promotions 
+    app.put('/api/admin/loyalty/promotions/:id', requireAdmin, async (req, res) => {
+        const { id } = req.params;
+        const { title, description, points_required, image_url, start_date, end_date, is_active, max_redemptions, user_redemption_limit, min_spend_amount } = req.body;
+        try {
+            const result = await query(
+                `UPDATE loyalty_promotions 
                  SET title = $1, description = $2, points_required = $3, image_url = $4, start_date = $5, end_date = $6, is_active = $7, max_redemptions = $8, user_redemption_limit = $9, min_spend_amount = $10
                  WHERE id = $11
                  RETURNING *`,
-                                    [title, description, points_required, image_url, start_date || null, end_date || null, is_active, max_redemptions || null, user_redemption_limit || null, min_spend_amount || 0, id]
-                                );
-                                res.json(result.rows[0]);
-                            } catch (err) {
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+                [title, description, points_required, image_url, start_date || null, end_date || null, is_active, max_redemptions || null, user_redemption_limit || null, min_spend_amount || 0, id]
+            );
+            res.json(result.rows[0]);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        app.delete('/api/admin/loyalty/promotions/:id', requireAdmin, async (req, res) => {
-                            const { id } = req.params;
-                            try {
-                                await query('DELETE FROM loyalty_promotions WHERE id = $1', [id]);
-                                res.json({ success: true });
-                            } catch (err) {
-                                console.error(err);
-                                res.status(500).json({ error: err.message });
-                            }
-                        });
+    app.delete('/api/admin/loyalty/promotions/:id', requireAdmin, async (req, res) => {
+        const { id } = req.params;
+        try {
+            await query('DELETE FROM loyalty_promotions WHERE id = $1', [id]);
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
 
-                        io.on('connection', (socket) => {
-                            console.log('Client connected:', socket.id)
-                            socket.on('disconnect', () => {
-                                console.log('Client disconnected:', socket.id)
-                            })
-                        })
+    io.on('connection', (socket) => {
+        console.log('Client connected:', socket.id)
+        socket.on('disconnect', () => {
+            console.log('Client disconnected:', socket.id)
+        })
+    })
 
-                        // SPA Fallback: Serve index.html for any unknown routes (non-API)
-                        app.get('*', (req, res) => {
-                            // If it's an API call that fell through, 404 it.
-                            if (req.path.startsWith('/api')) {
-                                return res.status(404).json({ error: 'Endpoint not found' });
-                            }
+    // SPA Fallback: Serve index.html for any unknown routes (non-API)
+    app.get('*', (req, res) => {
+        // If it's an API call that fell through, 404 it.
+        if (req.path.startsWith('/api')) {
+            return res.status(404).json({ error: 'Endpoint not found' });
+        }
 
-                            const indexPath = path.join(distPath, 'index.html');
-                            const fs = require('fs');
-                            if (fs.existsSync(indexPath)) {
-                                res.sendFile(indexPath);
-                            } else {
-                                res.send(`
+        const indexPath = path.join(distPath, 'index.html');
+        const fs = require('fs');
+        if (fs.existsSync(indexPath)) {
+            res.sendFile(indexPath);
+        } else {
+            res.send(`
                 <div style="font-family: sans-serif; padding: 40px; text-align: center;">
                     <h1>Tasty Station API Server</h1>
                     <p>Static frontend files (dist) not found.</p>
@@ -5076,30 +5049,30 @@ async function startServer() {
                     <p>If you want to use this port, run <code>npm run build</code> first.</p>
                 </div>
             `);
-                            }
-                        });
+        }
+    });
 
-                        // Handle Port Conflict (e.g., if external server is running)
-                        server.on('error', (e) => {
-                            if (e.code === 'EADDRINUSE') {
-                                console.log(`⚠️  Port ${port} is busy. Assuming external server is running.`);
-                                console.log('   >> Starting in CLIENT MODE (connecting to existing server).');
-                            } else {
-                                console.error('SERVER ERROR:', e);
-                            }
-                        });
+    // Handle Port Conflict (e.g., if external server is running)
+    server.on('error', (e) => {
+        if (e.code === 'EADDRINUSE') {
+            console.log(`⚠️  Port ${port} is busy. Assuming external server is running.`);
+            console.log('   >> Starting in CLIENT MODE (connecting to existing server).');
+        } else {
+            console.error('SERVER ERROR:', e);
+        }
+    });
 
-                        server.listen(port, '0.0.0.0', () => {
-                            console.log(`Internal Express server listening on port ${port} (0.0.0.0)`)
-                        })
-                    }
+    server.listen(port, '0.0.0.0', () => {
+        console.log(`Internal Express server listening on port ${port} (0.0.0.0)`)
+    })
+}
 
-                    // Auto-start when running directly (e.g., on Render)
-                    if (require.main === module) {
-                        startServer().catch(err => {
-                            console.error('❌ Failed to start server:', err);
-                            process.exit(1);
-                        });
-                    }
+// Auto-start when running directly (e.g., on Render)
+if (require.main === module) {
+    startServer().catch(err => {
+        console.error('❌ Failed to start server:', err);
+        process.exit(1);
+    });
+}
 
-                    module.exports = startServer
+module.exports = startServer
