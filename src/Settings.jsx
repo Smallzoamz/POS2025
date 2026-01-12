@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MasterLayout from './layouts/MasterLayout';
 import { api } from './services/api';
 import QRCode from 'react-qr-code';
+import { FaLine, FaFacebook } from 'react-icons/fa';
 import LineConnectSettings from './components/settings/LineConnectSettings';
 import FacebookConnectSettings from './components/settings/FacebookConnectSettings';
 
@@ -87,8 +88,8 @@ const Settings = () => {
     const tabs = [
         { id: 'general', label: 'ทั่วไป', icon: '🏪' },
         { id: 'payment', label: 'การเงิน', icon: '💳' },
-        { id: 'line', label: 'LINE OA', icon: '💬' },
-        { id: 'facebook', label: 'Facebook', icon: '📘' },
+        { id: 'line', label: 'LINE OA', icon: <FaLine className="text-lg" /> },
+        { id: 'facebook', label: 'Facebook', icon: <FaFacebook className="text-lg" /> },
         { id: 'takeaway', label: 'Takeaway', icon: '📸' },
     ];
 
