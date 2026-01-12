@@ -3029,7 +3029,11 @@ async function startServer() {
                 },
                 body: imageBuffer // node-fetch supports Buffer
             });
-            if (!uploadRes.ok) throw new Error('Failed to upload Rich Menu Image');
+            if (!uploadRes.ok) {
+                const errorBody = await uploadRes.text();
+                console.error('LINE Upload Error:', errorBody);
+                throw new Error(`Failed to upload Rich Menu Image: ${errorBody}`);
+            }
             console.log('✅ Image Uploaded');
 
             // 5. Set Default
