@@ -2887,7 +2887,7 @@ async function startServer() {
                         buttons.push({
                             "type": "web_url",
                             "url": lineUrl,
-                            "title": "💬 แอดไลน์ร้าน"
+                            "title": "💚 สั่งอาหาร"
                         });
                     }
 
