@@ -2846,10 +2846,29 @@ async function startServer() {
                 // C. Menu (Dynamic Link & Line ID)
             } else if (matches(text, KEYWORDS.menu)) {
                 try {
-                    const settingsRes = await query("SELECT key, value FROM settings WHERE key IN ('website_sync_url', 'line_id')");
+                    // Fetch all necessary settings: Menu/Line links AND Store Hours
+                    const settingsRes = await query("SELECT key, value FROM settings WHERE key IN ('website_sync_url', 'line_id', 'store_open_time', 'store_close_time')");
                     const settings = {};
                     settingsRes.rows.forEach(s => settings[s.key] = s.value);
 
+                    // 1. Check Store Hours
+                    const openTime = settings.store_open_time || '09:00';
+                    const closeTime = settings.store_close_time || '21:00';
+                    const now = new Date();
+                    const currentTime = now.toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: false }); // "HH:MM"
+
+                    // Simple string comparison works for 24h format (e.g. "09:00" <= "14:30" <= "21:00")
+                    // Note: This simple logic assumes open < close (day shift). If night shift (cross-day), logic needs adjustment. 
+                    // Assuming day shift for typical restaurant POS context based on valid hours (09-21).
+                    if (currentTime < openTime || currentTime >= closeTime) {
+                        response = {
+                            "text": `ตอนนี้ร้านปิดอยู่นะคะ 😴\n\nรบกวนสั่งอาหารใหม่อีกทีในเวลาที่ร้านเปิดนะคะ\n⏰ (${openTime} - ${closeTime} น.)\n\nขอบคุณค่า 💖`
+                        };
+                        callSendFacebookAPI(sender_psid, response);
+                        return; // Stop here, don't show menu
+                    }
+
+                    // 2. If Open, existing Menu Logic
                     let menuUrl = "https://yoursite.com";
                     if (settings.website_sync_url) {
                         menuUrl = settings.website_sync_url.replace('/api/sync-menu', '');
@@ -2865,22 +2884,10 @@ async function startServer() {
 
                     if (settings.line_id) {
                         let lineId = settings.line_id;
-                        // Determine URL scheme based on ID format (Basic vs Premium/OA)
-                        // Heuristic: If it starts with @, it's likely an OA.
-                        // Standard add friend URL: https://line.me/ti/p/~ID
-                        // Official Account URL: https://line.me/R/ti/p/@ID
-                        // If user put @ in settings, strip it for search or keep it?
-                        // Simple approach: Use search intent or direct link if possible.
-                        // Valid Format: https://line.me/R/ti/p/@<id> works well for OAs.
-
-                        // Ensure @ prefix for OA URL format if missing, or use ~ for personal.
-                        // Given this is a business POS, assume OA or properly formatted ID.
-                        // Let's explicitly check if it starts with @.
                         let lineUrl;
                         if (lineId.startsWith('@')) {
                             lineUrl = `https://line.me/R/ti/p/${lineId}`;
                         } else {
-                            // Assume personal ID or Basic ID without @
                             lineUrl = `https://line.me/ti/p/~${lineId}`;
                         }
 

@@ -220,3 +220,4 @@
 - \[2026-01-13 03:13] | File: electron/server.js | Line: 2828 | Keyword: Chatbot Intelligence | Status: Enhanced | Change: Added 4 new skills: Check Queue (Orders), Check Price (Products), Payment Info, and WiFi Password.
 - \[2026-01-13 04:24] | File: electron/server.js | Line: 5110 | Keyword: Syntax Error | Status: Fixed | Change: Fixed 'Unexpected end of input' syntax error in Facebook Webhook handler to resolve Render deployment failure.
 - \[2026-01-13 04:45] | File: electron/server.js | Line: 2890 | Keyword: Facebook Button | Status: Modified | Change: Updated Facebook Chatbot button: Changed 'Add Shop Line' to 'Order Food' and replaced icon with Green Heart (LINE theme).
+- \[2026-01-13 04:50] | File: electron/server.js | Line: 2847 | Keyword: Smart Business Hours | Status: Implemented | Change: Added logic to check 'store_open_time' vs Current Time (Asia/Bangkok). If closed, Bot politely refuses 'Menu/Order' command and shows opening hours.
