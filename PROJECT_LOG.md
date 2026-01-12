@@ -199,7 +199,18 @@
 - \[2026-01-12 16:45] | File: src/layouts/MasterLayout.jsx | Line: 227 | Keyword: NavLink | Status: Fixed | Change: Updated broken '/promotions' link to '/admin/promotions'
 - \[2026-01-12 16:45] | File: src/components/AnalyticsDashboard.jsx | Line: 46, 107 | Keyword: w-full | Status: Fixed | Change: Added w-full to chart containers
 - \[2026-01-12 16:50] | File: src/App.jsx | Line: 127 | Keyword: Navigate | Status: Fixed | Change: Added redirect rule for '/promotions' -> '/admin/promotions'
-[2026-01-12 17:30] | File: src/OrderEntry.jsx | Line: 469 | Keyword: Bug Fix | Status: Fixed | Change: Fixed duplicate 'couponDiscount' declaration
-[2026-01-12 17:35] | File: src/pages/Promotions.jsx | Line: 56, 23 | Keyword: Refactor | Status: Optimized | Change: Refactored modal UI for compactness and fixed key duplicates
+- \[2026-01-12 17:30] | File: src/OrderEntry.jsx | Line: 469 | Keyword: Bug Fix | Status: Fixed | Change: Fixed duplicate 'couponDiscount' declaration
+- \[2026-01-12 17:35] | File: src/pages/Promotions.jsx | Line: 56, 23 | Keyword: Refactor | Status: Optimized | Change: Refactored modal UI for compactness and fixed key duplicates
 - \[2026-01-12 17:30] | File: src/pages/Promotions.jsx | Line: 1 | Keyword: Admin UI | Status: Created | Change: Created promotions page with basic structure and table display
 
+- \[2026-01-12 18:28] | File: src/components/settings/LineConnectSettings.jsx | Line: 180 | Keyword: Refactor | Status: Fixed | Change: Moved GuideModal component definition before usage to prevent ReferenceError (use-before-define).
+- \[2026-01-12 18:28] | File: src/components/settings/LineConnectSettings.jsx | Line: 189 | Keyword: Security | Status: Fixed | Change: Added rel="noopener noreferrer" to external LINE Developer Console links.
+- \[2026-01-12 18:28] | File: src/components/settings/LineConnectSettings.jsx | Line: 29 | Keyword: API Safety | Status: Fixed | Change: Passed empty object {} to api.post body for robust backend handling.
+- \[2026-01-12 21:00] | File: src/Settings.jsx | Line: 167 | Keyword: Website Sync UI | Status: Created | Change: Added UI fields for website_sync_url and website_sync_secret in General Settings.
+- \[2026-01-12 21:05] | File: electron/server.js | Line: 456 | Keyword: Sync Logic | Status: Modified | Change: Updated syncMenuToWebsite to prioritize DB settings over ENV variables.
+- \[2026-01-12 21:15] | File: src/Settings.jsx | Line: 144, 295 | Keyword: UI Enhancement | Status: Modified | Change: Refactored General and Payment inputs with icons, better padding, and consistent focus states.
+- \[2026-01-12 21:25] | File: src/Settings.jsx | Line: 144, 295 | Keyword: UI Padding | Status: Modified | Change: Added p-8 padding to tasty-card containers for better spacing.
+- [2026-01-12 21:26] | File: src/Settings.jsx | Line: 167 | Keyword: Facebook Feature | Status: Added | Change: Integrated FacebookConnectSettings into the main Settings tabs.
+- [2026-01-12 21:26] | File: src/components/settings/FacebookConnectSettings.jsx | Line: 1 | Keyword: Facebook UI | Status: Created | Change: Implemented comprehensive Facebook Page settings UI with Page ID, Access Token, and Verify Token fields.
+- [2026-01-12 21:26] | File: src/components/settings/FacebookConnectSettings.jsx | Line: 3 | Keyword: Setup Guide | Status: Created | Change: Built an interactive 5-step Setup Guide Modal to walk users through the Meta Developer Console configuration.
+- [2026-01-12 21:27] | File: C:/Users/Venge/.gemini/antigravity/brain/3d40f57f-566d-4d42-88be-2aa8df9c8530/facebook_setup_guide.md | Line: 1 | Keyword: Documentation | Status: Created | Change: Created detailed Facebook Setup Guide artifact for reference.

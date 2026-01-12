@@ -48,7 +48,7 @@ const GuideModal = ({ onClose }) => {
                         1. กดเข้าไปที่ Channel ที่เพิ่งสร้าง<br />
                         2. ไปที่แท็บ <strong>Basic Settings</strong><br />
                         3. เลื่อนลงมาหา <strong>Channel ID</strong> (ก๊อปปี้เก็บไว้)<br />
-                        4. เลื่อนลงมาหา <strong>Channel Secret</strong> > กดปุ่ม <strong>Issue</strong> (ก๊อปปี้เก็บไว้)
+                        4. เลื่อนลงมาหา <strong>Channel Secret</strong> -&gt; กดปุ่ม <strong>Issue</strong> (ก๊อปปี้เก็บไว้)
                     </p>
                     <div className="bg-slate-100 p-4 rounded-xl text-center border-2 border-dashed border-slate-200 text-slate-500">
                         <p>🆔 Channel ID: <strong>165xxxxxxx</strong></p>
@@ -80,11 +80,11 @@ const GuideModal = ({ onClose }) => {
                 <div className="space-y-4">
                     <p className="text-slate-600">
                         1. กลับไปหน้า Provider (กดชื่อ Provider ด้านซ้ายบน)<br />
-                        2. กด <strong>Create a new channel</strong> > เลือก <strong>LIFF</strong><br />
+                        2. กด <strong>Create a new channel</strong> -&gt; เลือก <strong>LIFF</strong><br />
                         3. ตั้งชื่อแอป (เช่น "สั่งอาหาร")<br />
                         4. <strong>Scopes:</strong> เลือก <code>chat_message.write</code>, <code>profile</code>, <code>openid</code><br />
                         5. <strong>Scan QR:</strong> ปิด (Off)<br />
-                        6. กด Create > จะได้ <strong>LIFF ID</strong> (เช่น 165xxxx-xxxx)<br />
+                        6. กด Create -&gt; จะได้ <strong>LIFF ID</strong> (เช่น 165xxxx-xxxx)<br />
                         ** นำ LIFF ID มาใส่ช่อง "LIFF ID (Order System)"
                     </p>
                     <div className="bg-slate-100 p-4 rounded-xl text-center border-2 border-dashed border-slate-200">

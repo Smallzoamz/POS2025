@@ -454,8 +454,13 @@ async function startServer() {
      * This function is called automatically after menu CRUD operations.
      */
     const syncMenuToWebsite = async () => {
-        const websiteUrl = process.env.WEBSITE_SYNC_URL;
-        const syncSecret = process.env.WEBSITE_SYNC_SECRET;
+        // Fetch Sync Settings from DB first (Priority), fallback to ENV
+        const settingsRes = await query("SELECT key, value FROM settings WHERE key IN ('website_sync_url', 'website_sync_secret')");
+        const settings = {};
+        settingsRes.rows.forEach(r => settings[r.key] = r.value);
+
+        const websiteUrl = settings.website_sync_url || process.env.WEBSITE_SYNC_URL;
+        const syncSecret = settings.website_sync_secret || process.env.WEBSITE_SYNC_SECRET;
 
         if (!websiteUrl) {
             console.log('[MenuSync] No WEBSITE_SYNC_URL configured, skipping sync');
