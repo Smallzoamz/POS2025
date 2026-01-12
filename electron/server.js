@@ -2768,15 +2768,151 @@ async function startServer() {
     });
 
     // --- FACEBOOK HELPER FUNCTIONS ---
+    // --- FACEBOOK HELPER FUNCTIONS ---
     async function handleFacebookMessage(sender_psid, received_message) {
         let response;
 
         // Checks if the message contains text
         if (received_message.text) {
-            // Create the payload for a basic text message, which
-            // will be added to the body of our request to the Send API
-            response = {
-                "text": `คุณส่งข้อความว่า: "${received_message.text}". ขณะนี้ระบบแชทบอทยังอยู่ระหว่างการพัฒนา!`
+            const text = received_message.text.trim();
+            const lowerText = text.toLowerCase();
+
+            // 1. Stock Check Logic (e.g., "มีหมูมั้ย", "มีกุ้งไหม")
+            // Regex to capture the word after "มี" and before "มั้ย/ไหม" or end of string
+            const stockMatch = text.match(/มี(.+)(?:มั้ย|ไหม|รึเปล่า|หรือเปล่า)/i);
+
+            if (stockMatch) {
+                const keyword = stockMatch[1].trim();
+                // Security: Parameterized query to prevent SQL Injection
+                try {
+                    const stockRes = await query(
+                        "SELECT name, total_quantity, unit FROM ingredients WHERE name LIKE $1 LIMIT 5",
+                        [`%${keyword}%`]
+                    );
+
+                    if (stockRes.rows.length === 0) {
+                        response = { "text": `ขออภัยค่ะ ไม่พบข้อมูลวัตถุดิบ "${keyword}" ในระบบค่ะ 😅` };
+                    } else {
+                        // Check availablity
+                        const availableItems = stockRes.rows.filter(item => parseFloat(item.total_quantity) > 0.5); // Must have at least 0.5 unit to be "In Stock"
+
+                        if (availableItems.length > 0) {
+                            const itemNames = availableItems.map(i => i.name).join(', ');
+                            response = { "text": `✅ มีค่ะ! เมนู ${keyword} (หรือวัตถุดิบ: ${itemNames}) พร้อมให้บริการค่ะ 😋` };
+                        } else {
+                            response = { "text": `❌ ขออภัยค่ะ ตอนนี้ "${keyword}" หมดชั่วคราวค่ะ 🙏` };
+                        }
+                    }
+                } catch (e) {
+                    console.error("Stock Query Error:", e);
+                    response = { "text": "ระบบขัดข้องชั่วคราวในการเช็คสต็อกค่ะ" };
+                }
+
+                // 2. Store Hours Logic
+            } else if (lowerText.includes('เปิด') || lowerText.includes('เวลา') || lowerText.includes('กี่โมง')) {
+                try {
+                    const settingsRes = await query("SELECT key, value FROM settings WHERE key IN ('store_open_time', 'store_close_time')");
+                    const settings = {};
+                    settingsRes.rows.forEach(s => settings[s.key] = s.value);
+                    const open = settings.store_open_time || '09:00';
+                    const close = settings.store_close_time || '21:00';
+                    response = { "text": `🕒 ร้านเปิดให้บริการทุกวัน ตั้งแต่เวลา ${open} น. - ${close} น. ค่ะ` };
+                } catch (e) {
+                    response = { "text": "ร้านเปิดให้บริการตามปกตินะคะ (ระบบตรวจสอบเวลาขัดข้อง)" };
+                }
+
+                // 3. Recommendation / Menu Logic
+            } else if (lowerText.includes('เมนู') || lowerText.includes('แนะนำ')) {
+                response = {
+                    "attachment": {
+                        "type": "template",
+                        "payload": {
+                            "template_type": "generic",
+                            "elements": [
+                                {
+                                    "title": "เมนูแนะนำประจำร้าน 🍛",
+                                    "subtitle": "ความอร่อยที่คุณต้องลอง!",
+                                    "image_url": "https://img.freepik.com/free-photo/stir-fried-basil-minced-pork-spicy-food-thai-style_1150-26425.jpg", // Placeholder or Dynamic
+                                    "buttons": [
+                                        {
+                                            "type": "web_url",
+                                            "url": "https://yoursite.com/menu", // Should be replaced with actual menu link if available
+                                            "title": "ดูเมนูทั้งหมด"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                }
+
+                // 4. Queue / Wait Time Logic
+            } else if (lowerText.includes('คิว') || lowerText.includes('รอนาน') || lowerText.includes('คนเยอะ')) {
+                try {
+                    const ordersRes = await query("SELECT COUNT(*) as count FROM orders WHERE status NOT IN ('paid', 'cancelled')");
+                    const queueCount = parseInt(ordersRes.rows[0].count || 0);
+                    if (queueCount === 0) {
+                        response = { "text": "🟢 ตอนนี้คิวโล่งมากค่ะ! สั่งอาหารแล้วรอไม่นานแน่นอน 😋" };
+                    } else if (queueCount < 5) {
+                        response = { "text": `🟡 ตอนนี้มีคิวรอประมาณ ${queueCount} โต๊ะค่ะ อาจจะรอนิดนึงนะคะ` };
+                    } else {
+                        response = { "text": `🔴 ตอนนี้ลูกค้าหนาแน่นนิดนึงค่ะ (มี ${queueCount} คิว) ขอบคุณที่รอคอยนะคะ 🙏` };
+                    }
+                } catch (e) {
+                    response = { "text": "ไม่สามารถตรวจสอบคิวได้ในขณะนี้ค่ะ" };
+                }
+
+                // 5. Price Check Logic (e.g. "ราคาข้าวกะเพราเท่าไหร่")
+            } else if (lowerText.includes('ราคา') || lowerText.includes('กี่บาท')) {
+                // Extract potential menu name
+                const menuMatch = text.match(/(?:ราคา|ค่า)(.+)(?:เท่าไหร่|กี่บาท|มั้ย|ไหม)/);
+                const keyword = menuMatch ? menuMatch[1].trim() : text.replace(/ราคา|เท่าไหร่|กี่บาท/g, '').trim();
+
+                if (keyword.length > 1) {
+                    try {
+                        // Initial broad search
+                        const productRes = await query("SELECT name, price FROM products WHERE name LIKE $1 LIMIT 3", [`%${keyword}%`]);
+                        if (productRes.rows.length > 0) {
+                            let msg = "💰 ราคาเมนูที่ถามหาค่ะ:\n";
+                            productRes.rows.forEach(p => {
+                                msg += `- ${p.name}: ${p.price} บาท\n`;
+                            });
+                            response = { "text": msg };
+                        } else {
+                            response = { "text": `หาเมนู "${keyword}" ไม่เจอค่ะ ลองพิมพ์ชื่อเมนูใหม่นะ` };
+                        }
+                    } catch (e) { console.error(e); }
+                } else {
+                    response = { "text": "อยากทราบราคาเมนูไหน พิมพ์บอกอันอันได้เลยนะคะ เช่น 'ราคากะเพรา'" };
+                }
+
+                // 6. Payment Info Logic
+            } else if (lowerText.includes('โอน') || lowerText.includes('จ่าย') || lowerText.includes('เลขบัญชี') || lowerText.includes('พร้อมเพย์')) {
+                try {
+                    const settingsRes = await query("SELECT value FROM settings WHERE key = 'promptpay_number'");
+                    const promptpay = settingsRes.rows[0]?.value;
+                    if (promptpay) {
+                        response = { "text": `💸 ชำระเงินง่ายๆ ผ่าน PromptPay ได้เลยค่ะ:\n\n📱 หมายเลข: ${promptpay}\n\n(รบกวนแจ้งพี่พนักงานก่อนโอนนะคะ)` };
+                    } else {
+                        response = { "text": "รับชำระเป็นเงินสด หรือสอบถามพี่พนักงานที่เคาน์เตอร์ได้เลยค่ะ" };
+                    }
+                } catch (e) { response = { "text": "ขออภัยค่ะ ระบบขัดข้อง" }; }
+
+                // 7. WiFi Password Logic
+            } else if (lowerText.includes('wifi') || lowerText.includes('ไวไฟ') || lowerText.includes('รหัสเน็ต')) {
+                try {
+                    const settingsRes = await query("SELECT value FROM settings WHERE key = 'wifi_password'");
+                    const wifiPass = settingsRes.rows[0]?.value;
+                    if (wifiPass) {
+                        response = { "text": `📶 WiFi Password ของร้านค่า:\n\n🔑 รหัส: ${wifiPass}\n\nเล่นเน็ตให้สนุกนะคะ! 🚀` };
+                    } else {
+                        response = { "text": "ทางร้านมีบริการ WiFi ฟรีค่ะ สอบถามรหัสจากพี่พนักงานได้เลยนะคะ" };
+                    }
+                } catch (e) { response = { "text": "ลองสอบถามรหัส WiFi กับพี่พนักงานดูนะคะ" }; }
+
+                // 8. Fallback (Echo / Default)
+            } else {
+                response = { "text": `น้องอันอันได้รับข้อความว่า: "${text}" แล้วค่ะ เดี๋ยวให้พี่พนักงานมาตอบเพิ่มเติมนะคะ หรือลองถามว่า "มีหมูมั้ย", "ร้านเปิดกี่โมง", "ขอรหัส WiFi" ได้เลยค่ะ 💕` };
             }
         } else if (received_message.attachments) {
             // Get the URL of the message attachment

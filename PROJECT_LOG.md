@@ -216,3 +216,5 @@
 - \[2026-01-12 21:27] | File: C:/Users/Venge/.gemini/antigravity/brain/3d40f57f-566d-4d42-88be-2aa8df9c8530/facebook_setup_guide.md | Line: 1 | Keyword: Documentation | Status: Created | Change: Created detailed Facebook Setup Guide artifact for reference.
 - \[2026-01-12 21:45] | File: src/Settings.jsx | Line: 87 | Keyword: UI Icons | Status: Modified | Change: Replaced emoji icons with official FaLine and FaFacebook brand icons in Settings tabs.
 - \[2026-01-13 02:58] | File: electron/server.js | Line: 2710 | Keyword: Facebook Webhook | Status: Created | Change: Implemented complete Facebook Webhook Logic (GET verification + POST message handling).
+- \[2026-01-13 03:07] | File: electron/server.js | Line: 2768 | Keyword: Chatbot Logic | Status: Modified | Change: Added Rule-Based Logic (Stock Check from DB, Store Hours from Settings, Menu Recommendation).
+- \[2026-01-13 03:13] | File: electron/server.js | Line: 2828 | Keyword: Chatbot Intelligence | Status: Enhanced | Change: Added 4 new skills: Check Queue (Orders), Check Price (Products), Payment Info, and WiFi Password.
