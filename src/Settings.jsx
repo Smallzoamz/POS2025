@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MasterLayout from './layouts/MasterLayout';
 import { api } from './services/api';
 import QRCode from 'react-qr-code';
+import LineConnectSettings from './components/settings/LineConnectSettings';
 
 const Settings = () => {
     const [settings, setSettings] = useState({
@@ -20,7 +21,12 @@ const Settings = () => {
         enable_receipt_printer: 'true',
         store_open_time: '09:00',
         store_close_time: '21:00',
-        last_order_offset_minutes: '30'
+        last_order_offset_minutes: '30',
+        line_channel_access_token: '',
+        line_channel_id: '',
+        line_channel_secret: '',
+        line_liff_id: '',
+        line_liff_id_loyalty: ''
     });
     const [network, setNetwork] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -53,7 +59,18 @@ const Settings = () => {
     const handleSave = async (e) => {
         e.preventDefault();
         try {
+            // Save General Settings
             await api.saveSettings(settings);
+
+            // Save LINE Settings explicitly to ensure keys are updated
+            await api.post('/admin/line/settings', {
+                channelId: settings.line_channel_id,
+                channelSecret: settings.line_channel_secret,
+                accessToken: settings.line_channel_access_token,
+                liffId: settings.line_liff_id,
+                liffIdLoyalty: settings.line_liff_id_loyalty
+            });
+
             alert('✅ บันทึกการตั้งค่าเรียบร้อยแล้ว');
         } catch (error) {
             console.error(error);
@@ -301,6 +318,9 @@ const Settings = () => {
                                 </div>
                             </div>
                         </section>
+
+                        {/* Section: LINE Integration */}
+                        <LineConnectSettings settings={settings} handleChange={handleChange} />
 
                         {/* Section 5: Takeaway QR Code */}
                         <section className="space-y-6">

@@ -186,4 +186,13 @@
 - \[2026-01-11 23:41:00] | File: electron/server.js | Line: 3230 | Keyword: Coupon Processing | Status: Modified | Change: Added handling for fixed_price discount type (customer pays only fixed amount).
 - \[2026-01-11 23:44:00] | File: src/OrderEntry.jsx | Line: 459 | Keyword: Coupon Discount | Status: Modified | Change: Added support for discount_type + discount_value system (fixed, percent, fixed_price).
 - \[2026-01-11 23:44:00] | File: src/pages/LineOrder.jsx | Line: 267 | Keyword: getCouponDiscountAmount | Status: Modified | Change: Added support for discount_type + discount_value system (fixed, percent, fixed_price).
-
+- \[2026-01-12 14:00:00] | File: src/pages/LineOrder.jsx | Line: 375 | Keyword: Double Discount Fix | Status: Modified | Change: Updated submitOrder to send cartAmt (Gross) instead of finalTotal (Net) to prevent backend from double-discounting.
+- \[2026-01-12 14:00:00] | File: electron/server.js | Line: 3270 | Keyword: Deposit Calculation | Status: Modified | Change: Moved deposit calculation to AFTER coupon deduction and used finalTotal (Net) as base.
+- \[2026-01-12 14:15:00] | File: task.md | Line: 1 | Keyword: Easy LINE Integration | Status: Created | Change: Created task list for SaaS-style LINE configuration.
+- \[2026-01-12 14:20:00] | File: electron/server.js | Line: 2914 | Keyword: Admin LINE Settings | Status: Created | Change: Added POST /api/admin/line/settings endpoint to save LINE keys to DB.
+- \[2026-01-12 14:20:00] | File: electron/server.js | Line: 2950 | Keyword: Dynamic Token | Status: Modified | Change: Refactored sendLineFlexMessage to fetch access token from DB settings.
+- \[2026-01-12 14:40:00] | File: src/components/settings/LineConnectSettings.jsx | Line: 1 | Keyword: Admin UI | Status: Created | Change: Created LINE settings form with Guide Modal for finding Channel Keys.
+- \[2026-01-12 14:45:00] | File: src/Settings.jsx | Line: 5, 24, 62, 304 | Keyword: Integration | Status: Modified | Change: Integrated LineConnectSettings component and updated handleSave to persist LINE keys via API.
+- \[2026-01-12 14:55:00] | File: electron/server.js | Line: 2980 | Keyword: Auto-Setup | Status: Created | Change: Implemented POST /api/admin/line/setup-richmenu to automate Rich Menu creation and image upload.
+- \[2026-01-12 14:58:00] | File: src/components/settings/LineConnectSettings.jsx | Line: 4 | Keyword: One-Click Setup | Status: Modified | Change: Added logic to trigger Auto-Setup with 1-click, including auto-save of settings.
+- \[2026-01-12 15:15:00] | File: src/Settings.jsx | Line: 126 | Keyword: Hybrid Mode | Status: Modified | Change: Added Optional Loyalty LIFF ID input to support existing separate Order/Loyalty apps.

@@ -119,9 +119,11 @@ function App() {
                     {/* Public Tracking Page */}
                     <Route path="/tracking/:token" element={<CustomerTracking />} />
 
-                    {/* Loyalty System */}
+                    {/* Loyalty System - Public */}
                     <Route path="/loyalty" element={<CustomerLoyalty />} />
-                    <Route path="/promotions" element={<ProtectedRoute roles={['owner', 'admin']}><Promotions /></ProtectedRoute>} />
+
+                    {/* Loyalty System - Admin Management */}
+                    <Route path="/admin/promotions" element={<ProtectedRoute roles={['owner', 'admin']}><Promotions /></ProtectedRoute>} />
                 </Routes>
             </Router>
         </AuthProvider>

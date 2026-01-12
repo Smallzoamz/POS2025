@@ -3,6 +3,7 @@ const cors = require('cors')
 const http = require('http')
 const { Server } = require('socket.io')
 const path = require('path')
+const fs = require('fs')
 const os = require('os')
 // const localtunnel = require('localtunnel')
 
@@ -2914,11 +2915,160 @@ async function startServer() {
 
     // (Duplicate /api/public/menu removed)
 
+    // --- ADMIN: LINE Settings ---
+    app.post('/api/admin/line/settings', async (req, res) => {
+        const { channelId, channelSecret, accessToken, liffId, liffIdLoyalty } = req.body;
+        try {
+            await query("BEGIN");
+            // Upsert settings
+            const keys = {
+                'line_channel_id': channelId,
+                'line_channel_secret': channelSecret,
+                'line_channel_access_token': accessToken,
+                'line_liff_id': liffId,
+                'line_liff_id_loyalty': liffIdLoyalty
+            };
+
+            for (const [key, value] of Object.entries(keys)) {
+                await query(`
+                    INSERT INTO settings (key, value) VALUES ($1, $2)
+                    ON CONFLICT (key) DO UPDATE SET value = $2
+                `, [key, value || '']);
+            }
+            await query("COMMIT");
+            console.log('✅ LINE Settings updated via Admin API');
+            res.json({ success: true });
+        } catch (err) {
+            await query("ROLLBACK");
+            console.error(err);
+            res.status(500).json({ error: 'Failed to save LINE settings' });
+        }
+    });
+
+    // --- ADMIN: Auto-Setup Rich Menu ---
+    app.post('/api/admin/line/setup-richmenu', async (req, res) => {
+        try {
+            // 1. Get Credentials
+            const settingsRes = await query("SELECT * FROM settings WHERE key IN ('line_channel_access_token', 'line_liff_id', 'line_liff_id_loyalty')");
+            const settings = {};
+            settingsRes.rows.forEach(s => settings[s.key] = s.value);
+            const token = settings.line_channel_access_token;
+            const liffId = settings.line_liff_id;
+            const liffIdLoyalty = settings.line_liff_id_loyalty;
+
+            if (!token) return res.status(400).json({ error: 'LINE Access Token not configured.' });
+
+            // 2. Define Rich Menu Object
+            // Hybrid Logic:
+            // - If User provides 2 IDs (Order & Loyalty), assume they are configured to point to respective pages. Use raw LIFF URL.
+            // - If User provides 1 ID, assume Single App Strategy. Append paths.
+
+            let uriOrder, uriLoyalty, uriPromo;
+
+            if (liffIdLoyalty) {
+                // Dual App Strategy
+                uriOrder = `https://liff.line.me/${liffId}`;
+                uriLoyalty = `https://liff.line.me/${liffIdLoyalty}`;
+                uriPromo = `https://liff.line.me/${liffIdLoyalty}?tab=promotions`; // Still append param for promo tab
+            } else {
+                // Single App Strategy
+                const baseUrl = `https://liff.line.me/${liffId}`;
+                uriOrder = `${baseUrl}/line-order`;
+                uriLoyalty = `${baseUrl}/loyalty`;
+                uriPromo = `${baseUrl}/loyalty?tab=promotions`;
+            }
+
+            const richMenuObject = {
+                "size": { "width": 1200, "height": 810 },
+                "selected": true,
+                "name": "POS Default Menu",
+                "chatBarText": "สั่งอาหาร / เมนู",
+                "areas": [
+                    {
+                        "bounds": { "x": 0, "y": 0, "width": 1200, "height": 540 },
+                        "action": { "type": "uri", "uri": uriOrder }
+                    },
+                    {
+                        "bounds": { "x": 0, "y": 540, "width": 600, "height": 270 },
+                        "action": { "type": "uri", "uri": uriLoyalty }
+                    },
+                    {
+                        "bounds": { "x": 600, "y": 540, "width": 600, "height": 270 },
+                        "action": { "type": "uri", "uri": uriPromo }
+                    }
+                ]
+            };
+
+            // 3. Create Rich Menu
+            console.log('Creating Rich Menu...');
+            const createRes = await fetch('https://api.line.me/v2/bot/richmenu', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(richMenuObject)
+            });
+            const createData = await createRes.json();
+            if (!createRes.ok) throw new Error(createData.message || 'Failed to create Rich Menu');
+            const richMenuId = createData.richMenuId;
+            console.log('✅ Rich Menu Created:', richMenuId);
+
+            // 4. Upload Image
+            const imagePath = path.join(__dirname, '../public/assets/rich_menu_default.png');
+            if (!fs.existsSync(imagePath)) throw new Error('Default Rich Menu Image not found');
+
+            const imageBuffer = fs.readFileSync(imagePath);
+
+            console.log('Uploading Image...');
+            const uploadRes = await fetch(`https://api-data.line.me/v2/bot/richmenu/${richMenuId}/content`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'image/png'
+                },
+                body: imageBuffer // node-fetch supports Buffer
+            });
+            if (!uploadRes.ok) throw new Error('Failed to upload Rich Menu Image');
+            console.log('✅ Image Uploaded');
+
+            // 5. Set Default
+            console.log('Setting as Default...');
+            const defaultRes = await fetch(`https://api.line.me/v2/bot/user/all/richmenu/${richMenuId}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (!defaultRes.ok) throw new Error('Failed to set Default Rich Menu');
+            console.log('✅ Rich Menu Set as Default');
+
+            // Save to DB (Update legacy id if needed, or just log it)
+            // await query("INSERT INTO settings (key, value) VALUES ('active_rich_menu_id', $1) ON CONFLICT (key) DO UPDATE SET value = $1", [richMenuId]);
+
+            res.json({ success: true, richMenuId });
+
+        } catch (err) {
+            console.error('❌ Auto-Setup Error:', err.message);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     // --- LINE Messaging API Helper ---
     const sendLineFlexMessage = async (to, orderData) => {
-        const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+        // Fetch Token from Database
+        let token = process.env.LINE_CHANNEL_ACCESS_TOKEN; // Fallback
+        try {
+            const tokenRes = await query("SELECT value FROM settings WHERE key = 'line_channel_access_token'");
+            if (tokenRes.rows.length > 0 && tokenRes.rows[0].value) {
+                token = tokenRes.rows[0].value;
+            }
+        } catch (err) {
+            console.error('Failed to fetch line_channel_access_token:', err);
+        }
+
         if (!token || !to) {
-            console.log('⚠️ Skipping LINE Message: No token or lineUserId' + (!token ? ' (LINE_CHANNEL_ACCESS_TOKEN missing in .env)' : ''));
+            console.log('⚠️ Skipping LINE Message: No token or lineUserId' + (!token ? ' (Not configured in Settings)' : ''));
             return;
         }
 
