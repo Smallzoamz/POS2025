@@ -240,33 +240,62 @@ const CustomerLoyalty = () => {
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {promotions.map(promo => (
-                                        <div key={promo.id} className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 hover:bg-orange-50/50 transition-colors group">
-                                            <div className="w-14 h-14 rounded-xl overflow-hidden bg-white shadow-sm flex-shrink-0">
-                                                {promo.image_url ? (
-                                                    <img src={promo.image_url} className="w-full h-full object-cover" alt="" />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center text-orange-200 bg-orange-50">
-                                                        <FiGift size={24} />
+                                    {promotions.map(promo => {
+                                        const redeemedCount = promo.redeemed_count || 0;
+                                        const userRedeemedCount = coupons.filter(c => c.promotion_id === promo.id).length;
+                                        const isGlobalSoldOut = promo.max_redemptions && redeemedCount >= promo.max_redemptions;
+                                        const isUserLimitReached = promo.user_redemption_limit && userRedeemedCount >= promo.user_redemption_limit;
+                                        const isSoldOut = isGlobalSoldOut || isUserLimitReached;
+                                        const canRedeem = points >= promo.points_required && !isSoldOut;
+
+                                        return (
+                                            <div key={promo.id} className={`flex items-center gap-4 p-4 rounded-2xl transition-colors group ${isSoldOut ? 'bg-gray-100 opacity-75' : 'bg-gray-50 hover:bg-orange-50/50'}`}>
+                                                <div className="w-14 h-14 rounded-xl overflow-hidden bg-white shadow-sm flex-shrink-0 relative">
+                                                    {promo.image_url ? (
+                                                        <img src={promo.image_url} className={`w-full h-full object-cover ${isSoldOut ? 'grayscale' : ''}`} alt="" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-orange-200 bg-orange-50">
+                                                            <FiGift size={24} />
+                                                        </div>
+                                                    )}
+                                                    {isSoldOut && (
+                                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                                            <span className="text-[10px] font-bold text-white uppercase transform -rotate-12 border-2 border-white px-1 tracking-wider">
+                                                                {isGlobalSoldOut ? 'Sold Out' : 'Redeemed'}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className={`font-bold text-sm truncate ${isSoldOut ? 'text-gray-500' : 'text-gray-800'}`}>{promo.title}</h4>
+                                                    <div className="flex flex-wrap gap-2 mt-1">
+                                                        <span className="text-xs text-orange-500 font-bold">{promo.points_required} แต้ม</span>
+                                                        {promo.max_redemptions && (
+                                                            <span className="text-[10px] bg-white px-2 py-0.5 rounded-full text-gray-400 border border-gray-100 shadow-sm">
+                                                                เหลือ {Math.max(0, promo.max_redemptions - redeemedCount)}/{promo.max_redemptions}
+                                                            </span>
+                                                        )}
+                                                        {promo.user_redemption_limit && (
+                                                            <span className={`text-[10px] px-2 py-0.5 rounded-full border shadow-sm ${isUserLimitReached ? 'bg-red-50 text-red-400 border-red-100' : 'bg-white text-gray-400 border-gray-100'}`}>
+                                                                สิทธิ์ของคุณ {userRedeemedCount}/{promo.user_redemption_limit}
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                )}
+                                                </div>
+                                                <button
+                                                    onClick={() => !isSoldOut && handleRedeem(promo)}
+                                                    disabled={!canRedeem}
+                                                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 whitespace-nowrap
+                                                    ${canRedeem
+                                                            ? 'bg-orange-500 text-white shadow-md shadow-orange-100 hover:bg-orange-600'
+                                                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                                        }`}
+                                                >
+                                                    {isGlobalSoldOut ? 'หมด' : (isUserLimitReached ? 'เต็ม' : 'แลก')}
+                                                </button>
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <h4 className="font-bold text-sm text-gray-800 truncate">{promo.title}</h4>
-                                                <p className="text-xs text-gray-400 font-medium">{promo.points_required} แต้ม</p>
-                                            </div>
-                                            <button
-                                                onClick={() => handleRedeem(promo)}
-                                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95
-                                                    ${points >= promo.points_required
-                                                        ? 'bg-orange-500 text-white shadow-md shadow-orange-100'
-                                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                                    }`}
-                                            >
-                                                แลก
-                                            </button>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                     {promotions.length === 0 && (
                                         <p className="text-center text-gray-400 py-4 text-sm">ยังไม่มีของรางวัลในขณะนี้ค่ะ</p>
                                     )}

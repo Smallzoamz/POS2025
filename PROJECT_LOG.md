@@ -198,3 +198,4 @@
 - \[2026-01-12 15:15:00] | File: src/Settings.jsx | Line: 126 | Keyword: Hybrid Mode | Status: Modified | Change: Added Optional Loyalty LIFF ID input to support existing separate Order/Loyalty apps.
 [2026-01-12 16:45] | File: src/layouts/MasterLayout.jsx | Line: 227 | Keyword: NavLink | Status: Fixed | Change: Updated broken '/promotions' link to '/admin/promotions'
 [2026-01-12 16:45] | File: src/components/AnalyticsDashboard.jsx | Line: 46, 107 | Keyword: w-full | Status: Fixed | Change: Added w-full to chart containers
+[2026-01-12 16:50] | File: src/App.jsx | Line: 127 | Keyword: Navigate | Status: Fixed | Change: Added redirect rule for '/promotions' -> '/admin/promotions'

@@ -21,7 +21,10 @@ const Promotions = () => {
         endDate: '',
         isActive: true,
         discountType: 'none',
-        discountValue: 0
+        discountValue: 0,
+        maxRedemptions: '',
+        userRedemptionLimit: '',
+        minSpendAmount: 0
     });
 
     useEffect(() => {
@@ -50,7 +53,10 @@ const Promotions = () => {
             endDate: promo.end_date ? promo.end_date.split('T')[0] : '',
             isActive: promo.is_active,
             discountType: promo.discount_type || 'none',
-            discountValue: promo.discount_value || 0
+            discountValue: promo.discount_value || 0,
+            maxRedemptions: promo.max_redemptions || '',
+            userRedemptionLimit: promo.user_redemption_limit || '',
+            minSpendAmount: promo.min_spend_amount || 0
         });
         setShowModal(true);
     };
@@ -58,10 +64,26 @@ const Promotions = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
+            // Convert to snake_case for API
+            const payload = {
+                title: formData.title,
+                description: formData.description,
+                points_required: formData.pointsRequired,
+                image_url: formData.imageUrl,
+                start_date: formData.startDate,
+                end_date: formData.endDate,
+                is_active: formData.isActive,
+                discount_type: formData.discountType,
+                discount_value: formData.discountValue,
+                max_redemptions: formData.maxRedemptions === '' ? null : parseInt(formData.maxRedemptions),
+                user_redemption_limit: formData.userRedemptionLimit === '' ? null : parseInt(formData.userRedemptionLimit),
+                min_spend_amount: parseInt(formData.minSpendAmount) || 0
+            };
+
             if (editingPromo) {
-                await api.updatePromotion(editingPromo.id, formData);
+                await api.updatePromotion(editingPromo.id, payload);
             } else {
-                await api.addPromotion(formData);
+                await api.addPromotion(payload);
             }
             setShowModal(false);
             fetchPromotions();
@@ -92,7 +114,10 @@ const Promotions = () => {
             endDate: '',
             isActive: true,
             discountType: 'none',
-            discountValue: 0
+            discountValue: 0,
+            maxRedemptions: '',
+            userRedemptionLimit: '',
+            minSpendAmount: 0
         });
     };
 
@@ -142,6 +167,11 @@ const Promotions = () => {
                                         <FiAward /> {promo.points_required} แต้ม
                                     </span>
                                 </div>
+                                {promo.min_spend_amount > 0 && (
+                                    <div className="absolute bottom-4 left-4 bg-orange-600/90 backdrop-blur-md px-3 py-1 rounded-full shadow-sm text-xs text-white z-10">
+                                        ซื้อขั้นต่ำ {promo.min_spend_amount}.-
+                                    </div>
+                                )}
                                 {!promo.is_active && (
                                     <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-[2px] flex items-center justify-center text-white font-bold text-xl">
                                         ❌ ปิดการใช้งาน
@@ -160,6 +190,17 @@ const Promotions = () => {
                                     <span className="flex items-center gap-1">
                                         <FiCalendar /> {promo.end_date ? new Date(promo.end_date).toLocaleDateString('th-TH') : 'ไม่มีวันหมดอายุ'}
                                     </span>
+                                </div>
+
+                                <div className="flex gap-4 text-xs font-medium text-gray-500 mb-4 bg-gray-50 p-3 rounded-xl">
+                                    <div className="flex-1 text-center border-r border-gray-200">
+                                        <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">จำกัดทั้งหมด</p>
+                                        <p className="text-gray-800">{promo.max_redemptions ? `${promo.max_redemptions} สิทธิ์` : 'ไม่จำกัด'}</p>
+                                    </div>
+                                    <div className="flex-1 text-center">
+                                        <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">ต่อคน</p>
+                                        <p className="text-gray-800">{promo.user_redemption_limit ? `${promo.user_redemption_limit} ครั้ง` : 'ไม่จำกัด'}</p>
+                                    </div>
                                 </div>
 
                                 <div className="flex gap-2">
@@ -185,137 +226,175 @@ const Promotions = () => {
             {/* Modal */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
-                        <div className="p-8">
-                            <h2 className="text-2xl font-bold text-gray-800 mb-6">
-                                {editingPromo ? 'แก้ไขของรางวัล' : 'สร้างของรางวัลใหม่'}
+                    <div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in duration-300 custom-scrollbar">
+                        <div className="p-6">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4 sticky top-0 bg-white z-10 pb-2 border-b border-gray-100 flex justify-between items-center">
+                                <span>{editingPromo ? '✏️ แก้ไขของรางวัล' : '✨ สร้างของรางวัลใหม่'}</span>
+                                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors"><FiXCircle size={24} /></button>
                             </h2>
-                            <form onSubmit={handleSubmit} className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อของรางวัล / โปรโมชั่น</label>
-                                    <input
-                                        type="text" required
-                                        className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                                        value={formData.title}
-                                        onChange={e => setFormData({ ...formData, title: e.target.value })}
-                                        placeholder="เช่น ส่วนลดเงินสด 50 บาท"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
+                            <form onSubmit={handleSubmit} className="space-y-3">
+                                {/* Basic Info */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="col-span-2">
+                                        <label className="block text-xs font-bold text-gray-700 mb-1">ชื่อของรางวัล / โปรโมชั่น</label>
+                                        <input
+                                            type="text" required
+                                            className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-orange-500 rounded-xl px-4 py-2.5 outline-none transition-all text-sm font-medium"
+                                            value={formData.title}
+                                            onChange={e => setFormData({ ...formData, title: e.target.value })}
+                                            placeholder="เช่น ส่วนลดเงินสด 50 บาท"
+                                        />
+                                    </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">แต้มที่ต้องใช้</label>
+                                        <label className="block text-xs font-bold text-gray-700 mb-1">แต้มที่ต้องใช้</label>
                                         <input
                                             type="number" required
-                                            className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                                            className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-orange-500 rounded-xl px-4 py-2.5 outline-none transition-all text-sm font-medium"
                                             value={formData.pointsRequired}
                                             onChange={e => setFormData({ ...formData, pointsRequired: parseInt(e.target.value) })}
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
+                                        <label className="block text-xs font-bold text-gray-700 mb-1">สถานะ</label>
                                         <select
-                                            className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-orange-500 outline-none transition-all cursor-pointer"
+                                            className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-orange-500 rounded-xl px-4 py-2.5 outline-none transition-all cursor-pointer text-sm font-medium"
                                             value={formData.isActive}
                                             onChange={e => setFormData({ ...formData, isActive: e.target.value === 'true' })}
                                         >
-                                            <option value="true">เปิดใช้งาน</option>
-                                            <option value="false">ปิดใช้งาน</option>
+                                            <option value="true">🟢 เปิดใช้งาน</option>
+                                            <option value="false">🔴 ปิดใช้งาน</option>
                                         </select>
                                     </div>
                                 </div>
-                                {/* Discount Settings */}
-                                <div className="bg-orange-50 rounded-2xl p-4 border border-orange-100">
-                                    <h4 className="text-sm font-bold text-orange-600 mb-3 flex items-center gap-2">🎯 ตั้งค่าส่วนลด</h4>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-600 mb-1">ประเภทส่วนลด</label>
-                                            <select
-                                                className="w-full bg-white border border-orange-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 outline-none transition-all cursor-pointer text-sm"
-                                                value={formData.discountType}
-                                                onChange={e => setFormData({ ...formData, discountType: e.target.value, discountValue: 0 })}
-                                            >
-                                                <option value="none">🚫 ไม่มีส่วนลด (โปรโมชั่นอื่นๆ)</option>
-                                                <option value="fixed">💵 ลดตายตัว (บาท)</option>
-                                                <option value="percent">📊 ลดเป็นเปอร์เซ็นต์ (%)</option>
-                                                <option value="fixed_price">🏷️ ราคาคงที่ (จ่ายเท่านี้)</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-600 mb-1">
-                                                {formData.discountType === 'fixed' && 'จำนวนเงินที่ลด (บาท)'}
-                                                {formData.discountType === 'percent' && 'เปอร์เซ็นต์ที่ลด (%)'}
-                                                {formData.discountType === 'fixed_price' && 'ราคาที่ต้องจ่าย (บาท)'}
-                                                {formData.discountType === 'none' && 'มูลค่า (ไม่ใช้)'}
-                                            </label>
-                                            <input
-                                                type="number"
-                                                className={`w-full bg-white border border-orange-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 outline-none transition-all text-sm ${formData.discountType === 'none' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                value={formData.discountValue}
-                                                onChange={e => setFormData({ ...formData, discountValue: parseFloat(e.target.value) || 0 })}
-                                                disabled={formData.discountType === 'none'}
-                                                placeholder={formData.discountType === 'percent' ? 'เช่น 10' : 'เช่น 50'}
-                                            />
+
+                                {/* Discount & Limits (Side by Side) */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-2">
+                                    {/* Discount Settings */}
+                                    <div className="bg-orange-50/50 rounded-2xl p-3 border border-orange-100">
+                                        <h4 className="text-xs font-bold text-orange-600 mb-2 flex items-center gap-1">🎯 ตั้งค่าส่วนลด</h4>
+                                        <div className="space-y-2">
+                                            <div>
+                                                <label className="block text-[10px] font-medium text-gray-500 mb-1">ประเภท</label>
+                                                <select
+                                                    className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 focus:ring-1 focus:ring-orange-500 outline-none text-xs"
+                                                    value={formData.discountType}
+                                                    onChange={e => setFormData({ ...formData, discountType: e.target.value, discountValue: 0 })}
+                                                >
+                                                    <option value="none">ไม่ใช้ส่วนลด</option>
+                                                    <option value="fixed">ลด (บาท)</option>
+                                                    <option value="percent">ลด (%)</option>
+                                                    <option value="fixed_price">ราคาเดียว</option>
+                                                </select>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="block text-[10px] font-medium text-gray-500 mb-1">มูลค่า</label>
+                                                    <input
+                                                        type="number"
+                                                        className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 outline-none text-xs disabled:opacity-50"
+                                                        value={formData.discountValue}
+                                                        onChange={e => setFormData({ ...formData, discountValue: parseFloat(e.target.value) || 0 })}
+                                                        disabled={formData.discountType === 'none'}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] font-medium text-gray-500 mb-1">ขั้นต่ำ (บาท)</label>
+                                                    <input
+                                                        type="number"
+                                                        className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 outline-none text-xs"
+                                                        value={formData.minSpendAmount}
+                                                        onChange={e => setFormData({ ...formData, minSpendAmount: parseInt(e.target.value) || 0 })}
+                                                        placeholder="0 = ไม่มี"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    {formData.discountType !== 'none' && (
-                                        <p className="text-xs text-orange-600 mt-2 bg-orange-100 p-2 rounded-lg">
-                                            {formData.discountType === 'fixed' && `💵 ลดทันที ${formData.discountValue} บาท จากยอดรวม`}
-                                            {formData.discountType === 'percent' && `📊 ลด ${formData.discountValue}% จากยอดรวม`}
-                                            {formData.discountType === 'fixed_price' && `🏷️ จ่ายเพียง ${formData.discountValue} บาท (ส่วนต่างเป็นส่วนลด)`}
-                                        </p>
-                                    )}
+
+                                    {/* Limits Settings */}
+                                    <div className="bg-blue-50/50 rounded-2xl p-3 border border-blue-100">
+                                        <h4 className="text-xs font-bold text-blue-600 mb-2 flex items-center gap-1">🔢 การจำกัดสิทธิ์</h4>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label className="block text-[10px] font-medium text-gray-500 mb-1">รวมทั้งหมด (ครั้ง)</label>
+                                                <input
+                                                    type="number"
+                                                    className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 outline-none text-xs"
+                                                    value={formData.maxRedemptions}
+                                                    onChange={e => setFormData({ ...formData, maxRedemptions: e.target.value })}
+                                                    placeholder="ไม่จำกัด"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-medium text-gray-500 mb-1">ต่อคน (ครั้ง)</label>
+                                                <input
+                                                    type="number"
+                                                    className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 outline-none text-xs"
+                                                    value={formData.userRedemptionLimit}
+                                                    onChange={e => setFormData({ ...formData, userRedemptionLimit: e.target.value })}
+                                                    placeholder="ไม่จำกัด"
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="text-[9px] text-blue-400 mt-2 italic">* เว้นว่าง = ไม่จำกัด</p>
+                                    </div>
                                 </div>
+
+                                {/* Details & Media */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">คำอธิบาย</label>
-                                    <textarea
-                                        className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-orange-500 outline-none transition-all h-24 resize-none"
-                                        value={formData.description}
-                                        onChange={e => setFormData({ ...formData, description: e.target.value })}
-                                        placeholder="รายละเอียดเพิ่มเติม หรือเงื่อนไขการใช้"
-                                    ></textarea>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">URL รูปภาพ</label>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">URL รูปภาพ</label>
                                     <input
                                         type="text"
-                                        className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                                        className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-orange-500 rounded-xl px-4 py-2 outline-none transition-all text-xs"
                                         value={formData.imageUrl}
                                         onChange={e => setFormData({ ...formData, imageUrl: e.target.value })}
                                         placeholder="https://..."
                                     />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">วันที่เริ่ม</label>
-                                        <input
-                                            type="date"
-                                            className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                                            value={formData.startDate}
-                                            onChange={e => setFormData({ ...formData, startDate: e.target.value })}
-                                        />
+                                        <label className="block text-xs font-bold text-gray-700 mb-1">คำอธิบาย</label>
+                                        <textarea
+                                            className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-orange-500 rounded-xl px-4 py-2 outline-none transition-all h-[86px] resize-none text-xs"
+                                            value={formData.description}
+                                            onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                            placeholder="เงื่อนไขการใช้"
+                                        ></textarea>
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">วันหมดอายุ</label>
-                                        <input
-                                            type="date"
-                                            className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                                            value={formData.endDate}
-                                            onChange={e => setFormData({ ...formData, endDate: e.target.value })}
-                                        />
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">วันที่เริ่ม</label>
+                                            <input
+                                                type="date"
+                                                className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-orange-500 rounded-xl px-4 py-1.5 outline-none transition-all text-xs"
+                                                value={formData.startDate}
+                                                onChange={e => setFormData({ ...formData, startDate: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">วันหมดอายุ</label>
+                                            <input
+                                                type="date"
+                                                className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-orange-500 rounded-xl px-4 py-1.5 outline-none transition-all text-xs"
+                                                value={formData.endDate}
+                                                onChange={e => setFormData({ ...formData, endDate: e.target.value })}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div className="flex gap-4 mt-8">
+                                <div className="flex gap-3 pt-4 border-t border-gray-100 mt-2">
                                     <button
                                         type="button"
                                         onClick={() => setShowModal(false)}
-                                        className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-4 rounded-[1.5rem] transition-all"
+                                        className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-3 rounded-xl transition-all text-sm"
                                     >
                                         ยกเลิก
                                     </button>
                                     <button
                                         type="submit"
-                                        className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-[1.5rem] shadow-lg shadow-orange-200 transition-all active:scale-95"
+                                        className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-orange-200 transition-all active:scale-95 text-sm"
                                     >
                                         บันทึกข้อมูล
                                     </button>

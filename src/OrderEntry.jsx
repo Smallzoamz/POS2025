@@ -229,6 +229,14 @@ const OrderEntry = () => {
                 setCouponError(res.error);
                 setAppliedCoupon(null);
             } else {
+                // Pre-check Min Spend on client side (optional but good UI)
+                const { subtotal } = calculateFinal();
+                if (res.min_spend_amount > 0 && subtotal < res.min_spend_amount) {
+                    setCouponError(`คูปองนี้ต้องมียอดขั้นต่ำ ${res.min_spend_amount} บาท (ยอดปัจจุบัน ${subtotal} บาท)`);
+                    setAppliedCoupon(null); // Do not apply yet
+                    return;
+                }
+
                 setAppliedCoupon(res);
                 setCouponCode(''); // Clear input on success
                 // Sync with server immediately
@@ -458,9 +466,14 @@ const OrderEntry = () => {
 
         // Coupon Discount Logic (Support new discount_type + discount_value system)
         let couponDiscount = 0;
+
+        // Verify Min Spend Dynamically
         if (appliedCoupon) {
-            // 1. NEW: Check for discount_type + discount_value (from DB)
-            if (appliedCoupon.discount_value && parseFloat(appliedCoupon.discount_value) > 0) {
+            if (appliedCoupon.min_spend_amount > 0 && subtotal < appliedCoupon.min_spend_amount) {
+                // If min spend not met, ignore coupon (effectively 0 discount)
+                // You might want to show a warning in UI, but for calculation, it's 0.
+                couponDiscount = 0;
+            } else if (appliedCoupon.discount_value && parseFloat(appliedCoupon.discount_value) > 0) {
                 if (appliedCoupon.discount_type === 'percent') {
                     // Percentage discount: e.g., 10% off
                     couponDiscount = Math.floor(subtotal * (parseFloat(appliedCoupon.discount_value) / 100));

@@ -4429,7 +4429,9 @@ async function startServer() {
     app.get('/api/loyalty/active-promotions', async (req, res) => {
         try {
             const result = await query(`
-                SELECT * FROM loyalty_promotions 
+                SELECT p.*, 
+                (SELECT COUNT(*)::int FROM loyalty_coupons c WHERE c.promotion_id = p.id) as redeemed_count
+                FROM loyalty_promotions p
                 WHERE is_active = TRUE 
                 AND (start_date IS NULL OR start_date <= CURRENT_DATE)
                 AND (end_date IS NULL OR end_date >= CURRENT_DATE)
@@ -4475,15 +4477,37 @@ async function startServer() {
                 return res.status(400).json({ error: 'คะแนนไม่เพียงพอค่ะ' });
             }
 
+            // --- CHECK LIMITS ---
+
+            // 1. Global Redemption Limit
+            if (promo.max_redemptions) {
+                const totalRedeemedRes = await query('SELECT COUNT(*) FROM loyalty_coupons WHERE promotion_id = $1', [promotionId]);
+                const totalRedeemed = parseInt(totalRedeemedRes.rows[0].count);
+                if (totalRedeemed >= promo.max_redemptions) {
+                    await query('ROLLBACK');
+                    return res.status(400).json({ error: 'ขออภัยค่ะ สิทธิ์แลกรางวัลนี้เต็มแล้ว' });
+                }
+            }
+
+            // 2. User Redemption Limit
+            if (promo.user_redemption_limit) {
+                const userRedeemedRes = await query('SELECT COUNT(*) FROM loyalty_coupons WHERE promotion_id = $1 AND customer_id = $2', [promotionId, customerId]);
+                const userRedeemed = parseInt(userRedeemedRes.rows[0].count);
+                if (userRedeemed >= promo.user_redemption_limit) {
+                    await query('ROLLBACK');
+                    return res.status(400).json({ error: `คุณใช้สิทธิ์ครบ ${promo.user_redemption_limit} ครั้งแล้วค่ะ` });
+                }
+            }
+
             // 1. Deduct points
             await query('UPDATE loyalty_customers SET points = points - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [promo.points_required, customerId]);
 
             // 2. Generate Coupon with discount settings from promotion
             const couponCode = generateCouponCode();
             await query(`
-                INSERT INTO loyalty_coupons (customer_id, promotion_id, coupon_code, discount_type, discount_value)
-                VALUES ($1, $2, $3, $4, $5)
-            `, [customerId, promotionId, couponCode, promo.discount_type || 'none', promo.discount_value || 0]);
+                INSERT INTO loyalty_coupons (customer_id, promotion_id, coupon_code, discount_type, discount_value, min_spend_amount)
+                VALUES ($1, $2, $3, $4, $5, $6)
+            `, [customerId, promotionId, couponCode, promo.discount_type || 'none', promo.discount_value || 0, promo.min_spend_amount || 0]);
 
             // 3. Log transaction
             await query(`
@@ -4548,19 +4572,40 @@ async function startServer() {
     app.post('/api/loyalty/coupons/use', async (req, res) => {
         const { code, orderId, lineOrderId } = req.body;
         try {
+            // First check the coupon
+            const checkCoupon = await query('SELECT * FROM loyalty_coupons WHERE coupon_code = $1 AND status = \'active\'', [code.toUpperCase()]);
+            if (checkCoupon.rowCount === 0) {
+                return res.status(404).json({ error: 'ไม่พบรหัสคูปอง หรือคูปองถูกใช้ไปแล้ว' });
+            }
+
+            const coupon = checkCoupon.rows[0];
+
+            // Verify Min Spend if order total provided
+            if (coupon.min_spend_amount > 0) {
+                // Fetch order total to verify
+                let orderTotal = 0;
+                if (orderId) {
+                    const orderRes = await query('SELECT total_amount FROM orders WHERE id = $1', [orderId]);
+                    if (orderRes.rowCount > 0) orderTotal = parseFloat(orderRes.rows[0].total_amount);
+                } else if (lineOrderId) {
+                    const orderRes = await query('SELECT total_amount FROM line_orders WHERE id = $1', [lineOrderId]);
+                    if (orderRes.rowCount > 0) orderTotal = parseFloat(orderRes.rows[0].total_amount);
+                }
+
+                if (orderTotal < coupon.min_spend_amount) {
+                    return res.status(400).json({ error: `คูปองนี้ต้องมียอดขั้นต่ำ ${coupon.min_spend_amount} บาทค่ะ` });
+                }
+            }
+
             const result = await query(`
                 UPDATE loyalty_coupons 
                 SET status = 'used', 
                     used_at = CURRENT_TIMESTAMP, 
                     order_id = $1, 
                     line_order_id = $2 
-                WHERE coupon_code = $3 AND status = 'active'
+                WHERE id = $3
                 RETURNING *
-            `, [orderId || null, lineOrderId || null, code.toUpperCase()]);
-
-            if (result.rowCount === 0) {
-                return res.status(404).json({ error: 'ไม่พบรหัสคูปอง หรือคูปองถูกใช้ไปแล้ว' });
-            }
+            `, [orderId || null, lineOrderId || null, coupon.id]);
 
             res.json({ success: true, coupon: result.rows[0] });
         } catch (err) {
@@ -4580,41 +4625,33 @@ async function startServer() {
     });
 
     app.post('/api/admin/loyalty/promotions', requireAdmin, async (req, res) => {
-        const { title, description, pointsRequired, imageUrl, startDate, endDate, discountType, discountValue } = req.body;
-        // Convert empty strings to null for DATE columns
-        const finalStartDate = startDate === '' ? null : startDate;
-        const finalEndDate = endDate === '' ? null : endDate;
-
+        const { title, description, points_required, image_url, start_date, end_date, max_redemptions, user_redemption_limit, min_spend_amount } = req.body;
         try {
-            const result = await query(`
-                INSERT INTO loyalty_promotions (title, description, points_required, image_url, start_date, end_date, discount_type, discount_value)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING *
-            `, [title, description, pointsRequired, imageUrl, finalStartDate, finalEndDate, discountType || 'none', discountValue || 0]);
+            const result = await query(
+                `INSERT INTO loyalty_promotions (title, description, points_required, image_url, start_date, end_date, max_redemptions, user_redemption_limit, min_spend_amount)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                 RETURNING *`,
+                [title, description, points_required, image_url, start_date || null, end_date || null, max_redemptions || null, user_redemption_limit || null, min_spend_amount || 0]
+            );
             res.json(result.rows[0]);
         } catch (err) {
-            console.error(err);
             res.status(500).json({ error: err.message });
         }
     });
 
     app.put('/api/admin/loyalty/promotions/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
-        const { title, description, pointsRequired, imageUrl, startDate, endDate, isActive, discountType, discountValue } = req.body;
-        // Convert empty strings to null for DATE columns
-        const finalStartDate = startDate === '' ? null : startDate;
-        const finalEndDate = endDate === '' ? null : endDate;
-
+        const { title, description, points_required, image_url, start_date, end_date, is_active, max_redemptions, user_redemption_limit, min_spend_amount } = req.body;
         try {
-            await query(`
-                UPDATE loyalty_promotions 
-                SET title = $1, description = $2, points_required = $3, image_url = $4, 
-                    start_date = $5, end_date = $6, is_active = $7, discount_type = $8, discount_value = $9
-                WHERE id = $10
-            `, [title, description, pointsRequired, imageUrl, finalStartDate, finalEndDate, isActive, discountType || 'none', discountValue || 0, id]);
-            res.json({ success: true });
+            const result = await query(
+                `UPDATE loyalty_promotions 
+                 SET title = $1, description = $2, points_required = $3, image_url = $4, start_date = $5, end_date = $6, is_active = $7, max_redemptions = $8, user_redemption_limit = $9, min_spend_amount = $10
+                 WHERE id = $11
+                 RETURNING *`,
+                [title, description, points_required, image_url, start_date || null, end_date || null, is_active, max_redemptions || null, user_redemption_limit || null, min_spend_amount || 0, id]
+            );
+            res.json(result.rows[0]);
         } catch (err) {
-            console.error(err);
             res.status(500).json({ error: err.message });
         }
     });
