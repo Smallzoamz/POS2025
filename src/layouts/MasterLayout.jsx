@@ -224,7 +224,7 @@ const MasterLayout = ({ children }) => {
                             <NavLink to="/tables-manage" icon="🗂️" label="Table Management" active={isActive('/tables-manage')} onClick={() => setIsSidebarOpen(false)} />
                         )}
                         {(user.role === 'owner' || user.role === 'admin') && (
-                            <NavLink to="/promotions" icon="🎁" label="Promotions & Rewards" active={isActive('/promotions')} onClick={() => setIsSidebarOpen(false)} />
+                            <NavLink to="/admin/promotions" icon="🎁" label="Promotions & Rewards" active={isActive('/admin/promotions')} onClick={() => setIsSidebarOpen(false)} />
                         )}
                     </div>
 

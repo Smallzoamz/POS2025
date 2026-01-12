@@ -196,3 +196,5 @@
 - \[2026-01-12 14:55:00] | File: electron/server.js | Line: 2980 | Keyword: Auto-Setup | Status: Created | Change: Implemented POST /api/admin/line/setup-richmenu to automate Rich Menu creation and image upload.
 - \[2026-01-12 14:58:00] | File: src/components/settings/LineConnectSettings.jsx | Line: 4 | Keyword: One-Click Setup | Status: Modified | Change: Added logic to trigger Auto-Setup with 1-click, including auto-save of settings.
 - \[2026-01-12 15:15:00] | File: src/Settings.jsx | Line: 126 | Keyword: Hybrid Mode | Status: Modified | Change: Added Optional Loyalty LIFF ID input to support existing separate Order/Loyalty apps.
+[2026-01-12 16:45] | File: src/layouts/MasterLayout.jsx | Line: 227 | Keyword: NavLink | Status: Fixed | Change: Updated broken '/promotions' link to '/admin/promotions'
+[2026-01-12 16:45] | File: src/components/AnalyticsDashboard.jsx | Line: 46, 107 | Keyword: w-full | Status: Fixed | Change: Added w-full to chart containers

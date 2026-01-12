@@ -43,7 +43,7 @@ const AnalyticsDashboard = ({ dateRange = {} }) => {
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Growth Performance</p>
                     </div>
 
-                    <div className="h-[280px]">
+                    <div className="h-[280px] w-full">
                         <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                             <AreaChart data={salesData}>
                                 <defs>
@@ -104,7 +104,7 @@ const AnalyticsDashboard = ({ dateRange = {} }) => {
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Inventory Velocity</p>
                     </div>
 
-                    <div className="h-[280px]">
+                    <div className="h-[280px] w-full">
                         <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                             <BarChart data={topItems} layout="vertical" margin={{ left: 10 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F1F5F9" />
