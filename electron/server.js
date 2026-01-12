@@ -2843,14 +2843,52 @@ async function startServer() {
                     response = { "text": "ร้านเปิดให้บริการตามปกตินะคะ (09:00 - 21:00)" };
                 }
 
-                // C. Menu (Dynamic Link)
+                // C. Menu (Dynamic Link & Line ID)
             } else if (matches(text, KEYWORDS.menu)) {
                 try {
-                    const settingsRes = await query("SELECT value FROM settings WHERE key = 'website_sync_url'");
+                    const settingsRes = await query("SELECT key, value FROM settings WHERE key IN ('website_sync_url', 'line_id')");
+                    const settings = {};
+                    settingsRes.rows.forEach(s => settings[s.key] = s.value);
+
                     let menuUrl = "https://yoursite.com";
-                    if (settingsRes.rows.length > 0 && settingsRes.rows[0].value) {
-                        const rawUrl = settingsRes.rows[0].value;
-                        menuUrl = rawUrl.replace('/api/sync-menu', '');
+                    if (settings.website_sync_url) {
+                        menuUrl = settings.website_sync_url.replace('/api/sync-menu', '');
+                    }
+
+                    const buttons = [
+                        {
+                            "type": "web_url",
+                            "url": menuUrl,
+                            "title": "📖 ดูเมนูออนไลน์"
+                        }
+                    ];
+
+                    if (settings.line_id) {
+                        let lineId = settings.line_id;
+                        // Determine URL scheme based on ID format (Basic vs Premium/OA)
+                        // Heuristic: If it starts with @, it's likely an OA.
+                        // Standard add friend URL: https://line.me/ti/p/~ID
+                        // Official Account URL: https://line.me/R/ti/p/@ID
+                        // If user put @ in settings, strip it for search or keep it?
+                        // Simple approach: Use search intent or direct link if possible.
+                        // Valid Format: https://line.me/R/ti/p/@<id> works well for OAs.
+
+                        // Ensure @ prefix for OA URL format if missing, or use ~ for personal.
+                        // Given this is a business POS, assume OA or properly formatted ID.
+                        // Let's explicitly check if it starts with @.
+                        let lineUrl;
+                        if (lineId.startsWith('@')) {
+                            lineUrl = `https://line.me/R/ti/p/${lineId}`;
+                        } else {
+                            // Assume personal ID or Basic ID without @
+                            lineUrl = `https://line.me/ti/p/~${lineId}`;
+                        }
+
+                        buttons.push({
+                            "type": "web_url",
+                            "url": lineUrl,
+                            "title": "💬 แอดไลน์ร้าน"
+                        });
                     }
 
                     response = {
@@ -2859,17 +2897,14 @@ async function startServer() {
                             "payload": {
                                 "template_type": "button",
                                 "text": "🍽️ หิวแล้วใช่มั้ยคะ? กดดูเมนูทั้งหมดแล้วสั่งออนไลน์ได้เลยที่นี่ค่ะ 👇",
-                                "buttons": [
-                                    {
-                                        "type": "web_url",
-                                        "url": menuUrl,
-                                        "title": "📖 ดูเมนูออนไลน์"
-                                    }
-                                ]
+                                "buttons": buttons
                             }
                         }
                     };
-                } catch (e) { response = { "text": "ขออภัยค่ะ ลิงค์เมนูขัดข้องชั่วคราว" }; }
+                } catch (e) {
+                    console.error(e);
+                    response = { "text": "ขออภัยค่ะ ลิงค์เมนูขัดข้องชั่วคราว" };
+                }
 
                 // D. Recommendations (Carousel from DB)
             } else if (matches(text, KEYWORDS.recommend)) {

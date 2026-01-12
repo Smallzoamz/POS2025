@@ -171,6 +171,20 @@ const Settings = () => {
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">📞</span>
                                             </div>
                                         </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Line ID</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    name="line_id"
+                                                    value={settings.line_id || ''}
+                                                    onChange={handleChange}
+                                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 pl-10 focus:bg-white focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none font-medium text-slate-900 transition-all text-sm font-mono tracking-wider"
+                                                    placeholder="@your_shop"
+                                                />
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">💬</span>
+                                            </div>
+                                        </div>
                                         <div className="md:col-span-2 space-y-1.5">
                                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shop Public URL (for QR Codes)</label>
                                             <div className="flex gap-3">
