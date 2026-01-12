@@ -372,7 +372,7 @@ const LineOrder = () => {
                         options: item.options || [],
                         optionsLabel: item.optionsLabel || ''
                     })),
-                    totalAmount: finalTotal,
+                    totalAmount: cartAmt,
                     note: customerInfo.note
                 })
             });

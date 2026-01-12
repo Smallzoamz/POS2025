@@ -49,4 +49,14 @@
 ---
 
 ## ⏳ Pending / Ideas (ไอเดียอื่นๆ)
-*   *ยังไม่มีรายการเพิ่มเติม*
+### 1. 🌍 Multi-Tenant SaaS Platform (Platform Service)
+*   **Start Date:** TBD (On Hold)
+*   **Plan Details:**
+    *   Upgrade architecture to support multiple shops (Tenants) on a single codebase.
+    *   **Database:** Use Shared Schema with `tenant_id` column protection.
+    *   **Auth:** Distinct roles for Super Admin (Platform) vs Tenant Admin (Shop Owner).
+    *   **Billing:** Implement subscription models and automated provisioning.
+*   **Identified Constraints:**
+    *   Requires major Refactoring of every SQL query to ensure data isolation.
+    *   Higher complexity in security and backup.
+    *   **Strategy:** "Dogfood" current version first to stabilize features before scaling.

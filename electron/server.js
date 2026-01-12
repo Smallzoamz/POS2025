@@ -3192,11 +3192,7 @@ async function startServer() {
                 }
             }
 
-            // Calculate Deposit (50% for reservations with items)
-            let depositAmount = 0;
-            if (orderType === 'reservation' && items && items.length > 0) {
-                depositAmount = totalAmount * 0.5;
-            }
+            // (Deposit calculation moved to after coupon processing)
 
             // 1. Associate Phone with LINE Account (Loyalty)
             if (lineUserId && customerPhone) {
@@ -3269,6 +3265,12 @@ async function startServer() {
                         console.log(`⚠️ Coupon ${couponCode} found but could not determine discount value`);
                     }
                 }
+            }
+
+            // Calculate Deposit (50% for reservations with items) - Moved to use Final Total
+            let depositAmount = 0;
+            if (orderType === 'reservation' && items && items.length > 0) {
+                depositAmount = finalTotal * 0.5;
             }
 
             // 2.5 STOCK DEDUCTION (Centralized)
