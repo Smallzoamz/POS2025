@@ -2706,6 +2706,171 @@ async function startServer() {
         }
     });
 
+    // --- FACEBOOK WEBHOOK ENDPOINTS ---
+
+    // 1. Webhook Verification (Handshake)
+    app.get('/webhook/facebook', async (req, res) => {
+        const mode = req.query['hub.mode'];
+        const token = req.query['hub.verify_token'];
+        const challenge = req.query['hub.challenge'];
+
+        // Fetch Verify Token from DB (or fallback)
+        let verifyToken = 'pos2025secret'; // Default Fallback
+        try {
+            const settingsRes = await query("SELECT value FROM settings WHERE key = 'facebook_verify_token'");
+            if (settingsRes.rows.length > 0 && settingsRes.rows[0].value) {
+                verifyToken = settingsRes.rows[0].value;
+            }
+        } catch (e) { console.error("Error fetching FB verify token:", e); }
+
+        if (mode && token) {
+            if (mode === 'subscribe' && token === verifyToken) {
+                console.log('[Facebook] Webhook Verified! Challenge accepted.');
+                res.status(200).send(challenge);
+            } else {
+                console.error(`[Facebook] Verification Failed. Mode: ${mode}, Token: ${token}, Expected: ${verifyToken}`);
+                res.sendStatus(403);
+            }
+        } else {
+            res.sendStatus(400); // Bad Request if parameters missing
+        }
+    });
+
+    // 2. Incoming Messages Handler
+    app.post('/webhook/facebook', async (req, res) => {
+        const body = req.body;
+
+        if (body.object === 'page') {
+            // Iterate over each entry - there may be multiple if batched
+            for (const entry of body.entry) {
+                // Get the webhook event. entry.messaging is an array, but 
+                // will only contain one event, so we get index 0
+                const webhook_event = entry.messaging[0];
+
+                // Get the sender PSID
+                const sender_psid = webhook_event.sender.id;
+                console.log(`[Facebook] Sender PSID: ${sender_psid}`);
+
+                // Check if it's a message or postback and pass the event to the appropriate handler functions
+                if (webhook_event.message) {
+                    handleFacebookMessage(sender_psid, webhook_event.message);
+                } else if (webhook_event.postback) {
+                    handleFacebookPostback(sender_psid, webhook_event.postback);
+                }
+            }
+
+            // Return a '200 OK' response to all events
+            res.status(200).send('EVENT_RECEIVED');
+        } else {
+            // Return a '404 Not Found' if event is not from a page subscription
+            res.sendStatus(404);
+        }
+    });
+
+    // --- FACEBOOK HELPER FUNCTIONS ---
+    async function handleFacebookMessage(sender_psid, received_message) {
+        let response;
+
+        // Checks if the message contains text
+        if (received_message.text) {
+            // Create the payload for a basic text message, which
+            // will be added to the body of our request to the Send API
+            response = {
+                "text": `คุณส่งข้อความว่า: "${received_message.text}". ขณะนี้ระบบแชทบอทยังอยู่ระหว่างการพัฒนา!`
+            }
+        } else if (received_message.attachments) {
+            // Get the URL of the message attachment
+            let attachment_url = received_message.attachments[0].payload.url;
+            response = {
+                "attachment": {
+                    "type": "template",
+                    "payload": {
+                        "template_type": "generic",
+                        "elements": [{
+                            "title": "คุณส่งรูปภาพมา?",
+                            "subtitle": "แตะปุ่มด้านล่างเพื่อยืนยัน",
+                            "image_url": attachment_url,
+                            "buttons": [
+                                {
+                                    "type": "postback",
+                                    "title": "ใช่! รูปนี้แหละ",
+                                    "payload": "yes",
+                                },
+                                {
+                                    "type": "postback",
+                                    "title": "ไม่ใช่",
+                                    "payload": "no",
+                                }
+                            ],
+                        }]
+                    }
+                }
+            }
+        }
+
+        // Send the response message
+        callSendFacebookAPI(sender_psid, response);
+    }
+
+    async function handleFacebookPostback(sender_psid, received_postback) {
+        let response;
+
+        // Get the payload for the postback
+        let payload = received_postback.payload;
+
+        // Set the response based on the postback payload
+        if (payload === 'yes') {
+            response = { "text": "ขอบคุณที่ยืนยันค่ะ!" }
+        } else if (payload === 'no') {
+            response = { "text": "ขออภัยด้วยค่ะ ลองส่งภาพมาใหม่นะ." }
+        }
+        // Send the message to acknowledge the postback
+        callSendFacebookAPI(sender_psid, response);
+    }
+
+    async function callSendFacebookAPI(sender_psid, response) {
+        // Fetch Page Access Token from DB
+        let pageAccessToken = '';
+        try {
+            const settingsRes = await query("SELECT value FROM settings WHERE key = 'facebook_page_access_token'");
+            if (settingsRes.rows.length > 0) {
+                pageAccessToken = settingsRes.rows[0].value;
+            }
+        } catch (e) {
+            console.error("Error fetching FB page token:", e);
+            return;
+        }
+
+        if (!pageAccessToken) {
+            console.warn('[Facebook] No Page Access Token configured. Cannot reply.');
+            return;
+        }
+
+        const requestBody = {
+            "recipient": {
+                "id": sender_psid
+            },
+            "message": response
+        };
+
+        try {
+            const res = await fetch(`https://graph.facebook.com/v13.0/me/messages?access_token=${pageAccessToken}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+            if (!res.ok) {
+                const errText = await res.text();
+                console.error('[Facebook] Send API Error:', errText);
+            } else {
+                console.log('[Facebook] Reply sent!');
+            }
+        } catch (err) {
+            console.error('[Facebook] Network Error:', err);
+        }
+    }
+
+
     // Create LINE Order
     app.post('/api/line_orders', async (req, res) => {
         const { customer_name, contact_number, delivery_address, items, total_amount, order_type, delivery_location } = req.body;
