@@ -228,3 +228,4 @@
 - \[2026-01-13 18:25] | File: src/KitchenDisplay.jsx | Line: 533 | Keyword: Sonic Feedback | Status: Implemented | Change: Added `playNotificationSound()` to `handleServeOrder` for immediate confirmation sound upon serving.
 - \[2026-01-13 19:10] | File: electron/server.js | Line: 4163 | Keyword: Takeaway Payment Status | Status: Fixed | Change: Changed Takeaway order completion status from 'completed' to 'paid' to ensure visibility in Sales History.
 - \[2026-01-13 19:20] | File: electron/db_pg.js | Line: 990 | Keyword: Migration 28 | Status: Created | Change: Added Migration 28 to create indexes on critical columns (created_at, status, phone, customer_id) for orders, line_orders, and customers tables.
+- \[2026-01-13 19:50] | File: src/Settings.jsx | Line: 66 | Keyword: Save Delay | Status: Optimized | Change: Converted sequential API calls to parallel `Promise.all` in `handleSave` to reduce waiting time significantly.
