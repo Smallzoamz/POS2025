@@ -1836,6 +1836,63 @@ async function startServer() {
             // 2. Update order status to 'served'
             await client.query("UPDATE orders SET status = 'served' WHERE id = $1", [id]);
 
+            // 3. --- STOCK DEDUCTION LOGIC ---
+            // Fetch all items in this order
+            const itemsRes = await client.query("SELECT * FROM order_items WHERE order_id = $1", [id]);
+            const items = itemsRes.rows;
+
+            for (const item of items) {
+                // Get Product Recipe
+                const recipeRes = await client.query("SELECT ingredient_id, quantity_used FROM product_ingredients WHERE product_id = $1", [item.product_id]);
+                const recipe = recipeRes.rows;
+
+                for (const ing of recipe) {
+                    const totalDeduct = parseFloat(ing.quantity_used) * parseFloat(item.quantity);
+                    await client.query("UPDATE ingredients SET total_quantity = total_quantity - $1 WHERE id = $2", [totalDeduct, ing.ingredient_id]);
+
+                    // Check Low Stock Warning
+                    const stockRes = await client.query("SELECT name, total_quantity, unit FROM ingredients WHERE id = $1", [ing.ingredient_id]);
+                    const currentStock = stockRes.rows[0];
+                    if (currentStock && parseFloat(currentStock.total_quantity) <= 10) {
+                        createNotification(
+                            `Low Stock Alert: ${currentStock.name}`,
+                            `วัตถุดิบ "${currentStock.name}" เหลือน้อย (${parseFloat(currentStock.total_quantity).toFixed(2)} ${currentStock.unit})`,
+                            'warning',
+                            { ingredientId: ing.ingredient_id }
+                        );
+                    }
+                }
+
+                // Get Options Recipe (if any)
+                const optsRes = await client.query("SELECT * FROM order_item_options WHERE order_item_id = $1", [item.id]);
+                for (const opt of optsRes.rows) {
+                    let optRecipeRes;
+                    if (opt.is_global) {
+                        optRecipeRes = await client.query("SELECT ingredient_id, quantity_used FROM global_option_ingredients WHERE global_option_id = $1", [opt.global_option_id || opt.option_id]);
+                    } else {
+                        optRecipeRes = await client.query("SELECT ingredient_id, quantity_used FROM option_ingredients WHERE option_id = $1", [opt.option_id]);
+                    }
+
+                    for (const ing of optRecipeRes.rows) {
+                        const totalDeduct = parseFloat(ing.quantity_used) * parseFloat(item.quantity); // Options usually 1 per item
+                        await client.query("UPDATE ingredients SET total_quantity = total_quantity - $1 WHERE id = $2", [totalDeduct, ing.ingredient_id]);
+
+                        // Check Low Stock Warning (Duplicate logic, could be helper function)
+                        const stockRes = await client.query("SELECT name, total_quantity, unit FROM ingredients WHERE id = $1", [ing.ingredient_id]);
+                        const currentStock = stockRes.rows[0];
+                        if (currentStock && parseFloat(currentStock.total_quantity) <= 10) {
+                            createNotification(
+                                `Low Stock Alert: ${currentStock.name}`,
+                                `วัตถุดิบ "${currentStock.name}" เหลือน้อย (${parseFloat(currentStock.total_quantity).toFixed(2)} ${currentStock.unit})`,
+                                'warning',
+                                { ingredientId: ing.ingredient_id }
+                            );
+                        }
+                    }
+                }
+            }
+            // -----------------------------
+
             await client.query('COMMIT');
 
             // Notify clients

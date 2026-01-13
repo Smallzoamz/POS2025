@@ -533,6 +533,7 @@ const KitchenDisplay = () => {
         if (!confirm('ยืนยันเสิร์ฟออเดอร์นี้?')) return;
         try {
             await api.serveOrder(orderId);
+            playNotificationSound(); // Immediate feedback
             loadOrders(); // Refresh list
         } catch (err) {
             console.error(err);

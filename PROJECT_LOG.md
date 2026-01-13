@@ -221,3 +221,8 @@
 - \[2026-01-13 04:24] | File: electron/server.js | Line: 5110 | Keyword: Syntax Error | Status: Fixed | Change: Fixed 'Unexpected end of input' syntax error in Facebook Webhook handler to resolve Render deployment failure.
 - \[2026-01-13 04:45] | File: electron/server.js | Line: 2890 | Keyword: Facebook Button | Status: Modified | Change: Updated Facebook Chatbot button: Changed 'Add Shop Line' to 'Order Food' and replaced icon with Green Heart (LINE theme).
 - \[2026-01-13 04:50] | File: electron/server.js | Line: 2847 | Keyword: Smart Business Hours | Status: Implemented | Change: Added logic to check 'store_open_time' vs Current Time (Asia/Bangkok). If closed, Bot politely refuses 'Menu/Order' command and shows opening hours.
+
+## 🔪 Stock & KDS "Trinity" Upgrade
+### 2026-01-13
+- \[2026-01-13 18:25] | File: electron/server.js | Line: 1839 | Keyword: Stock Deduction | Status: Implemented | Change: Added auto-stock deduction logic in `serveOrder`. Calculates and removes ingredients/options from inventory and triggers Low Stock Alert.
+- \[2026-01-13 18:25] | File: src/KitchenDisplay.jsx | Line: 533 | Keyword: Sonic Feedback | Status: Implemented | Change: Added `playNotificationSound()` to `handleServeOrder` for immediate confirmation sound upon serving.
