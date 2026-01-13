@@ -226,3 +226,4 @@
 ### 2026-01-13
 - \[2026-01-13 18:25] | File: electron/server.js | Line: 1839 | Keyword: Stock Deduction | Status: Implemented | Change: Added auto-stock deduction logic in `serveOrder`. Calculates and removes ingredients/options from inventory and triggers Low Stock Alert.
 - \[2026-01-13 18:25] | File: src/KitchenDisplay.jsx | Line: 533 | Keyword: Sonic Feedback | Status: Implemented | Change: Added `playNotificationSound()` to `handleServeOrder` for immediate confirmation sound upon serving.
+- \[2026-01-13 19:10] | File: electron/server.js | Line: 4163 | Keyword: Takeaway Payment Status | Status: Fixed | Change: Changed Takeaway order completion status from 'completed' to 'paid' to ensure visibility in Sales History.

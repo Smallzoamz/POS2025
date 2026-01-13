@@ -4160,7 +4160,7 @@ async function startServer() {
         const { paymentMethod } = req.body;
         try {
             await query(
-                "UPDATE orders SET status = 'completed', payment_method = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+                "UPDATE orders SET status = 'paid', payment_method = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
                 [paymentMethod || 'cash', id]
             );
 
