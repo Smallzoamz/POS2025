@@ -985,6 +985,38 @@ const initDatabasePG = async () => {
             console.log('Migration 27 note:', migrationErr27.message);
         }
 
+        // --- MIGRATION 28: Performance Indexes ---
+        try {
+            console.log('📦 Running Migration 28: Adding Performance Indexes...');
+
+            const indexes = [
+                // Orders
+                "CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)",
+                "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)",
+                "CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id)",
+
+                // Line Orders
+                "CREATE INDEX IF NOT EXISTS idx_line_orders_created_at ON line_orders(created_at)",
+                "CREATE INDEX IF NOT EXISTS idx_line_orders_status ON line_orders(status)",
+                "CREATE INDEX IF NOT EXISTS idx_line_orders_customer_id ON line_orders(customer_id)",
+                "CREATE INDEX IF NOT EXISTS idx_line_orders_reservation_date ON line_orders(reservation_date)",
+
+                // Loyalty Customers
+                "CREATE INDEX IF NOT EXISTS idx_loyalty_customers_phone ON loyalty_customers(phone)",
+                "CREATE INDEX IF NOT EXISTS idx_loyalty_customers_last_order ON loyalty_customers(last_order_at)",
+
+                // Transactions
+                "CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)"
+            ];
+
+            for (const idx of indexes) {
+                await client.query(idx);
+            }
+            console.log('✅ Migration 28: Performance indexes completed');
+        } catch (migrationErr28) {
+            console.log('Migration 28 note:', migrationErr28.message);
+        }
+
         // Final Commit for all migrations and seeds
         // await client.query('COMMIT'); // Removed to avoid double commit if line 329 already committed
     } catch (e) {
