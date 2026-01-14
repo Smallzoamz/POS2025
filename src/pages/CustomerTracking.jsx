@@ -122,6 +122,7 @@ const CustomerTracking = () => {
     // Status timeline configuration
     const statusSteps = [
         { key: 'pending', icon: '⏳', label: 'รอยืนยัน' },
+        { key: 'rider_assigned', icon: '🏍️', label: 'ไรเดอร์รับ' },
         { key: 'confirmed', icon: '✓', label: 'ยืนยัน' },
         { key: 'preparing', icon: '🍳', label: 'เตรียม' },
         { key: 'ready', icon: '📦', label: 'พร้อม' },
@@ -159,7 +160,9 @@ const CustomerTracking = () => {
         );
     }
 
-    const showMap = ['picked_up', 'delivering'].includes(order.status) && (riderPos || customerPos);
+    // Show map if rider is assigned/picked_up/delivering OR rider_name exists.
+    // Ensure we show it even if lat/lng missing (will use default center) so Rider Info Overlay is visible.
+    const showMap = ['picked_up', 'delivering', 'rider_assigned'].includes(order.status) || !!order.rider_name;
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-32">
@@ -173,7 +176,7 @@ const CustomerTracking = () => {
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Order Tracking System</p>
                     </div>
                     <div className="px-4 py-2 bg-orange-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-500/30 animate-bounce-subtle">
-                        {statusSteps[currentStatusIndex]?.label}
+                        {statusSteps[currentStatusIndex]?.label || order.status}
                     </div>
                 </div>
             </div>
@@ -267,6 +270,7 @@ const CustomerTracking = () => {
                         <div className="bg-slate-50 p-4 rounded-3xl inline-block px-8 border border-slate-100 mb-10">
                             <p className="text-sm font-medium text-slate-500">
                                 {order.status === 'pending' && 'รอร้านยืนยันออเดอร์ขอบคุณที่สั่งนะคะ'}
+                                {order.status === 'rider_assigned' && 'ไรเดอร์รับงานแล้ว กำลังมุ่งหน้ามาร้านค่ะ'}
                                 {order.status === 'confirmed' && 'ร้านยืนยันออเดอร์แล้ว กำลังรอเข้าคิวค่ะ'}
                                 {order.status === 'preparing' && 'พ่อครัวกำลังปรุงอาหารอย่างพิถีพิถัน'}
                                 {order.status === 'ready' && 'อาหารจานอร่อยของคุณเสร็จแล้ว พร้อมส่งต่อ!'}

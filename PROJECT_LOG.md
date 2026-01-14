@@ -262,3 +262,6 @@
 - [2026-01-14 22:55] | File: src/pages/CustomerTracking.jsx | Line: 160 | Keyword: UI Fix | Status: Fixed | Change: Updated Tracking Page to show Rider Info immediately when rider accepts (bypassing shop confirmation wait).
 
 - [2026-01-14 23:30] | File: electron/server.js | Line: 762, 4634 | Keyword: Status Logic | Status: Fixed | Change: Implemented 5s auto-delay for picked_up -> delivering and added socket events for Kitchen status updates.
+
+- [2026-01-14 23:45] | File: CustomerTracking.jsx | Line: 164 | Keyword: UI Fix | Status: Edited | Change: Relaxed showMap condition to force display of Rider Info even if coords are missing.
+- [2026-01-14 23:45] | File: RiderAPp/Dashboard.jsx | Line: 350 | Keyword: UI Fix | Status: Edited | Change: Enabled Complete button for 'delivering' status.
