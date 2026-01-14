@@ -265,3 +265,8 @@
 
 - [2026-01-14 23:45] | File: CustomerTracking.jsx | Line: 164 | Keyword: UI Fix | Status: Edited | Change: Relaxed showMap condition to force display of Rider Info even if coords are missing.
 - [2026-01-14 23:45] | File: RiderAPp/Dashboard.jsx | Line: 350 | Keyword: UI Fix | Status: Edited | Change: Enabled Complete button for 'delivering' status.
+
+- [2026-01-14 23:55] | File: electron/server.js | Line: 4231 | Keyword: Loyalty | Status: Fixed | Change: Auto-create loyalty_customers in /webhook/line if missing.
+- [2026-01-14 23:55] | File: electron/server.js | Line: 190 | Keyword: Loyalty | Status: Fixed | Change: Relaxed is_following check to allow points earning if LINE ID exists.
+- [2026-01-15 00:00] | File: electron/db_pg.js | Line: 612 | Keyword: Migration | Status: Created | Change: Added migration to ensure order_id and line_order_id columns exist in loyalty_point_transactions.
+- [2026-01-15 00:00] | File: electron/server.js | Line: 4933 | Keyword: Bug Fix | Status: Fixed | Change: Fixed ambiguous status column reference in Delivery Orders query by explicitly qualifying with table alias.

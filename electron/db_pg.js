@@ -608,6 +608,15 @@ const initDatabasePG = async () => {
                 )
             `);
 
+            // --- MIGRATION: Ensure order_id and line_order_id exist in loyalty_point_transactions ---
+            try {
+                await client.query(`ALTER TABLE loyalty_point_transactions ADD COLUMN IF NOT EXISTS order_id INTEGER REFERENCES orders(id)`);
+                await client.query(`ALTER TABLE loyalty_point_transactions ADD COLUMN IF NOT EXISTS line_order_id INTEGER REFERENCES line_orders(id)`);
+                console.log('✅ Loyalty Transaction migration key columns completed');
+            } catch (err) {
+                console.log('Loyalty Transaction migration note:', err.message);
+            }
+
             // Coupons (Redeemed Promotions)
             await client.query(`
                 CREATE TABLE IF NOT EXISTS loyalty_coupons (

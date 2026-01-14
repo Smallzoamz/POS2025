@@ -189,8 +189,17 @@ async function startServer() {
         try {
             // Check if customer is following LINE OA (Requirement)
             const customerRes = await query("SELECT id, line_user_id, points, is_following FROM loyalty_customers WHERE id = $1", [customerId]);
-            if (!customerRes.rows[0]?.is_following) {
-                console.log(`[Loyalty] Customer #${customerId} skipped points (Not following LINE OA)`);
+
+            // Relaxed check: Allow if line_user_id exists, regardless of is_following flag sync issue
+            if (customerRes.rowCount === 0) {
+                return null;
+            }
+
+            // Fallback: If no LINE ID, we can't notify, but maybe they refer to phone number points? 
+            // For now, if no LINE ID, just log warning but let them have points if valid customer.
+            // But originally we returned null. Let's keep it safe:
+            if (!customerRes.rows[0].line_user_id) {
+                console.log(`[Loyalty] Customer #${customerId} skipped points (No LINE ID)`);
                 return null;
             }
 
@@ -4234,6 +4243,21 @@ async function startServer() {
                 const customerLookup = await client.query("SELECT id FROM loyalty_customers WHERE line_user_id = $1", [lineUserId]);
                 if (customerLookup.rowCount > 0) {
                     customerId = customerLookup.rows[0].id;
+                } else {
+                    // Start: Auto-create Customer if not found
+                    // Use customerName as nickname if available
+                    try {
+                        const newCust = await client.query(`
+                            INSERT INTO loyalty_customers (line_user_id, points, is_following, phone, nickname, created_at, updated_at) 
+                            VALUES ($1, 0, true, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
+                            RETURNING id
+                        `, [lineUserId, customerPhone || null, customerName || 'LINE User']);
+                        customerId = newCust.rows[0].id;
+                        console.log(`✨ Auto-created new Loyalty Customer: #${customerId} (${customerName || 'No Name'})`);
+                    } catch (createErr) {
+                        console.error('Failed to auto-create customer:', createErr);
+                    }
+                    // End: Auto-create
                 }
             }
 
@@ -4901,12 +4925,12 @@ async function startServer() {
             let paramIdx = 1;
 
             if (status && status !== 'all') {
-                sql += ` AND status = $${paramIdx}`;
+                sql += ` AND lo.status = $${paramIdx}`;
                 params.push(status);
                 paramIdx++;
             }
 
-            sql += " ORDER BY created_at DESC";
+            sql += " ORDER BY lo.created_at DESC";
 
             const ordersRes = await query(sql, params);
             const orders = ordersRes.rows;
