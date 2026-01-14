@@ -265,9 +265,11 @@ const LineOrderManagement = () => {
     // Status Config
     const statusConfig = {
         pending: { color: 'bg-yellow-500', label: 'รอยืนยัน', icon: '⏳' },
+        rider_assigned: { color: 'bg-sky-500', label: 'ไรเดอร์รับงาน', icon: '🛵' },
         confirmed: { color: 'bg-blue-500', label: 'ยืนยันแล้ว', icon: '✓' },
         preparing: { color: 'bg-orange-500', label: 'กำลังเตรียม', icon: '🍳' },
         ready: { color: 'bg-emerald-500', label: 'พร้อมแล้ว', icon: '✅' },
+        picked_up: { color: 'bg-slate-700', label: 'กำลังจัดส่ง', icon: '🚚' },
         completed: { color: 'bg-slate-500', label: 'เสร็จสิ้น', icon: '📦' },
         cancelled: { color: 'bg-red-500', label: 'ยกเลิก', icon: '❌' }
     };
@@ -331,9 +333,11 @@ const LineOrderManagement = () => {
                             // Map existing status to Tasty theme colors
                             const theme = {
                                 pending: { bg: 'bg-[#FFE1E1]', border: 'border-[#FFC5C5]', text: 'text-red-600', badge: 'bg-red-500', label: 'Wait List' },
+                                rider_assigned: { bg: 'bg-[#E1F2FF]', border: 'border-[#C5E4FF]', text: 'text-sky-600', badge: 'bg-sky-500', label: 'Rider Found' },
                                 confirmed: { bg: 'bg-[#E1F2FF]', border: 'border-[#C5E4FF]', text: 'text-blue-600', badge: 'bg-blue-500', label: 'Confirmed' },
                                 preparing: { bg: 'bg-[#D6EFEF]', border: 'border-[#B5E1E1]', text: 'text-[#00A099]', badge: 'bg-[#00A099]', label: 'In Kitchen' },
                                 ready: { bg: 'bg-[#E9FFD6]', border: 'border-[#CDFFA1]', text: 'text-green-600', badge: 'bg-green-500', label: 'Ready' },
+                                picked_up: { bg: 'bg-slate-100', border: 'border-slate-300', text: 'text-slate-800', badge: 'bg-slate-700', label: 'Delivering' },
                                 completed: { bg: 'bg-slate-100', border: 'border-slate-200', text: 'text-slate-600', badge: 'bg-slate-500', label: 'Completed' },
                                 cancelled: { bg: 'bg-rose-50', border: 'border-rose-100', text: 'text-rose-600', badge: 'bg-rose-500', label: 'Cancelled' }
                             }[order.status] || { bg: 'bg-white', border: 'border-slate-200', text: 'text-slate-900', badge: 'bg-slate-400', label: 'Unknown' };
@@ -609,7 +613,7 @@ const LineOrderManagement = () => {
 
                             {/* Modal Actions */}
                             <div className="p-6 border-t border-white/5 bg-black/20 flex gap-3 flex-wrap">
-                                {selectedOrder.status === 'pending' && (
+                                {['pending', 'rider_assigned'].includes(selectedOrder.status) && (
                                     <>
                                         <button onClick={() => updateStatus(selectedOrder.id, 'confirm')} className="flex-1 py-4 bg-white text-slate-900 hover:bg-amber-400 transition-all rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-white/5">
                                             ✓ Confirm Order

@@ -247,3 +247,8 @@
 - \[2026-01-14 18:44] | File: electron/server.js | Line: 943 | Keyword: API | Status: Created | Change: Added report status update endpoint (PUT /api/riders/reports/:id/status).
 - \[2026-01-14 18:50] | File: rider_reports | Line: N/A | Keyword: DB | Status: Edited | Change: Added status column to rider_reports table via migration.
 
+
+- [2026-01-14 22:00] | File: electron/server.js | Line: 677, 4871 | Keyword: Delivery Refactor | Status: Modified | Change: Consolidated Rider/Delivery order endpoints. Merged pending-pickup logic into available orders to prevent job loss.
+- [2026-01-14 22:00] | File: electron/server.js | Line: 700 | Keyword: Status Logic | Status: Fixed | Change: Updated active-order query to include all intermediate shop statuses (confirmed, preparing, ready) so riders don't lose job visibility.
+- [2026-01-14 22:05] | File: src/LineOrderManagement.jsx | Line: 266, 335 | Keyword: Status Config | Status: Modified | Change: Added 'rider_assigned' and 'picked_up' statuses to POS UI. Enabled 'Confirm' action for assigned orders.
+- [2026-01-14 22:05] | File: f:/RiderAPp/src/pages/Dashboard.jsx | Line: 58, 266 | Keyword: Active Order | Status: Modified | Change: Updated Rider Dashboard to track and display orders through all shop processing stages (confirmed/preparing/ready).

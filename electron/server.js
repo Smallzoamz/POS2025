@@ -677,14 +677,15 @@ async function startServer() {
     // Get Available Orders (Pending Rider)
     app.get('/api/riders/orders/available', async (req, res) => {
         try {
-            // Assuming 'paid' orders that are type 'delivery' and have no rider are available
-            // OR 'confirmed' status if flow differs. Adjusting to 'paid' for now as usually paid before delivery.
-            // Also checking for 'pending_rider' status if used.
-            // Simplified: Order type = 'delivery' AND status = 'paid' AND rider_id IS NULL
+            // Updated Logic:
+            // Order Type = Delivery
+            // Rider ID = NULL (No rider yet)
+            // Status = pending OR confirmed OR preparing OR ready
+            // (Basically any active status that needs a rider)
             const result = await query(`
                 SELECT * FROM line_orders 
                 WHERE order_type = 'delivery' 
-                AND (status = 'paid' OR status = 'confirmed') 
+                AND status IN ('pending', 'confirmed', 'preparing', 'ready') 
                 AND rider_id IS NULL 
                 ORDER BY created_at ASC
             `);
@@ -702,11 +703,18 @@ async function startServer() {
         const { riderId } = req.body;
         try {
             // Check if order is still available
-            const orderRes = await query("SELECT id, customer_lat, customer_lng FROM line_orders WHERE id = $1 AND rider_id IS NULL", [id]);
+            const orderRes = await query("SELECT id, customer_lat, customer_lng, status FROM line_orders WHERE id = $1 AND rider_id IS NULL", [id]);
             if (orderRes.rows.length === 0) {
                 return res.status(400).json({ error: 'Order already taken or invalid' });
             }
             const order = orderRes.rows[0];
+
+            // If status is 'pending', update to 'rider_assigned'
+            // If status is 'confirmed', 'preparing', 'ready', KEEP IT (just assign rider)
+            let newStatus = 'rider_assigned';
+            if (['confirmed', 'preparing', 'ready'].includes(order.status)) {
+                newStatus = order.status; // Preserve shop status
+            }
 
             // Calculate Rider Share
             let riderShare = 20; // Default fallback
@@ -731,15 +739,17 @@ async function startServer() {
 
             const result = await query(
                 `UPDATE line_orders 
-                 SET rider_id = $1, status = 'rider_assigned', 
-                     rider_share = $2, distance_km = $3,
+                 SET rider_id = $1, status = $2, 
+                     rider_share = $3, distance_km = $4,
                      updated_at = CURRENT_TIMESTAMP 
-                 WHERE id = $4 RETURNING *`,
-                [riderId, riderShare, distanceKm, id]
+                 WHERE id = $5 RETURNING *`,
+                [riderId, newStatus, riderShare, distanceKm, id]
             );
 
             // Notify POS
-            io.emit('order-update', { id, status: 'rider_assigned', riderId });
+            io.emit('order-update', { id, status: newStatus, riderId }); // Generic
+            io.emit('line-order-update', { orderId: id, status: newStatus, riderId }); // Specific for LineOrderManagement
+            io.emit('delivery-order-update', { orderId: id, status: newStatus, riderId }); // Specific for Delivery
 
             res.json({ success: true, order: result.rows[0] });
         } catch (err) {
@@ -853,10 +863,12 @@ async function startServer() {
     app.get('/api/riders/:id/active-order', async (req, res) => {
         const { id } = req.params; // riderId
         try {
+            // INCLUDE: rider_assigned, confirmed, preparing, ready, picked_up, delivering
+            // EXCLUDE: pending (not yet assigned), completed, cancelled
             const result = await query(`
                 SELECT * FROM line_orders 
                 WHERE rider_id = $1 
-                AND status IN ('rider_assigned', 'picked_up', 'delivering')
+                AND status IN ('rider_assigned', 'confirmed', 'preparing', 'ready', 'picked_up', 'delivering')
                 ORDER BY created_at DESC 
                 LIMIT 1
             `, [id]);
@@ -4876,7 +4888,10 @@ async function startServer() {
     });
 
     // Get orders pending for Rider pickup
+    // Get orders pending for Rider pickup - DEPRECATED/REDIRECTED
     app.get('/api/delivery-orders/pending-pickup', async (req, res) => {
+        // Redundant - Use /api/riders/orders/available instead for "Available"
+        // Or if this is for ADMIN VIEW of what's ready but not picked up:
         try {
             const ordersRes = await query(`
                 SELECT lo.*, r.name as rider_name
@@ -4884,32 +4899,13 @@ async function startServer() {
                 LEFT JOIN riders r ON lo.rider_id = r.id
                 WHERE lo.order_type = 'delivery' 
                 AND lo.status = 'ready'
+                AND lo.rider_id IS NOT NULL
                 ORDER BY lo.created_at ASC
             `);
-            const orders = ordersRes.rows;
+            // NOTE: Modified to only show assigned-but-waiting-pickup orders, 
+            // as unassigned ones go to 'available'.
 
-            // Fetch settings ONCE for estimation
-            const settingsRes = await query("SELECT key, value FROM settings WHERE key IN ('store_lat', 'store_lng', 'rider_base_fare', 'rider_per_km_rate')");
-            const settings = {};
-            settingsRes.rows.forEach(r => settings[r.key] = r.value);
-            const storeLat = parseFloat(settings.store_lat);
-            const storeLng = parseFloat(settings.store_lng);
-            const baseFare = parseFloat(settings.rider_base_fare || 20);
-            const perKmRate = parseFloat(settings.rider_per_km_rate || 5);
-
-            for (let order of orders) {
-                const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
-                order.items = itemsRes.rows;
-
-                // Estimate Logic
-                if (!order.rider_share && storeLat && storeLng && order.customer_lat && order.customer_lng) {
-                    const dist = calculateDistance(storeLat, storeLng, parseFloat(order.customer_lat), parseFloat(order.customer_lng));
-                    order.rider_share = baseFare + (dist * perKmRate);
-                    order.distance_km = dist;
-                }
-            }
-
-            res.json(orders);
+            res.json(ordersRes.rows);
         } catch (err) {
             console.error(err);
             res.status(500).json({ error: err.message });
