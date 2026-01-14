@@ -3158,6 +3158,11 @@ async function startServer() {
         }
     });
 
+    // Helper: Generate Tracking Token
+    const generateTrackingToken = () => {
+        return 'TRK' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 8).toUpperCase();
+    };
+
     // --- FACEBOOK WEBHOOK ENDPOINTS ---
 
     // 1. Webhook Verification (Handshake)
@@ -3558,10 +3563,13 @@ async function startServer() {
         try {
             await client.query('BEGIN');
 
+            // Generate tracking token for Delivery orders
+            const trackingToken = (order_type === 'delivery') ? generateTrackingToken() : null;
+
             const result = await client.query(
-                `INSERT INTO line_orders (customer_name, contact_number, delivery_address, total_amount, status, order_type, delivery_location) 
-                 VALUES ($1, $2, $3, $4, 'pending', $5, $6) RETURNING id`,
-                [customer_name, contact_number, delivery_address, total_amount, order_type || 'delivery', delivery_location || null]
+                `INSERT INTO line_orders (customer_name, contact_number, delivery_address, total_amount, status, order_type, delivery_location, tracking_token) 
+                 VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7) RETURNING id`,
+                [customer_name, contact_number, delivery_address, total_amount, order_type || 'delivery', delivery_location || null, trackingToken]
             );
             const lineOrderId = result.rows[0].id;
 
@@ -4828,10 +4836,7 @@ async function startServer() {
     // === DELIVERY SYSTEM API ===
     // ============================================
 
-    // Generate unique tracking token
-    const generateTrackingToken = () => {
-        return 'TRK' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 8).toUpperCase();
-    };
+
 
     // Get Delivery Settings (minimum order, delivery fee, etc.)
     app.get('/api/delivery/settings', async (req, res) => {

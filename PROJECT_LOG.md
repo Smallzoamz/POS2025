@@ -252,3 +252,5 @@
 - [2026-01-14 22:00] | File: electron/server.js | Line: 700 | Keyword: Status Logic | Status: Fixed | Change: Updated active-order query to include all intermediate shop statuses (confirmed, preparing, ready) so riders don't lose job visibility.
 - [2026-01-14 22:05] | File: src/LineOrderManagement.jsx | Line: 266, 335 | Keyword: Status Config | Status: Modified | Change: Added 'rider_assigned' and 'picked_up' statuses to POS UI. Enabled 'Confirm' action for assigned orders.
 - [2026-01-14 22:05] | File: f:/RiderAPp/src/pages/Dashboard.jsx | Line: 58, 266 | Keyword: Active Order | Status: Modified | Change: Updated Rider Dashboard to track and display orders through all shop processing stages (confirmed/preparing/ready).
+
+- [2026-01-14 22:15] | File: electron/server.js | Line: 3562, 4831 | Keyword: Bug Fix | Status: Fixed | Change: Moved generateTrackingToken to global scope and implemented tracking_token generation in POST /api/line_orders manual creation endpoint to fix 'Order Not Found' issue.
