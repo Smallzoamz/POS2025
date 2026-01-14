@@ -33,7 +33,11 @@ const Settings = () => {
         facebook_page_id: '',
         facebook_verify_token: '',
         website_sync_url: '',
-        website_sync_secret: ''
+        website_sync_secret: '',
+        rider_base_fare: '20',
+        rider_per_km_rate: '5',
+        store_lat: '13.7563',
+        store_lng: '100.5018',
     });
     const [network, setNetwork] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -93,6 +97,8 @@ const Settings = () => {
         { id: 'payment', label: 'การเงิน', icon: '💳' },
         { id: 'line', label: 'LINE OA', icon: <FaLine className="text-lg" /> },
         { id: 'facebook', label: 'Facebook', icon: <FaFacebook className="text-lg" /> },
+        { id: 'facebook', label: 'Facebook', icon: <FaFacebook className="text-lg" /> },
+        { id: 'rider', label: 'Rider System', icon: '🛵' },
         { id: 'takeaway', label: 'Takeaway', icon: '📸' },
     ];
 
@@ -447,6 +453,87 @@ const Settings = () => {
                                 <div className="animate-slide-up-fade">
                                     <FacebookConnectSettings settings={settings} handleChange={handleChange} />
                                 </div>
+                            )}
+
+                            {/* Section: Rider System */}
+                            {activeTab === 'rider' && (
+                                <section className="space-y-6 animate-slide-up-fade">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-green-100 text-green-600 flex items-center justify-center text-lg">🛵</div>
+                                        <div>
+                                            <h3 className="font-bold text-slate-900 leading-none">ระบบไรเดอร์ (Rider System)</h3>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Delivery Rates & Location</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="tasty-card p-8 space-y-8">
+                                        {/* Rates Section */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Base Fare (ค่าเริ่มต้น)</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="number"
+                                                        name="rider_base_fare"
+                                                        value={settings.rider_base_fare || '20'}
+                                                        onChange={handleChange}
+                                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 pl-10 focus:bg-white focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none font-medium text-slate-900 transition-all text-sm"
+                                                    />
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">💵</span>
+                                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">THB</span>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Per KM Rate (ค่าวิ่งต่อกิโล)</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="number"
+                                                        name="rider_per_km_rate"
+                                                        value={settings.rider_per_km_rate || '5'}
+                                                        onChange={handleChange}
+                                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 pl-10 focus:bg-white focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none font-medium text-slate-900 transition-all text-sm"
+                                                    />
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🛣️</span>
+                                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">THB/km</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Store Location Section */}
+                                        <div className="pt-6 border-t border-slate-100">
+                                            <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><span>📍</span> Store Location (พิกัดร้าน)</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Latitude</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            name="store_lat"
+                                                            value={settings.store_lat || ''}
+                                                            onChange={handleChange}
+                                                            className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-mono font-medium text-slate-900 text-sm"
+                                                            placeholder="13.XXXXXX"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Longitude</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            name="store_lng"
+                                                            value={settings.store_lng || ''}
+                                                            onChange={handleChange}
+                                                            className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-mono font-medium text-slate-900 text-sm"
+                                                            placeholder="100.XXXXXX"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 mt-3 italic">* ใช้สำหรับคำนวณระยะทางจากร้านไปบ้านลูกค้า (Google Maps Coordinates)</p>
+                                        </div>
+                                    </div>
+                                </section>
                             )}
 
                             {/* Section 5: Takeaway QR Code */}

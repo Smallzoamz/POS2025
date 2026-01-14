@@ -799,6 +799,34 @@ const initDatabasePG = async () => {
             console.error('Migration 16 error:', migrationErr16.message);
         }
 
+        // --- MIGRATION 21: Rider Income System (Option C) ---
+        try {
+            console.log('📦 Running Migration 21: Rider Income System...');
+            // Add columns to line_orders
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS rider_share DECIMAL(12,2) DEFAULT 0`);
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS platform_fee DECIMAL(12,2) DEFAULT 0`);
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS distance_km DECIMAL(10,2) DEFAULT 0`);
+
+            // Add default settings for Rider Calc
+            const settingsToCheck = [
+                { key: 'rider_base_fare', value: '20' },
+                { key: 'rider_per_km_rate', value: '5' },
+                { key: 'store_lat', value: '13.7563' }, // Bangkok Default
+                { key: 'store_lng', value: '100.5018' } // Bangkok Default
+            ];
+
+            for (const s of settingsToCheck) {
+                const res = await client.query("SELECT COUNT(*) FROM settings WHERE key = $1", [s.key]);
+                if (res.rows[0].count == 0) {
+                    await client.query("INSERT INTO settings (key, value) VALUES ($1, $2)", [s.key, s.value]);
+                    console.log(`+ Added setting: ${s.key}`);
+                }
+            }
+            console.log('✅ Migration 21: Rider Income System completed');
+        } catch (migrationErr21) {
+            console.error('Migration 21 error:', migrationErr21.message);
+        }
+
         // --- MIGRATION 17: Global Option Recipes (Ingredient deduction for global options) ---
         try {
             console.log('📦 Running Migration 17: global_option_recipes...');

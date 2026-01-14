@@ -9,6 +9,7 @@ const RiderDashboard = () => {
     const { user } = useAuth();
     const [pendingOrders, setPendingOrders] = useState([]);
     const [myDeliveries, setMyDeliveries] = useState([]);
+    const [earnings, setEarnings] = useState({ today: {}, all_time: {} });
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('pending'); // pending, my
     const [currentLocation, setCurrentLocation] = useState(null);
@@ -23,12 +24,14 @@ const RiderDashboard = () => {
     // Load orders
     const loadOrders = useCallback(async () => {
         try {
-            const [pendingRes, myRes] = await Promise.all([
+            const [pendingRes, myRes, statsRes] = await Promise.all([
                 fetch('/api/delivery-orders/pending-pickup'),
-                fetch(`/api/delivery-orders/my-deliveries/${user?.id}`)
+                fetch(`/api/delivery-orders/my-deliveries/${user?.id}`),
+                fetch(`/api/rider/stats/${user?.id}`)
             ]);
             setPendingOrders(await pendingRes.json());
             setMyDeliveries(await myRes.json());
+            setEarnings(await statsRes.json());
         } catch (err) {
             console.error('Failed to load orders:', err);
         }
@@ -203,7 +206,15 @@ const RiderDashboard = () => {
         const dest = order.latitude && order.longitude
             ? `${order.latitude},${order.longitude}`
             : encodeURIComponent(order.delivery_address || '');
-        window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`, '_blank');
+
+        let url = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+
+        // Lock origin to Store if available (as requested)
+        if (settings.store_lat && settings.store_lng) {
+            url += `&origin=${settings.store_lat},${settings.store_lng}`;
+        }
+
+        window.open(url, '_blank');
     };
 
     const statusConfig = {
@@ -237,6 +248,31 @@ const RiderDashboard = () => {
                             ยินดีต้อนรับกลับมาค่ะคุณ <span className="text-slate-900 font-black">{user?.name || 'Rider'}</span>
                             {isTracking && <span className="ml-3 px-3 py-1 bg-green-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse">📍 GPS Tracking Live</span>}
                         </p>
+                    </div>
+
+                    {/* Compact Earnings Widget */}
+                    <div className="flex bg-white p-2 rounded-[24px] shadow-sm border border-slate-100 gap-2">
+                        <div className="px-5 py-2 bg-emerald-50 rounded-2xl flex items-center gap-3 border border-emerald-100">
+                            <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center text-lg shadow-lg shadow-emerald-500/20">💰</div>
+                            <div>
+                                <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest leading-none mb-0.5">Today's Income</p>
+                                <p className="text-xl font-heading font-black text-emerald-700 leading-none">฿{(parseFloat(earnings.today?.today_income) || 0).toLocaleString()}</p>
+                            </div>
+                        </div>
+                        <div className="px-5 py-2 bg-blue-50 rounded-2xl flex items-center gap-3 border border-blue-100">
+                            <div className="text-2xl">🛣️</div>
+                            <div>
+                                <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest leading-none mb-0.5">Distance</p>
+                                <p className="text-xl font-heading font-black text-blue-700 leading-none">{(parseFloat(earnings.today?.today_distance) || 0).toFixed(1)} <span className="text-xs text-blue-400 font-bold">km</span></p>
+                            </div>
+                        </div>
+                        <div className="px-5 py-2 bg-slate-50 rounded-2xl flex items-center gap-3 border border-slate-100">
+                            <div className="text-2xl">📦</div>
+                            <div>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Completed</p>
+                                <p className="text-xl font-heading font-black text-slate-700 leading-none">{earnings.today?.today_jobs || 0} <span className="text-xs text-slate-400 font-bold">Jobs</span></p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -284,6 +320,19 @@ const RiderDashboard = () => {
                                         </div>
                                     </div>
                                     <div className="p-6 space-y-5">
+                                        {/* Estimated Income Badge */}
+                                        {order.rider_share > 0 && (
+                                            <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-2xl border border-emerald-100/50">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-lg">💰</span>
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest leading-none">Est. Income</p>
+                                                        {order.distance_km > 0 && <span className="text-[10px] font-bold text-slate-400">({order.distance_km} km)</span>}
+                                                    </div>
+                                                </div>
+                                                <p className="text-xl font-heading font-black text-emerald-600">+{parseFloat(order.rider_share).toLocaleString()}฿</p>
+                                            </div>
+                                        )}
                                         <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100/50">
                                             <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1.5 flex items-center gap-2"><span>📍</span> SHIPPING ADDRESS</p>
                                             <p className="text-sm font-bold text-slate-600 leading-relaxed line-clamp-2">{order.delivery_address}</p>
@@ -339,6 +388,20 @@ const RiderDashboard = () => {
                                     </div>
 
                                     <div className="p-6 space-y-5">
+                                        {/* Income Badge */}
+                                        {order.rider_share > 0 && (
+                                            <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-2xl border border-emerald-100/50">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-lg">💰</span>
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest leading-none">Rider Income</p>
+                                                        {order.distance_km > 0 && <span className="text-[10px] font-bold text-slate-400">({order.distance_km} km)</span>}
+                                                    </div>
+                                                </div>
+                                                <p className="text-xl font-heading font-black text-emerald-600">+{parseFloat(order.rider_share).toLocaleString()}฿</p>
+                                            </div>
+                                        )}
+
                                         <div className="p-4 bg-white border border-slate-100 rounded-3xl space-y-3 shadow-sm">
                                             <div className="flex items-center justify-between border-b border-slate-50 pb-2">
                                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">📍 Destination</p>
@@ -407,6 +470,8 @@ const RiderDashboard = () => {
                         )
                     )}
                 </div>
+
+
 
                 {/* Floating Refresh */}
                 <button
@@ -540,7 +605,7 @@ const RiderDashboard = () => {
                     transform: translateY(-8px);
                 }
             `}</style>
-        </MasterLayout>
+        </MasterLayout >
     );
 };
 

@@ -39,6 +39,21 @@ const getLocalIp = () => {
     return bestIp;
 };
 
+// Utility: Haversine Distance (in KM)
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+    const toRad = (value) => (value * Math.PI) / 180;
+    const R = 6371; // Earth radius in km
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return parseFloat((R * c).toFixed(2));
+};
+
 async function startServer() {
     // Initialize PostgreSQL (Primary)
     try {
@@ -2613,11 +2628,11 @@ async function startServer() {
                 const manualBonus = adjustments.filter(a => a.type === 'bonus').reduce((sum, a) => sum + parseFloat(a.amount || 0), 0);
                 const manualDeduction = adjustments.filter(a => a.type === 'deduction').reduce((sum, a) => sum + parseFloat(a.amount || 0), 0);
 
-                // Rider Bonus: 5 Baht per completed order
+                // Rider Bonus: Actual Income (Sum of rider_share)
                 let riderBonus = 0;
                 let completedDeliveries = 0;
                 if (user.can_deliver) {
-                    let orderSql = `SELECT COUNT(*) as count FROM line_orders WHERE rider_id = $1 AND status = 'completed'`;
+                    let orderSql = `SELECT COUNT(*) as count, SUM(rider_share) as total_income FROM line_orders WHERE rider_id = $1 AND status = 'completed'`;
                     const orderParams = [user.id];
                     if (startDate && endDate) {
                         orderSql += " AND updated_at::date BETWEEN $2::date AND $3::date";
@@ -2625,7 +2640,7 @@ async function startServer() {
                     }
                     const orderRes = await query(orderSql, orderParams);
                     completedDeliveries = parseInt(orderRes.rows[0].count || 0);
-                    riderBonus = completedDeliveries * 5;
+                    riderBonus = parseFloat(orderRes.rows[0].total_income || 0);
                 }
 
                 const totalBonus = manualBonus + holidayBonus + riderBonus;
@@ -4495,9 +4510,25 @@ async function startServer() {
             `);
             const orders = ordersRes.rows;
 
+            // Fetch settings ONCE for estimation
+            const settingsRes = await query("SELECT key, value FROM settings WHERE key IN ('store_lat', 'store_lng', 'rider_base_fare', 'rider_per_km_rate')");
+            const settings = {};
+            settingsRes.rows.forEach(r => settings[r.key] = r.value);
+            const storeLat = parseFloat(settings.store_lat);
+            const storeLng = parseFloat(settings.store_lng);
+            const baseFare = parseFloat(settings.rider_base_fare || 20);
+            const perKmRate = parseFloat(settings.rider_per_km_rate || 5);
+
             for (let order of orders) {
                 const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
                 order.items = itemsRes.rows;
+
+                // Estimate Logic
+                if (!order.rider_share && storeLat && storeLng && order.customer_lat && order.customer_lng) {
+                    const dist = calculateDistance(storeLat, storeLng, parseFloat(order.customer_lat), parseFloat(order.customer_lng));
+                    order.rider_share = baseFare + (dist * perKmRate);
+                    order.distance_km = dist;
+                }
             }
 
             res.json(orders);
@@ -4519,12 +4550,64 @@ async function startServer() {
             `, [riderId]);
             const orders = ordersRes.rows;
 
+            // Fetch settings ONCE for estimation
+            const settingsRes = await query("SELECT key, value FROM settings WHERE key IN ('store_lat', 'store_lng', 'rider_base_fare', 'rider_per_km_rate')");
+            const settings = {};
+            settingsRes.rows.forEach(r => settings[r.key] = r.value);
+            const storeLat = parseFloat(settings.store_lat);
+            const storeLng = parseFloat(settings.store_lng);
+            const baseFare = parseFloat(settings.rider_base_fare || 20);
+            const perKmRate = parseFloat(settings.rider_per_km_rate || 5);
+
             for (let order of orders) {
                 const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
                 order.items = itemsRes.rows;
+
+                // Estimate Logic
+                if (!order.rider_share && storeLat && storeLng && order.customer_lat && order.customer_lng) {
+                    const dist = calculateDistance(storeLat, storeLng, parseFloat(order.customer_lat), parseFloat(order.customer_lng));
+                    order.rider_share = baseFare + (dist * perKmRate);
+                    order.distance_km = dist;
+                }
             }
 
             res.json(orders);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Get Rider Stats (Earnings)
+    app.get('/api/rider/stats/:riderId', async (req, res) => {
+        const { riderId } = req.params;
+        try {
+            // Summary All Time
+            const allTimeRes = await query(`
+                SELECT 
+                    COUNT(*) as total_jobs,
+                    SUM(rider_share) as total_income,
+                    SUM(distance_km) as total_distance
+                FROM line_orders 
+                WHERE rider_id = $1 AND status = 'completed'
+            `, [riderId]);
+
+            // Summary Today
+            const todayRes = await query(`
+                SELECT 
+                    COUNT(*) as today_jobs,
+                    SUM(rider_share) as today_income,
+                    SUM(distance_km) as today_distance
+                FROM line_orders 
+                WHERE rider_id = $1 
+                AND status = 'completed'
+                AND delivered_at::date = CURRENT_DATE
+            `, [riderId]);
+
+            res.json({
+                all_time: allTimeRes.rows[0],
+                today: todayRes.rows[0]
+            });
         } catch (err) {
             console.error(err);
             res.status(500).json({ error: err.message });
@@ -4625,21 +4708,55 @@ async function startServer() {
         const { id } = req.params;
         const { paymentMethod } = req.body;
         try {
+            // 1. Fetch Order & Settings & Calculate Income
+            const orderRes = await query("SELECT customer_lat, customer_lng, delivery_fee FROM line_orders WHERE id = $1", [id]);
+            const order = orderRes.rows[0];
+
+            let riderShare = 0;
+            let distance = 0;
+            let platformFee = 0;
+
+            if (order && order.customer_lat && order.customer_lng) {
+                // Get Settings
+                const settingsRes = await query("SELECT key, value FROM settings WHERE key IN ('store_lat', 'store_lng', 'rider_base_fare', 'rider_per_km_rate')");
+                const settings = {};
+                settingsRes.rows.forEach(r => settings[r.key] = r.value);
+
+                const storeLat = parseFloat(settings.store_lat);
+                const storeLng = parseFloat(settings.store_lng);
+                const baseFare = parseFloat(settings.rider_base_fare || 20);
+                const perKmRate = parseFloat(settings.rider_per_km_rate || 5);
+
+                if (storeLat && storeLng) {
+                    distance = calculateDistance(storeLat, storeLng, parseFloat(order.customer_lat), parseFloat(order.customer_lng));
+                    riderShare = baseFare + (distance * perKmRate);
+                    // Cap rider share to not exceed total delivery fee? Or can it exceed?
+                    // Usually Rider Income is independent of Customer Delivery Fee (Subsidized or Marked up)
+                    // Let's assume independent calculation.
+                    // But Platform Fee = Delivery Fee (collected from customer) - Rider Share (paid to rider)
+                    // If negative, it means platform subsidizes the delivery.
+                    platformFee = (parseFloat(order.delivery_fee) || 0) - riderShare;
+                }
+            }
+
             await query(`
                 UPDATE line_orders 
                 SET status = 'completed', 
                     payment_method = $1,
                     delivered_at = CURRENT_TIMESTAMP,
-                    updated_at = CURRENT_TIMESTAMP 
-                WHERE id = $2
-            `, [paymentMethod || 'cash', id]);
+                    updated_at = CURRENT_TIMESTAMP,
+                    rider_share = $2,
+                    platform_fee = $3,
+                    distance_km = $4
+                WHERE id = $5
+            `, [paymentMethod || 'cash', riderShare, platformFee, distance, id]);
 
             // Earn Loyalty Points (Fetch customer info first)
-            const orderRes = await query("SELECT customer_id, total_amount FROM line_orders WHERE id = $1", [id]);
-            const order = orderRes.rows[0];
-            if (order && order.customer_id) {
+            const orderForPointsRes = await query("SELECT customer_id, total_amount FROM line_orders WHERE id = $1", [id]);
+            const orderForPoints = orderForPointsRes.rows[0];
+            if (orderForPoints && orderForPoints.customer_id) {
                 console.log(`💎 Awarding points for delivered LINE order: #${id}`);
-                await earnLoyaltyPoints(order.customer_id, order.total_amount, null, id);
+                await earnLoyaltyPoints(orderForPoints.customer_id, orderForPoints.total_amount, null, id);
             }
 
             io.emit('delivery-order-update', { orderId: id, status: 'completed' });
@@ -4648,9 +4765,9 @@ async function startServer() {
             // Notification: Delivered successfully
             createNotification(
                 `✅ ส่งสำเร็จ #${id}`,
-                `ลูกค้าได้รับอาหารเรียบร้อยแล้ว (฿${order?.total_amount || 0})`,
+                `ลูกค้าได้รับอาหารเรียบร้อยแล้ว (฿${orderForPoints?.total_amount || 0})`,
                 'success',
-                { orderId: id, status: 'completed', amount: order?.total_amount }
+                { orderId: id, status: 'completed', amount: orderForPoints?.total_amount }
             );
 
             res.json({ success: true });

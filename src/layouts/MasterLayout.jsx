@@ -22,7 +22,8 @@ const MasterLayout = ({ children }) => {
 
     // Permission Helpers
     const canViewDashboard = isOwner || isAdmin;
-    const canViewTables = isOwner || isAdmin || isStaff;
+    const canViewTablePlan = isOwner || isAdmin || isStaff;
+    const canManageTables = isOwner || isAdmin; // Exclude Staff
     const canViewKitchen = isOwner || isAdmin || isKitchen;
 
     // Management
@@ -195,7 +196,7 @@ const MasterLayout = ({ children }) => {
                         {canViewDashboard && (
                             <NavLink to="/dashboard" icon="📊" label="Dashboard" active={isActive('/dashboard')} onClick={() => setIsSidebarOpen(false)} />
                         )}
-                        {canViewTables && (
+                        {canViewTablePlan && (
                             <NavLink to="/tables" icon="🪑" label="Table Plan" active={isActive('/tables')} onClick={() => setIsSidebarOpen(false)} />
                         )}
                         {canViewKitchen && (
@@ -220,7 +221,7 @@ const MasterLayout = ({ children }) => {
                         {canViewStock && (
                             <NavLink to="/stock" icon="📦" label="Stock Management" active={isActive('/stock')} onClick={() => setIsSidebarOpen(false)} />
                         )}
-                        {canViewTables && (
+                        {canManageTables && (
                             <NavLink to="/tables-manage" icon="🗂️" label="Table Management" active={isActive('/tables-manage')} onClick={() => setIsSidebarOpen(false)} />
                         )}
                         {(user.role === 'owner' || user.role === 'admin') && (
