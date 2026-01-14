@@ -852,7 +852,10 @@ const initDatabasePG = async () => {
         bank_account TEXT,
         phone TEXT,
         status TEXT DEFAULT 'pending', --pending, approved, suspended
-                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        vehicle_plate TEXT,
+        vehicle_type TEXT,
+        profile_pic TEXT,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     )
     `);
@@ -873,6 +876,19 @@ const initDatabasePG = async () => {
             console.log('✅ Rider Location columns migration completed');
         } catch (err) {
             console.error('Rider Location migration error:', err.message);
+        }
+
+        // --- MIGRATION: Rider Vehicle Details ---
+        try {
+            await client.query(`
+                ALTER TABLE riders 
+                ADD COLUMN IF NOT EXISTS vehicle_plate TEXT,
+                ADD COLUMN IF NOT EXISTS vehicle_type TEXT,
+                ADD COLUMN IF NOT EXISTS profile_pic TEXT
+            `);
+            console.log('✅ Rider Vehicle columns migration completed');
+        } catch (err) {
+            console.error('Rider Vehicle migration error:', err.message);
         }
 
         // --- MIGRATION 21: Rider Income System (Option C) ---

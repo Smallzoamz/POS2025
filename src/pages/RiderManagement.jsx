@@ -9,7 +9,7 @@ export default function RiderManagement() {
     const fetchRiders = async () => {
         try {
             const res = await api.get('/admin/riders');
-            setRiders(res);
+            setRiders(Array.isArray(res) ? res : []);
         } catch (error) {
             console.error(error);
         } finally {
