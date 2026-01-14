@@ -254,3 +254,5 @@
 - [2026-01-14 22:05] | File: f:/RiderAPp/src/pages/Dashboard.jsx | Line: 58, 266 | Keyword: Active Order | Status: Modified | Change: Updated Rider Dashboard to track and display orders through all shop processing stages (confirmed/preparing/ready).
 
 - [2026-01-14 22:15] | File: electron/server.js | Line: 3562, 4831 | Keyword: Bug Fix | Status: Fixed | Change: Moved generateTrackingToken to global scope and implemented tracking_token generation in POST /api/line_orders manual creation endpoint to fix 'Order Not Found' issue.
+
+- [2026-01-14 22:38] | File: electron/server.js | Line: 4312 | Keyword: Bug Fix | Status: Fixed | Change: Fixed Missing Parameter in SQL Insert for /api/public/line-orders. Added trackingToken to VALUES list to ensure digital ordering works.
