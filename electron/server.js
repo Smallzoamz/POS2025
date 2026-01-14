@@ -5162,7 +5162,7 @@ async function startServer() {
         try {
             const orderRes = await query(`
                 SELECT 
-                    lo.id, lo.status, lo.customer_name, lo.delivery_address,
+                    lo.id, lo.status, lo.customer_name, lo.customer_address as delivery_address,
                     lo.rider_lat, lo.rider_lng, lo.customer_lat, lo.customer_lng,
                     lo.total_amount, lo.delivery_fee, lo.created_at, lo.updated_at,
                     lo.delivery_started_at, lo.delivered_at, lo.estimated_delivery_time,

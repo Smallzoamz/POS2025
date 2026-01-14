@@ -256,3 +256,5 @@
 - [2026-01-14 22:15] | File: electron/server.js | Line: 3562, 4831 | Keyword: Bug Fix | Status: Fixed | Change: Moved generateTrackingToken to global scope and implemented tracking_token generation in POST /api/line_orders manual creation endpoint to fix 'Order Not Found' issue.
 
 - [2026-01-14 22:38] | File: electron/server.js | Line: 4312 | Keyword: Bug Fix | Status: Fixed | Change: Fixed Missing Parameter in SQL Insert for /api/public/line-orders. Added trackingToken to VALUES list to ensure digital ordering works.
+
+- [2026-01-14 22:45] | File: electron/server.js | Line: 5160 | Keyword: Bug Fix | Status: Fixed | Change: Fixed Schema Mismatch in Tracking API. Renamed delivery_address to customer_address in SQL Select.
