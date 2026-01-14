@@ -258,3 +258,7 @@
 - [2026-01-14 22:38] | File: electron/server.js | Line: 4312 | Keyword: Bug Fix | Status: Fixed | Change: Fixed Missing Parameter in SQL Insert for /api/public/line-orders. Added trackingToken to VALUES list to ensure digital ordering works.
 
 - [2026-01-14 22:45] | File: electron/server.js | Line: 5160 | Keyword: Bug Fix | Status: Fixed | Change: Fixed Schema Mismatch in Tracking API. Renamed delivery_address to customer_address in SQL Select.
+
+- [2026-01-14 22:55] | File: src/pages/CustomerTracking.jsx | Line: 160 | Keyword: UI Fix | Status: Fixed | Change: Updated Tracking Page to show Rider Info immediately when rider accepts (bypassing shop confirmation wait).
+
+- [2026-01-14 23:30] | File: electron/server.js | Line: 762, 4634 | Keyword: Status Logic | Status: Fixed | Change: Implemented 5s auto-delay for picked_up -> delivering and added socket events for Kitchen status updates.

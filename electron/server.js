@@ -782,7 +782,36 @@ async function startServer() {
             }
 
             // Notify POS
-            io.emit('order-update', { id, status, riderId });
+            io.emit('order-update', { id, status, riderId }); // Generic
+            io.emit('line-order-update', { orderId: id, status, riderId }); // Line Manager
+            io.emit('delivery-order-update', { orderId: id, status, riderId }); // Tracking Page
+
+            // Special Logic: If status is 'picked_up', automatically switch to 'delivering' after 5 seconds
+            if (status === 'picked_up') {
+                setTimeout(async () => {
+                    try {
+                        console.log(`🚚 Auto-updating order #${id} to 'delivering' after 5s delay...`);
+                        await query("UPDATE line_orders SET status = 'delivering', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
+
+                        // Notify everyone again
+                        io.emit('order-update', { id, status: 'delivering', riderId });
+                        io.emit('line-order-update', { orderId: id, status: 'delivering', riderId });
+                        io.emit('delivery-order-update', { orderId: id, status: 'delivering', riderId });
+
+                        // Optional Notification
+                        /*
+                        createNotification(
+                            `🚚 ไรเดอร์กำลังเดินทาง #${id}`,
+                            `สินค้าออกจากร้านแล้ว กำลังมุ่งหน้าไปหาลูกค้า`,
+                            'delivery',
+                            { orderId: id, status: 'delivering' }
+                        );
+                        */
+                    } catch (timeoutErr) {
+                        console.error(`Failed to auto-update order #${id} to delivering:`, timeoutErr);
+                    }
+                }, 5000); // 5 seconds
+            }
 
             res.json({ success: true, order: result.rows[0] });
         } catch (err) {
@@ -4616,6 +4645,7 @@ async function startServer() {
         try {
             await query("UPDATE line_orders SET status = 'confirmed', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
             io.emit('line-order-update', { orderId: id, status: 'confirmed' });
+            io.emit('delivery-order-update', { orderId: id, status: 'confirmed' }); // Update Tracking Page
 
             // Notification: Order confirmed
             const orderRes = await query("SELECT customer_name, order_type FROM line_orders WHERE id = $1", [id]);
@@ -4640,6 +4670,7 @@ async function startServer() {
         try {
             await query("UPDATE line_orders SET status = 'preparing', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
             io.emit('line-order-update', { orderId: id, status: 'preparing' });
+            io.emit('delivery-order-update', { orderId: id, status: 'preparing' }); // Update Tracking Page
 
             // Notification: Kitchen preparing
             createNotification(
@@ -4662,6 +4693,7 @@ async function startServer() {
         try {
             await query("UPDATE line_orders SET status = 'ready', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
             io.emit('line-order-update', { orderId: id, status: 'ready' });
+            io.emit('delivery-order-update', { orderId: id, status: 'ready' }); // Update Tracking Page
 
             // Notification: Order ready for pickup/delivery
             createNotification(
