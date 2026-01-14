@@ -202,8 +202,8 @@ const MasterLayout = ({ children }) => {
                         {canViewKitchen && (
                             <NavLink to="/kitchen" icon="🍳" label="Kitchen Display" active={isActive('/kitchen')} onClick={() => setIsSidebarOpen(false)} />
                         )}
-                        {canViewRider && (
-                            <NavLink to="/rider" icon="🏍️" label="Rider Dashboard" active={isActive('/rider')} onClick={() => setIsSidebarOpen(false)} />
+                        {(isOwner || isAdmin) && (
+                            null
                         )}
                     </div>
 
@@ -227,6 +227,7 @@ const MasterLayout = ({ children }) => {
                         {(user.role === 'owner' || user.role === 'admin') && (
                             <NavLink to="/admin/promotions" icon="🎁" label="Promotions & Rewards" active={isActive('/admin/promotions')} onClick={() => setIsSidebarOpen(false)} />
                         )}
+                        <NavLink to="/rider-reports" icon="📝" label="Rider Reports" active={isActive('/rider-reports')} onClick={() => setIsSidebarOpen(false)} />
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-slate-50 px-5">

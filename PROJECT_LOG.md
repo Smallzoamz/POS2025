@@ -229,3 +229,19 @@
 - \[2026-01-13 19:10] | File: electron/server.js | Line: 4163 | Keyword: Takeaway Payment Status | Status: Fixed | Change: Changed Takeaway order completion status from 'completed' to 'paid' to ensure visibility in Sales History.
 - \[2026-01-13 19:20] | File: electron/db_pg.js | Line: 990 | Keyword: Migration 28 | Status: Created | Change: Added Migration 28 to create indexes on critical columns (created_at, status, phone, customer_id) for orders, line_orders, and customers tables.
 - \[2026-01-13 19:50] | File: src/Settings.jsx | Line: 66 | Keyword: Save Delay | Status: Optimized | Change: Converted sequential API calls to parallel `Promise.all` in `handleSave` to reduce waiting time significantly.
+- \[2026-01-14 15:00] | File: src/Settings.jsx | Line: 446 | Keyword: Rider System Tab | Status: Edited | Change: Added 'Rider System' tab and configuration inputs for Base Fare, Per KM Rate, and Store Location.
+- \[2026-01-14 15:05] | File: src/RiderDashboard.jsx | Line: 231 | Keyword: Earnings Widget | Status: Modified | Change: Removed Earnings Tab. Added compact Header Widget showing Today's Income, Distance, and Jobs.
+- \[2026-01-14 15:05] | File: src/RiderDashboard.jsx | Line: 202 | Keyword: Map Origin | Status: Fixed | Change: Locked Google Maps navigation origin to the configured 'Store Location' (settings.store_lat/lng).
+- \[2026-01-14 15:10] | File: electron/server.js | Line: 4561 | Keyword: /api/rider/stats | Status: Created | Change: Added API to fetch rider statistics (income, distance, jobs) for the dashboard widget.
+- \[2026-01-14 15:15] | File: electron/server.js | Line: 2631 | Keyword: Payroll Logic | Status: Modified | Change: Updated Payroll Summary to calculate Rider Bonus using actual 'rider_share' sum instead of fixed 5 THB count.
+- \[2026-01-14 15:25] | File: src/layouts/MasterLayout.jsx | Line: 25, 223 | Keyword: Menu Permissions | Status: Modified | Change: Split 'canViewTables' and 'canManageTables'. Hidden 'Table Management' menu for Staff role.
+- \[2026-01-14 18:30] | File: electron/server.js | Line: 652 | Keyword: Admin Riders | Status: Edited | Change: Included vehicle_plate and vehicle_type in admin riders list.
+- \[2026-01-14 18:32] | File: src/pages/RiderManagement.jsx | Line: 53 | Keyword: UI | Status: Edited | Change: Added Vehicle Info column to rider table.
+- \[2026-01-14 18:34] | File: riders table | Line: N/A | Keyword: DB | Status: Edited | Change: Added vehicle_plate and vehicle_type columns via migration.
+- \[2026-01-14 18:36] | File: src/contexts/AuthContext.jsx | Line: 54 | Keyword: Auth | Status: Edited | Change: Added updateRider function to sync local state for Rider App.
+- \[2026-01-14 18:36] | File: src/pages/Profile.jsx | Line: 92 | Keyword: UI | Status: Edited | Change: Switched reload to updateRider for instant profile pic update in Rider App.
+- \[2026-01-14 18:42] | File: electron/server.js | Line: 931 | Keyword: API | Status: Edited | Change: Fixed rider name link in reports SQL to retrieve real rider name instead of "Owner".
+- \[2026-01-14 18:43] | File: src/pages/RiderReports.jsx | Line: 78 | Keyword: UI | Status: Edited | Change: Fixed hover jitter on details and added status update select dropdown.
+- \[2026-01-14 18:44] | File: electron/server.js | Line: 943 | Keyword: API | Status: Created | Change: Added report status update endpoint (PUT /api/riders/reports/:id/status).
+- \[2026-01-14 18:50] | File: rider_reports | Line: N/A | Keyword: DB | Status: Edited | Change: Added status column to rider_reports table via migration.
+

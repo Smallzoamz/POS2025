@@ -38,6 +38,7 @@ const Settings = () => {
         rider_per_km_rate: '5',
         store_lat: '13.7563',
         store_lng: '100.5018',
+        rider_app_url: '',
     });
     const [network, setNetwork] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -97,8 +98,8 @@ const Settings = () => {
         { id: 'payment', label: 'การเงิน', icon: '💳' },
         { id: 'line', label: 'LINE OA', icon: <FaLine className="text-lg" /> },
         { id: 'facebook', label: 'Facebook', icon: <FaFacebook className="text-lg" /> },
-        { id: 'facebook', label: 'Facebook', icon: <FaFacebook className="text-lg" /> },
         { id: 'rider', label: 'Rider System', icon: '🛵' },
+        { id: 'connect', label: 'Rider Connect', icon: '📡' },
         { id: 'takeaway', label: 'Takeaway', icon: '📸' },
     ];
 
@@ -600,6 +601,77 @@ const Settings = () => {
                                     </div>
                                 </section>
                             )}
+
+                            {/* Section: Rider Connect (Magic Setup) */}
+                            {activeTab === 'connect' && (
+                                <section className="space-y-6 animate-slide-up-fade">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-lg">📡</div>
+                                        <div>
+                                            <h3 className="font-bold text-slate-900 leading-none">เชื่อมต่อแอปไรเดอร์ (Rider Connect)</h3>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">SaaS Magic Link & QR Setup</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="tasty-card p-8 space-y-8">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                            <div className="space-y-6">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Rider App URL (Vercel)</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            name="rider_app_url"
+                                                            placeholder="https://your-rider-app.vercel.app"
+                                                            value={settings.rider_app_url || ''}
+                                                            onChange={handleChange}
+                                                            className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 pl-10 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium text-slate-900 transition-all text-sm"
+                                                        />
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs text-blue-500">🔗</span>
+                                                    </div>
+                                                    <p className="text-[9px] text-slate-400 italic">ใส่ URL ของ RiderApp ที่ Deploy บน Vercel เพื่อใช้สร้าง Magic Link</p>
+                                                </div>
+
+                                                <div className="p-5 bg-blue-50 rounded-2xl border border-blue-100 space-y-3">
+                                                    <div className="flex items-center gap-2 text-blue-700">
+                                                        <span className="text-sm">💡</span>
+                                                        <span className="text-xs font-bold uppercase tracking-wider">How to connect?</span>
+                                                    </div>
+                                                    <ul className="text-[11px] text-blue-600/80 space-y-2 leading-relaxed font-medium">
+                                                        <li className="flex gap-2"><span>1.</span> <span>ใส่ URL ของแอปไรเดอร์ด้านบนแล้วกด Save</span></li>
+                                                        <li className="flex gap-2"><span>2.</span> <span>ให้ไรเดอร์สแกน QR Code ด้านขวาเพื่อตั้งค่าแอปอัตโนมัติ</span></li>
+                                                        <li className="flex gap-2"><span>3.</span> <span>ระบบจะผูก API ของร้านนี้เข้ากับเครื่องไรเดอร์ทันที</span></li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-col items-center justify-center space-y-4 p-6 bg-slate-50 rounded-[40px] border border-slate-100 border-dashed">
+                                                {settings.rider_app_url ? (
+                                                    <>
+                                                        <div className="bg-white p-6 rounded-[32px] shadow-xl shadow-blue-500/10 border-4 border-white">
+                                                            <QRCode
+                                                                value={`${settings.rider_app_url}/connect?api=${network?.cloudUrl || `http://${network?.localIp || '127.0.0.1'}:${window.location.port}`}&store=${settings.shop_name || 'Store'}`}
+                                                                size={180}
+                                                                level="H"
+                                                            />
+                                                        </div>
+                                                        <div className="text-center">
+                                                            <p className="text-sm font-bold text-slate-900">Scan to Magic Setup</p>
+                                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">ไรเดอร์สแกนเพื่อเริ่มใช้งาน</p>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div className="text-center space-y-3 py-10 opacity-40">
+                                                        <div className="w-20 h-20 bg-slate-200 rounded-3xl mx-auto flex items-center justify-center text-4xl">📸</div>
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center px-10">กรุณาใส่ Rider App URL ก่อนเพื่อสร้าง QR Setup</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+                            )}
+
                         </div>
 
                         <div className="flex justify-end pt-10 border-t border-slate-100 mt-10">

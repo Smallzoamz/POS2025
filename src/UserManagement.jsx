@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from './services/api';
 import MasterLayout from './layouts/MasterLayout';
 import { useAuth } from './contexts/AuthContext';
+import RiderManagement from './pages/RiderManagement';
 
 const UserManagement = () => {
     const { user: currentUser, refreshUser } = useAuth();
@@ -9,6 +10,7 @@ const UserManagement = () => {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
+    const [activeTab, setActiveTab] = useState('staff');
 
     // Form State
     const [formData, setFormData] = useState({
@@ -138,7 +140,7 @@ const UserManagement = () => {
 
     return (
         <MasterLayout>
-            <div className="space-y-10">
+            <div className="space-y-6">
                 {/* Header Section */}
                 <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                     <div>
@@ -146,84 +148,106 @@ const UserManagement = () => {
                         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Personnel Management • Roles & Permissions</p>
                     </div>
 
-                    <button
-                        onClick={() => handleOpenModal()}
-                        className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-orange-500/20 transition-all active:scale-95"
-                    >
-                        <span>+</span> เพิ่มพนักงาน
-                    </button>
+                    <div className="flex gap-3">
+                        {/* Tabs */}
+                        <div className="bg-slate-100 p-1 rounded-xl flex gap-1">
+                            <button
+                                onClick={() => setActiveTab('staff')}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'staff' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                                Staff
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('rider')}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'rider' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                                Riders
+                            </button>
+                        </div>
+
+                        {activeTab === 'staff' && (
+                            <button
+                                onClick={() => handleOpenModal()}
+                                className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-orange-500/20 transition-all active:scale-95 text-sm"
+                            >
+                                <span>+</span> เพิ่มพนักงาน
+                            </button>
+                        )}
+                    </div>
                 </header>
 
-                {/* Staff Table */}
-                <div className="tasty-card p-0 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="bg-[#F8FAFC]">
-                                <tr>
-                                    <th className="px-8 py-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Name / Display</th>
-                                    <th className="px-6 py-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Role (Permissions)</th>
-                                    <th className="px-6 py-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">PIN Code</th>
-                                    <th className="px-8 py-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
-                                {users.map(user => (
-                                    <tr key={user.id} className="group hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-8 py-4">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center text-lg font-bold shadow-lg shadow-slate-200 uppercase">
-                                                    {user.name?.[0] || '?'}
-                                                </div>
-                                                <div>
-                                                    <div className="font-bold text-slate-900 leading-tight">{user.name}</div>
-                                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                                        {user.phone ? `📞 ${user.phone}` : (user.full_name || 'Generic Asset')}
+                {/* Content */}
+                {activeTab === 'staff' ? (
+                    <div className="tasty-card p-0 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="bg-[#F8FAFC]">
+                                    <tr>
+                                        <th className="px-8 py-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Name / Display</th>
+                                        <th className="px-6 py-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Role (Permissions)</th>
+                                        <th className="px-6 py-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">PIN Code</th>
+                                        <th className="px-8 py-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {users.map(user => (
+                                        <tr key={user.id} className="group hover:bg-slate-50/50 transition-colors">
+                                            <td className="px-8 py-4">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center text-lg font-bold shadow-lg shadow-slate-200 uppercase">
+                                                        {user.name?.[0] || '?'}
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-bold text-slate-900 leading-tight">{user.name}</div>
+                                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                                            {user.phone ? `📞 ${user.phone}` : (user.full_name || 'Generic Asset')}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <span className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border ${user.role === 'owner' ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                                                    user.role === 'admin' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                                                        user.role === 'finance' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                            user.role === 'kitchen' ? 'bg-orange-50 text-orange-600 border-orange-100' :
-                                                                'bg-slate-50 text-slate-600 border-slate-100'
-                                                    }`}>
-                                                    {user.role}
-                                                </span>
-                                                {user.can_deliver && (
-                                                    <span className="px-2 py-1 bg-cyan-500 text-white rounded-lg text-[8px] font-bold uppercase animate-pulse">🛵 Rider</span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <code className="bg-slate-50 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 font-mono tracking-[0.3em]">****</code>
-                                        </td>
-                                        <td className="px-8 py-4 text-right">
-                                            <div className="flex justify-end gap-2">
-                                                <button
-                                                    onClick={() => handleOpenModal(user)}
-                                                    className="w-10 h-10 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-orange-500 hover:border-orange-200 transition-all shadow-sm"
-                                                >
-                                                    ✏️
-                                                </button>
-                                                {user.role !== 'owner' && (
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border ${user.role === 'owner' ? 'bg-purple-50 text-purple-600 border-purple-100' :
+                                                        user.role === 'admin' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                                            user.role === 'finance' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                                                user.role === 'kitchen' ? 'bg-orange-50 text-orange-600 border-orange-100' :
+                                                                    'bg-slate-50 text-slate-600 border-slate-100'
+                                                        }`}>
+                                                        {user.role}
+                                                    </span>
+
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <code className="bg-slate-50 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 font-mono tracking-[0.3em]">****</code>
+                                            </td>
+                                            <td className="px-8 py-4 text-right">
+                                                <div className="flex justify-end gap-2">
                                                     <button
-                                                        onClick={() => handleDelete(user.id)}
-                                                        className="w-10 h-10 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-300 hover:text-red-500 hover:border-red-200 transition-all shadow-sm"
+                                                        onClick={() => handleOpenModal(user)}
+                                                        className="w-10 h-10 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-orange-500 hover:border-orange-200 transition-all shadow-sm"
                                                     >
-                                                        🗑️
+                                                        ✏️
                                                     </button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                                    {user.role !== 'owner' && (
+                                                        <button
+                                                            onClick={() => handleDelete(user.id)}
+                                                            className="w-10 h-10 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-300 hover:text-red-500 hover:border-red-200 transition-all shadow-sm"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    <RiderManagement />
+                )}
             </div>
 
             {/* User Modal */}
@@ -348,20 +372,7 @@ const UserManagement = () => {
                                 </div>
                             </div>
 
-                            {/* Can Deliver Toggle */}
-                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                <div>
-                                    <p className="font-bold text-slate-700 text-sm">สามารถเป็นไรเดอร์ได้</p>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Can Deliver Orders</p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setFormData({ ...formData, can_deliver: !formData.can_deliver })}
-                                    className={`w-14 h-8 rounded-full transition-all relative p-1 ${formData.can_deliver ? 'bg-orange-500' : 'bg-slate-300'}`}
-                                >
-                                    <div className={`w-6 h-6 bg-white rounded-full transition-all shadow-sm ${formData.can_deliver ? 'translate-x-6' : 'translate-x-0'}`} />
-                                </button>
-                            </div>
+
 
                             <div className="pt-4 flex gap-3">
                                 <button

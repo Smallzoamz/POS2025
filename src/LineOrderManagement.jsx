@@ -363,6 +363,11 @@ const LineOrderManagement = () => {
                                         <p className="text-[10px] font-bold text-slate-400 line-clamp-1">
                                             👤 {order.customer_name}
                                         </p>
+                                        {order.rider_name && (
+                                            <p className="text-[10px] font-bold text-orange-400 line-clamp-1 mt-1">
+                                                🛵 Rider: {order.rider_name}
+                                            </p>
+                                        )}
                                         {order.coupon_code && parseFloat(order.coupon_discount || 0) > 0 ? (
                                             <p className="text-[10px] font-bold text-emerald-400 flex items-center gap-1 mt-1">
                                                 <span>🎁</span> {order.coupon_code} <span className="text-emerald-500">(-฿{parseFloat(order.coupon_discount).toLocaleString()})</span>

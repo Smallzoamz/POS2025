@@ -599,46 +599,86 @@ const initDatabasePG = async () => {
                 CREATE TABLE IF NOT EXISTS loyalty_point_transactions (
                     id SERIAL PRIMARY KEY,
                     customer_id INTEGER REFERENCES loyalty_customers(id),
+                    type TEXT NOT NULL, -- 'earn', 'redeem', 'adjust'
                     points INTEGER NOT NULL,
-                    type TEXT NOT NULL, -- 'earn' | 'redeem'
+                    order_id INTEGER REFERENCES orders(id),
+                    line_order_id INTEGER REFERENCES line_orders(id),
                     description TEXT,
-                    reference_id TEXT, -- order_id or promotion_id
                     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 )
             `);
 
-            // Migration 8.1: Add limit columns if not exist
-            try {
-                await client.query(`
+            // Coupons (Redeemed Promotions)
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS loyalty_coupons (
+                    id SERIAL PRIMARY KEY,
+                    customer_id INTEGER REFERENCES loyalty_customers(id),
+                    promotion_id INTEGER REFERENCES loyalty_promotions(id),
+                    coupon_code TEXT UNIQUE,
+                    status TEXT DEFAULT 'active', -- 'active', 'used', 'expired'
+                    redeemed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    used_at TIMESTAMPTZ,
+                    order_id INTEGER REFERENCES orders(id),
+                    line_order_id INTEGER REFERENCES line_orders(id)
+                )
+            `);
+            console.log('✅ Loyalty System migration completed');
+        } catch (migrationErr8) {
+            console.error('Loyalty migration note:', migrationErr8.message);
+        }
+
+        // Migration 9: Rider Reports
+        try {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS rider_reports (
+                    id SERIAL PRIMARY KEY,
+                    rider_id INTEGER, -- Intentionally loose FK for now to support both users/riders tables
+                    order_id INTEGER REFERENCES line_orders(id),
+                    topic TEXT,
+                    description TEXT,
+                    status TEXT DEFAULT 'unread',
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+            console.log('✅ Rider Reports table migration completed');
+        } catch (migrationErr9) {
+            console.error('Rider Reports migration note:', migrationErr9.message);
+        }
+
+
+        // Migration 8.1: Add limit columns if not exist
+        try {
+            await client.query(`
                     ALTER TABLE loyalty_promotions 
                     ADD COLUMN IF NOT EXISTS max_redemptions INTEGER,
-                    ADD COLUMN IF NOT EXISTS user_redemption_limit INTEGER
-                `);
-                console.log('✅ Promotion limits migration completed');
-            } catch (err) {
-                console.log('Promotion limits migration note:', err.message);
-            }
+    ADD COLUMN IF NOT EXISTS user_redemption_limit INTEGER
+        `);
+            console.log('✅ Promotion limits migration completed');
+        } catch (err) {
+            console.log('Promotion limits migration note:', err.message);
+        }
 
-            // Migration 8.2: Add Minimum Spend Requirement
-            try {
-                await client.query(`
+        // Migration 8.2: Add Minimum Spend Requirement
+        try {
+            await client.query(`
                     ALTER TABLE loyalty_promotions 
                     ADD COLUMN IF NOT EXISTS min_spend_amount INTEGER DEFAULT 0
-                `);
+    `);
 
-                await client.query(`
+            await client.query(`
                     ALTER TABLE loyalty_coupons 
                     ADD COLUMN IF NOT EXISTS min_spend_amount INTEGER DEFAULT 0
                 `);
-                console.log('✅ Promotion min_spend_amount migration completed');
-            } catch (err) {
-                console.log('Min spend migration note:', err.message);
-            }
+            console.log('✅ Promotion min_spend_amount migration completed');
+        } catch (err) {
+            console.log('Min spend migration note:', err.message);
+        }
 
 
 
 
-            // Add customer_id to orders and line_orders
+        // Add customer_id to orders and line_orders
+        try {
             await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES loyalty_customers(id)`);
             await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES loyalty_customers(id)`);
 
@@ -669,16 +709,16 @@ const initDatabasePG = async () => {
             console.log('📦 Running Migration 10: loyalty_coupons...');
             await client.query(`
                 CREATE TABLE IF NOT EXISTS loyalty_coupons(
-                id SERIAL PRIMARY KEY,
-                customer_id INTEGER REFERENCES loyalty_customers(id),
-                promotion_id INTEGER REFERENCES loyalty_promotions(id),
-                coupon_code TEXT UNIQUE NOT NULL,
-                status TEXT DEFAULT 'active', -- 'active', 'used', 'expired'
+        id SERIAL PRIMARY KEY,
+        customer_id INTEGER REFERENCES loyalty_customers(id),
+        promotion_id INTEGER REFERENCES loyalty_promotions(id),
+        coupon_code TEXT UNIQUE NOT NULL,
+        status TEXT DEFAULT 'active', -- 'active', 'used', 'expired'
                     redeemed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                used_at TIMESTAMPTZ,
-                order_id INTEGER, --Link to in -store order when used
+        used_at TIMESTAMPTZ,
+        order_id INTEGER, --Link to in -store order when used
                     line_order_id INTEGER-- Link to line order when used
-            )
+    )
             `);
             console.log('✅ Migration 10: loyalty_coupons completed');
         } catch (migrationErr10) {
@@ -710,16 +750,16 @@ const initDatabasePG = async () => {
             console.log('📦 Running Migration 12: product_options...');
             await client.query(`
                 CREATE TABLE IF NOT EXISTS product_options(
-                id SERIAL PRIMARY KEY,
-                product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
-                name TEXT NOT NULL,
-                price_modifier DECIMAL(12, 2) DEFAULT 0,
-                is_size_option BOOLEAN DEFAULT FALSE,
-                stock_quantity INTEGER DEFAULT 0,
-                is_available BOOLEAN DEFAULT TRUE,
-                sort_order INTEGER DEFAULT 0,
-                recipe_multiplier DECIMAL(5, 2) DEFAULT 1.00
-            )
+        id SERIAL PRIMARY KEY,
+        product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        price_modifier DECIMAL(12, 2) DEFAULT 0,
+        is_size_option BOOLEAN DEFAULT FALSE,
+        stock_quantity INTEGER DEFAULT 0,
+        is_available BOOLEAN DEFAULT TRUE,
+        sort_order INTEGER DEFAULT 0,
+        recipe_multiplier DECIMAL(5, 2) DEFAULT 1.00
+    )
             `);
             // Also ensure column exists if table was already created
             await client.query(`ALTER TABLE product_options ADD COLUMN IF NOT EXISTS recipe_multiplier DECIMAL(5, 2) DEFAULT 1.00`);
@@ -733,13 +773,13 @@ const initDatabasePG = async () => {
             console.log('📦 Running Migration 13: order_item_options...');
             await client.query(`
                 CREATE TABLE IF NOT EXISTS order_item_options(
-                id SERIAL PRIMARY KEY,
-                order_item_id INTEGER REFERENCES order_items(id) ON DELETE CASCADE,
-                option_id INTEGER REFERENCES product_options(id),
-                option_name TEXT,
-                price_modifier DECIMAL(12, 2) DEFAULT 0
-            )
-                `);
+        id SERIAL PRIMARY KEY,
+        order_item_id INTEGER REFERENCES order_items(id) ON DELETE CASCADE,
+        option_id INTEGER REFERENCES product_options(id),
+        option_name TEXT,
+        price_modifier DECIMAL(12, 2) DEFAULT 0
+    )
+    `);
             console.log('✅ Migration 13: order_item_options completed');
         } catch (migrationErr13) {
             console.error('Migration 13 error:', migrationErr13.message);
@@ -750,13 +790,13 @@ const initDatabasePG = async () => {
             console.log('📦 Running Migration 14: option_recipes...');
             await client.query(`
                 CREATE TABLE IF NOT EXISTS option_recipes(
-                    id SERIAL PRIMARY KEY,
-                    option_id INTEGER REFERENCES product_options(id) ON DELETE CASCADE,
-                    ingredient_id INTEGER REFERENCES ingredients(id) ON DELETE CASCADE,
-                    quantity_used DECIMAL(12, 3) NOT NULL,
-                    UNIQUE(option_id, ingredient_id)
-                )
-                `);
+        id SERIAL PRIMARY KEY,
+        option_id INTEGER REFERENCES product_options(id) ON DELETE CASCADE,
+        ingredient_id INTEGER REFERENCES ingredients(id) ON DELETE CASCADE,
+        quantity_used DECIMAL(12, 3) NOT NULL,
+        UNIQUE(option_id, ingredient_id)
+    )
+    `);
             console.log('✅ Migration 14: option_recipes completed');
         } catch (migrationErr14) {
             console.error('Migration 14 error:', migrationErr14.message);
@@ -767,17 +807,17 @@ const initDatabasePG = async () => {
             console.log('📦 Running Migration 15: global_options...');
             await client.query(`
                 CREATE TABLE IF NOT EXISTS global_options(
-                    id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    price_modifier DECIMAL(12, 2) DEFAULT 0,
-                    is_size_option BOOLEAN DEFAULT FALSE,
-                    stock_quantity INTEGER DEFAULT 0,
-                    recipe_multiplier DECIMAL(5, 2) DEFAULT 1.00,
-                    is_active BOOLEAN DEFAULT TRUE,
-                    sort_order INTEGER DEFAULT 0,
-                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-                )
-                `);
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        price_modifier DECIMAL(12, 2) DEFAULT 0,
+        is_size_option BOOLEAN DEFAULT FALSE,
+        stock_quantity INTEGER DEFAULT 0,
+        recipe_multiplier DECIMAL(5, 2) DEFAULT 1.00,
+        is_active BOOLEAN DEFAULT TRUE,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )
+    `);
             console.log('✅ Migration 15: global_options completed');
         } catch (migrationErr15) {
             console.error('Migration 15 error:', migrationErr15.message);
@@ -788,24 +828,60 @@ const initDatabasePG = async () => {
             console.log('📦 Running Migration 16: global_option_categories...');
             await client.query(`
                 CREATE TABLE IF NOT EXISTS global_option_categories(
-                    id SERIAL PRIMARY KEY,
-                    option_id INTEGER REFERENCES global_options(id) ON DELETE CASCADE,
-                    category_id TEXT REFERENCES categories(id) ON DELETE CASCADE,
-                    UNIQUE(option_id, category_id)
-                )
-                `);
+        id SERIAL PRIMARY KEY,
+        option_id INTEGER REFERENCES global_options(id) ON DELETE CASCADE,
+        category_id TEXT REFERENCES categories(id) ON DELETE CASCADE,
+        UNIQUE(option_id, category_id)
+    )
+    `);
             console.log('✅ Migration 16: global_option_categories completed');
         } catch (migrationErr16) {
             console.error('Migration 16 error:', migrationErr16.message);
+        }
+
+        // --- MIGRATION 17: Riders (New) ---
+        try {
+            console.log('📦 Running Migration 17: riders table...');
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS riders(
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        name TEXT NOT NULL,
+        age INTEGER,
+        bank_account TEXT,
+        phone TEXT,
+        status TEXT DEFAULT 'pending', --pending, approved, suspended
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )
+    `);
+            console.log('✅ Migration 17: riders table completed');
+        } catch (migrationErr17) {
+            console.error('Migration 17 error:', migrationErr17.message);
+        }
+
+        // --- MIGRATION: Rider Location Tracking ---
+        try {
+            await client.query(`
+                ALTER TABLE riders 
+                ADD COLUMN IF NOT EXISTS current_lat DECIMAL(10, 8),
+    ADD COLUMN IF NOT EXISTS current_lng DECIMAL(11, 8),
+        ADD COLUMN IF NOT EXISTS is_online BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS last_location_update TIMESTAMPTZ
+            `);
+            console.log('✅ Rider Location columns migration completed');
+        } catch (err) {
+            console.error('Rider Location migration error:', err.message);
         }
 
         // --- MIGRATION 21: Rider Income System (Option C) ---
         try {
             console.log('📦 Running Migration 21: Rider Income System...');
             // Add columns to line_orders
-            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS rider_share DECIMAL(12,2) DEFAULT 0`);
-            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS platform_fee DECIMAL(12,2) DEFAULT 0`);
-            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS distance_km DECIMAL(10,2) DEFAULT 0`);
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS rider_share DECIMAL(12, 2) DEFAULT 0`);
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS platform_fee DECIMAL(12, 2) DEFAULT 0`);
+            await client.query(`ALTER TABLE line_orders ADD COLUMN IF NOT EXISTS distance_km DECIMAL(10, 2) DEFAULT 0`);
 
             // Add default settings for Rider Calc
             const settingsToCheck = [
@@ -816,15 +892,35 @@ const initDatabasePG = async () => {
             ];
 
             for (const s of settingsToCheck) {
-                const res = await client.query("SELECT COUNT(*) FROM settings WHERE key = $1", [s.key]);
-                if (res.rows[0].count == 0) {
-                    await client.query("INSERT INTO settings (key, value) VALUES ($1, $2)", [s.key, s.value]);
-                    console.log(`+ Added setting: ${s.key}`);
-                }
+                await client.query(`
+                    INSERT INTO settings(key, value) VALUES($1, $2)
+                    ON CONFLICT(key) DO NOTHING
+    `, [s.key, s.value]);
             }
-            console.log('✅ Migration 21: Rider Income System completed');
-        } catch (migrationErr21) {
-            console.error('Migration 21 error:', migrationErr21.message);
+            console.log('✅ Migration 21: Rider Income system ready');
+        } catch (err) {
+            console.error('Migration 21 error:', err.message);
+        }
+
+        // --- MIGRATION: Rider Profile & Reports ---
+        try {
+            await client.query(`
+                ALTER TABLE riders ADD COLUMN IF NOT EXISTS profile_pic TEXT;
+`);
+
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS rider_reports(
+    id SERIAL PRIMARY KEY,
+    rider_id INTEGER REFERENCES riders(id),
+    order_id INTEGER, --Optional, if specific to an order
+                    reason TEXT NOT NULL,
+    details TEXT,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                );
+`);
+            console.log('✅ Rider Profile & Reports migration completed');
+        } catch (err) {
+            console.error('Rider Profile/Reports migration error:', err.message);
         }
 
         // --- MIGRATION 17: Global Option Recipes (Ingredient deduction for global options) ---
@@ -832,13 +928,13 @@ const initDatabasePG = async () => {
             console.log('📦 Running Migration 17: global_option_recipes...');
             await client.query(`
                 CREATE TABLE IF NOT EXISTS global_option_recipes(
-                    id SERIAL PRIMARY KEY,
-                    global_option_id INTEGER REFERENCES global_options(id) ON DELETE CASCADE,
-                    ingredient_id INTEGER REFERENCES ingredients(id) ON DELETE CASCADE,
-                    quantity_used DECIMAL(12, 3) NOT NULL DEFAULT 0,
-                    unit TEXT
-                )
-                `);
+    id SERIAL PRIMARY KEY,
+    global_option_id INTEGER REFERENCES global_options(id) ON DELETE CASCADE,
+    ingredient_id INTEGER REFERENCES ingredients(id) ON DELETE CASCADE,
+    quantity_used DECIMAL(12, 3) NOT NULL DEFAULT 0,
+    unit TEXT
+)
+    `);
             console.log('✅ Migration 17: global_option_recipes completed');
         } catch (migrationErr17) {
             console.error('Migration 17 error:', migrationErr17.message);
@@ -850,7 +946,7 @@ const initDatabasePG = async () => {
             await client.query(`
                 ALTER TABLE products 
                 ADD COLUMN IF NOT EXISTS is_recommended BOOLEAN DEFAULT FALSE
-                `);
+    `);
             console.log('✅ Migration 18: is_recommended column added');
         } catch (migrationErr18) {
             console.error('Migration 18 error:', migrationErr18.message);
@@ -863,22 +959,22 @@ const initDatabasePG = async () => {
             // And add 'options' column to line_order_items
             await client.query(`
                 DO $$
-            BEGIN 
+BEGIN 
                     IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'is_recommended') THEN 
                         ALTER TABLE products ADD COLUMN is_recommended BOOLEAN DEFAULT FALSE; 
                     END IF;
-            --Fix: Add options column to line_order_items
+--Fix: Add options column to line_order_items
                     IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name = 'line_order_items' AND column_name = 'options') THEN
                         ALTER TABLE line_order_items ADD COLUMN options JSONB DEFAULT '[]';
                     END IF;
                 END $$;
-            `);
+`);
             await client.query(`
                 ALTER TABLE order_item_options 
                 ADD COLUMN IF NOT EXISTS global_option_id INTEGER REFERENCES global_options(id),
-                ADD COLUMN IF NOT EXISTS is_global BOOLEAN DEFAULT FALSE,
-                    ALTER COLUMN option_id DROP NOT NULL
-                        `);
+    ADD COLUMN IF NOT EXISTS is_global BOOLEAN DEFAULT FALSE,
+        ALTER COLUMN option_id DROP NOT NULL
+            `);
             console.log('✅ Migration 19: global_option_id added & option_id constraint relaxed');
         } catch (migrationErr19) {
             console.error('Migration 19 error:', migrationErr19.message);
@@ -891,19 +987,19 @@ const initDatabasePG = async () => {
             await client.query(`
                 ALTER TABLE loyalty_customers 
                 ADD COLUMN IF NOT EXISTS birthday_reward_sent_year INTEGER
-                `);
+    `);
             // Add coupon_type to categorize coupons
             await client.query(`
                 ALTER TABLE loyalty_coupons 
                 ADD COLUMN IF NOT EXISTS coupon_type TEXT DEFAULT 'manual'
-                `);
+    `);
             // Add discount_type and discount_value for flexible coupon values
             await client.query(`
                 ALTER TABLE loyalty_coupons 
                 ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percent',
-                ADD COLUMN IF NOT EXISTS discount_value DECIMAL(12, 2) DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS min_order_amount DECIMAL(12, 2) DEFAULT 0
-                        `);
+    ADD COLUMN IF NOT EXISTS discount_value DECIMAL(12, 2) DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS min_order_amount DECIMAL(12, 2) DEFAULT 0
+            `);
             console.log('✅ Migration 21: Birthday Reward System columns added');
         } catch (migrationErr21) {
             console.error('Migration 21 error:', migrationErr21.message);
@@ -916,12 +1012,12 @@ const initDatabasePG = async () => {
             await client.query(`
                 ALTER TABLE loyalty_customers 
                 ADD COLUMN IF NOT EXISTS last_order_at TIMESTAMPTZ
-                `);
+    `);
             // Add winback_sent_at to prevent sending too frequently
             await client.query(`
                 ALTER TABLE loyalty_customers 
                 ADD COLUMN IF NOT EXISTS winback_sent_at TIMESTAMPTZ
-                `);
+    `);
             console.log('✅ Migration 22: Win-Back System columns added');
         } catch (migrationErr22) {
             console.error('Migration 22 error:', migrationErr22.message);
@@ -956,12 +1052,12 @@ const initDatabasePG = async () => {
             await client.query(`
                 ALTER TABLE order_item_options 
                 DROP CONSTRAINT IF EXISTS order_item_options_option_id_fkey
-                `);
+    `);
             // Add global_option_id column if it doesn't exist (for distinguishing source)
             await client.query(`
                 ALTER TABLE order_item_options 
                 ADD COLUMN IF NOT EXISTS global_option_id INTEGER REFERENCES global_options(id)
-                `);
+    `);
             console.log('✅ Migration 24: FK constraint dropped, global_option_id added');
         } catch (migrationErr24) {
             console.log('Migration 24 note:', migrationErr24.message);
@@ -973,8 +1069,8 @@ const initDatabasePG = async () => {
             await client.query(`
                 ALTER TABLE orders 
                 ADD COLUMN IF NOT EXISTS coupon_code TEXT,
-                ADD COLUMN IF NOT EXISTS coupon_details JSONB
-                    `);
+    ADD COLUMN IF NOT EXISTS coupon_details JSONB
+        `);
             console.log('✅ Migration 25: coupon_code and coupon_details added to orders');
         } catch (migrationErr25) {
             console.log('Migration 25 note:', migrationErr25.message);
@@ -986,9 +1082,9 @@ const initDatabasePG = async () => {
             await client.query(`
                 ALTER TABLE line_orders 
                 ADD COLUMN IF NOT EXISTS coupon_code TEXT,
-                ADD COLUMN IF NOT EXISTS coupon_discount DECIMAL(12, 2) DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS original_amount DECIMAL(12, 2)
-                        `);
+    ADD COLUMN IF NOT EXISTS coupon_discount DECIMAL(12, 2) DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS original_amount DECIMAL(12, 2)
+            `);
             console.log('✅ Migration 26: coupon columns added to line_orders');
         } catch (migrationErr26) {
             console.log('Migration 26 note:', migrationErr26.message);
@@ -1001,8 +1097,8 @@ const initDatabasePG = async () => {
             await client.query(`
                 ALTER TABLE loyalty_promotions 
                 ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'none',
-                ADD COLUMN IF NOT EXISTS discount_value DECIMAL(12, 2) DEFAULT 0
-                    `);
+    ADD COLUMN IF NOT EXISTS discount_value DECIMAL(12, 2) DEFAULT 0
+        `);
             // discount_type values: 'none', 'fixed', 'percent', 'fixed_price'
             // - none: No discount (e.g., free item promo)
             // - fixed: Fixed amount discount (e.g., 10 baht off)
@@ -1014,46 +1110,28 @@ const initDatabasePG = async () => {
         }
 
         // --- MIGRATION 28: Performance Indexes ---
+        /*
         try {
             console.log('📦 Running Migration 28: Adding Performance Indexes...');
-
+    
             const indexes = [
-                // Orders
-                "CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)",
-                "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)",
-                "CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id)",
-
-                // Line Orders
-                "CREATE INDEX IF NOT EXISTS idx_line_orders_created_at ON line_orders(created_at)",
-                "CREATE INDEX IF NOT EXISTS idx_line_orders_status ON line_orders(status)",
-                "CREATE INDEX IF NOT EXISTS idx_line_orders_customer_id ON line_orders(customer_id)",
-                "CREATE INDEX IF NOT EXISTS idx_line_orders_reservation_date ON line_orders(reservation_date)",
-
-                // Loyalty Customers
-                "CREATE INDEX IF NOT EXISTS idx_loyalty_customers_phone ON loyalty_customers(phone)",
-                "CREATE INDEX IF NOT EXISTS idx_loyalty_customers_last_order ON loyalty_customers(last_order_at)",
-
-                // Transactions
-                "CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)"
+               "CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)",
+               // ...
             ];
-
-            for (const idx of indexes) {
+            
+            // ...
                 await client.query(idx);
-            }
-            console.log('✅ Migration 28: Performance indexes completed');
+            // ...
         } catch (migrationErr28) {
             console.log('Migration 28 note:', migrationErr28.message);
         }
+        */
 
         // Final Commit for all migrations and seeds
-        // await client.query('COMMIT'); // Removed to avoid double commit if line 329 already committed
+        await client.query('COMMIT');
+        console.log('✅ Database initialization completed successfully');
+
     } catch (e) {
-        // Only rollback if we are actually in a transaction
-        try {
-            await client.query('ROLLBACK');
-        } catch (rbErr) {
-            // Silently fail rollback if no transaction
-        }
         console.error("❌ PostgreSQL Initialization Error:", e);
         throw e;
     } finally {
@@ -1078,8 +1156,8 @@ const updateCustomerProfile = async (lineUserId, { nickname, birthdate, phoneNum
             UPDATE loyalty_customers 
             SET nickname = $1, birthdate = $2, phone = $3, is_profile_completed = TRUE
             WHERE line_user_id = $4
-            RETURNING *
-                `, [nickname, birthdate, phoneNumber, lineUserId]);
+RETURNING *
+    `, [nickname, birthdate, phoneNumber, lineUserId]);
 
         await client.query('COMMIT');
         return { customer: updateRes.rows[0], isFirstCompletion };

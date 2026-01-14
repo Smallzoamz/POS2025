@@ -265,6 +265,24 @@ const DeliveryOrderManagement = () => {
                                         )}
                                     </div>
 
+                                    {/* Rider Info (if assigned) */}
+                                    {order.rider_name && (
+                                        <div className="flex items-center gap-2 mt-4 p-3 bg-orange-50/50 rounded-xl border border-orange-100">
+                                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm text-lg">
+                                                🛵
+                                            </div>
+                                            <div>
+                                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Assigned Rider</div>
+                                                <div className="font-bold text-slate-800 text-xs">{order.rider_name}</div>
+                                                {(order.vehicle_plate || order.vehicle_type) && (
+                                                    <div className="text-[10px] text-slate-500 font-bold mt-0.5">
+                                                        {order.vehicle_plate || '-'} | {order.vehicle_type === 'motorcycle' ? 'มอเตอร์ไซค์' : order.vehicle_type || '-'}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Transaction Info */}
                                     <div className="flex justify-between items-end pt-4 border-t border-slate-50">
                                         <div>
@@ -326,6 +344,14 @@ const DeliveryOrderManagement = () => {
                                         <div className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-3 rounded-2xl">
                                             {selectedOrder.delivery_address || 'No address specified'}
                                         </div>
+                                        {selectedOrder.rider_name && (
+                                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-50">
+                                                <span className="text-lg">🛵</span>
+                                                <div className="text-xs font-bold text-slate-700">
+                                                    Rider: <span className="text-orange-500">{selectedOrder.rider_name}</span>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="space-y-4">

@@ -18,11 +18,12 @@ import GlobalNotificationListener from './components/GlobalNotificationListener'
 import LineOrder from './pages/LineOrder';
 import LineOrderManagement from './LineOrderManagement';
 import DeliveryOrderManagement from './DeliveryOrderManagement';
-import RiderDashboard from './RiderDashboard';
 import CustomerTracking from './pages/CustomerTracking';
 import TakeawayOrder from './pages/TakeawayOrder';
 import CustomerLoyalty from './pages/CustomerLoyalty';
 import Promotions from './pages/Promotions';
+import RiderManagement from './pages/RiderManagement';
+import RiderReports from './pages/RiderReports';
 
 // Protected Route Component
 const ProtectedRoute = ({ children, roles = [] }) => {
@@ -113,8 +114,9 @@ function App() {
                     <Route path="/line-orders" element={<ProtectedRoute roles={['owner', 'admin']}><LineOrderManagement /></ProtectedRoute>} />
 
                     {/* Delivery System */}
+                    {/* Delivery System */}
                     <Route path="/delivery-orders" element={<ProtectedRoute roles={['owner', 'admin']}><DeliveryOrderManagement /></ProtectedRoute>} />
-                    <Route path="/rider" element={<ProtectedRoute roles={['owner', 'admin', 'rider', 'staff']}><RiderDashboard /></ProtectedRoute>} />
+                    <Route path="/rider-reports" element={<ProtectedRoute roles={['owner', 'admin', 'staff']}><RiderReports /></ProtectedRoute>} />
 
                     {/* Public Tracking Page */}
                     <Route path="/tracking/:token" element={<CustomerTracking />} />

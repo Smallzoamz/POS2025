@@ -11,6 +11,7 @@ const os = require('os')
 const { pool, query, initDatabasePG, updateCustomerProfile } = require('./db_pg')
 const { initBirthdayScheduler, checkBirthdaysManually } = require('./birthdayScheduler')
 const { initWinbackScheduler, checkWinbackManually } = require('./winbackScheduler')
+const bcrypt = require('bcryptjs');
 
 // Utility: Get Local IP (Prioritize common LAN ranges and ignore virtual adapters)
 const getLocalIp = () => {
@@ -98,7 +99,8 @@ async function startServer() {
             // Check if it's from trusted external domains
             const isLiffDomain = origin.includes('.line.me') || origin.includes('liff.line.me');
             const isRenderDomain = origin.includes('.onrender.com');
-            const isTrustedExternal = isLiffDomain || isRenderDomain;
+            const isVercelDomain = origin.includes('.vercel.app');
+            const isTrustedExternal = isLiffDomain || isRenderDomain || isVercelDomain;
 
             // Allow if any condition matches, or in non-production mode
             if (isInAllowedList || isLocalhost || isLocalNetwork || isServerLocalIp || isTrustedExternal || process.env.NODE_ENV !== 'production') {
@@ -579,6 +581,372 @@ async function startServer() {
     app.delete('/api/notifications', async (req, res) => {
         try {
             await query('DELETE FROM notifications');
+            res.json({ success: true });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // =====================================================
+    // RIDER SYSTEM APIs
+    // =====================================================
+
+    // Rider Registration
+    app.post('/api/riders/register', async (req, res) => {
+        const { username, password, name, age, bank_account, phone } = req.body;
+        try {
+            // Check if username exists
+            const checkRes = await query('SELECT id FROM riders WHERE username = $1', [username]);
+            if (checkRes.rows.length > 0) {
+                return res.status(400).json({ error: 'Username already taken' });
+            }
+
+            const hashedPassword = await bcrypt.hash(password, 10);
+            const result = await query(
+                `INSERT INTO riders (username, password, name, age, bank_account, phone, status) 
+                 VALUES ($1, $2, $3, $4, $5, $6, 'pending') RETURNING id, username, name, status`,
+                [username, hashedPassword, name, age, bank_account, phone]
+            );
+
+            // Notify Admins
+            io.emit('new-rider-registered', result.rows[0]);
+
+            res.json({ success: true, rider: result.rows[0] });
+        } catch (err) {
+            console.error('Rider Registration Error:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Rider Login
+    app.post('/api/riders/login', async (req, res) => {
+        const { username, password } = req.body;
+        try {
+            const result = await query('SELECT * FROM riders WHERE username = $1', [username]);
+            if (result.rows.length === 0) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+
+            const rider = result.rows[0];
+            const match = await bcrypt.compare(password, rider.password);
+
+            if (!match) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+
+            if (rider.status !== 'approved') {
+                return res.status(403).json({ error: 'Account pending approval' });
+            }
+
+            // Return rider info (exclude password)
+            delete rider.password;
+            res.json({ success: true, rider });
+        } catch (err) {
+            console.error('Rider Login Error:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Admin: Get All Riders
+    app.get('/api/admin/riders', requireAdmin, async (req, res) => {
+        try {
+            const result = await query('SELECT id, username, name, age, bank_account, phone, status, vehicle_plate, vehicle_type, created_at FROM riders ORDER BY created_at DESC');
+            res.json(result.rows);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Admin: Approve/Reject Rider
+    app.put('/api/admin/riders/:id/status', requireAdmin, async (req, res) => {
+        const { id } = req.params;
+        const { status } = req.body; // 'approved' or 'rejected' or 'suspended'
+        try {
+            const result = await query(
+                'UPDATE riders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+                [status, id]
+            );
+            res.json({ success: true, rider: result.rows[0] });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // --- RIDER ORDER APIs ---
+
+    // Get Available Orders (Pending Rider)
+    app.get('/api/riders/orders/available', async (req, res) => {
+        try {
+            // Assuming 'paid' orders that are type 'delivery' and have no rider are available
+            // OR 'confirmed' status if flow differs. Adjusting to 'paid' for now as usually paid before delivery.
+            // Also checking for 'pending_rider' status if used.
+            // Simplified: Order type = 'delivery' AND status = 'paid' AND rider_id IS NULL
+            const result = await query(`
+                SELECT * FROM line_orders 
+                WHERE order_type = 'delivery' 
+                AND (status = 'paid' OR status = 'confirmed') 
+                AND rider_id IS NULL 
+                ORDER BY created_at ASC
+            `);
+            res.json(result.rows);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Accept Order
+    // Accept Order
+    app.post('/api/riders/orders/:id/accept', async (req, res) => {
+        const { id } = req.params;
+        const { riderId } = req.body;
+        try {
+            // Check if order is still available
+            const orderRes = await query("SELECT id, customer_lat, customer_lng FROM line_orders WHERE id = $1 AND rider_id IS NULL", [id]);
+            if (orderRes.rows.length === 0) {
+                return res.status(400).json({ error: 'Order already taken or invalid' });
+            }
+            const order = orderRes.rows[0];
+
+            // Calculate Rider Share
+            let riderShare = 20; // Default fallback
+            let distanceKm = 0;
+            try {
+                const settingsRes = await query("SELECT key, value FROM settings WHERE key IN ('store_lat', 'store_lng', 'rider_base_fare', 'rider_per_km_rate')");
+                const settings = {};
+                settingsRes.rows.forEach(r => settings[r.key] = r.value);
+
+                const storeLat = parseFloat(settings.store_lat);
+                const storeLng = parseFloat(settings.store_lng);
+                const baseFare = parseFloat(settings.rider_base_fare || 20);
+                const perKmRate = parseFloat(settings.rider_per_km_rate || 5);
+
+                if (storeLat && storeLng && order.customer_lat && order.customer_lng) {
+                    distanceKm = calculateDistance(storeLat, storeLng, parseFloat(order.customer_lat), parseFloat(order.customer_lng));
+                    riderShare = baseFare + (distanceKm * perKmRate);
+                }
+            } catch (calcErr) {
+                console.error("Failed to calculate rider share:", calcErr);
+            }
+
+            const result = await query(
+                `UPDATE line_orders 
+                 SET rider_id = $1, status = 'rider_assigned', 
+                     rider_share = $2, distance_km = $3,
+                     updated_at = CURRENT_TIMESTAMP 
+                 WHERE id = $4 RETURNING *`,
+                [riderId, riderShare, distanceKm, id]
+            );
+
+            // Notify POS
+            io.emit('order-update', { id, status: 'rider_assigned', riderId });
+
+            res.json({ success: true, order: result.rows[0] });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Update Status (Pickup / Deliver)
+    app.post('/api/riders/orders/:id/status', async (req, res) => {
+        const { id } = req.params;
+        const { status, riderId } = req.body; // status: 'picked_up', 'delivered', 'completed'
+        try {
+            // Verify rider owns this order
+            const check = await query("SELECT id FROM line_orders WHERE id = $1 AND rider_id = $2", [id, riderId]);
+            if (check.rows.length === 0) {
+                return res.status(403).json({ error: 'Unauthorized order' });
+            }
+
+            const result = await query(
+                `UPDATE line_orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
+                [status, id]
+            );
+
+            // If status is 'completed' (Delivered), automatically Set 'Paid' status (is_deposit_paid = true)
+            // This assumes cash on delivery or transfer is collected by rider.
+            if (status === 'completed') {
+                await query("UPDATE line_orders SET is_deposit_paid = TRUE WHERE id = $1", [id]);
+                result.rows[0].is_deposit_paid = true;
+            }
+
+            // Notify POS
+            io.emit('order-update', { id, status, riderId });
+
+            res.json({ success: true, order: result.rows[0] });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Update Rider Location
+    app.post('/api/riders/location', async (req, res) => {
+        const { riderId, lat, lng } = req.body;
+        try {
+            // Update Rider Table
+            await query(
+                `UPDATE riders SET current_lat = $1, current_lng = $2, last_location_update = CURRENT_TIMESTAMP WHERE id = $3`,
+                [lat, lng, riderId]
+            );
+
+            // If rider has active order, update order location too (for tracking)
+            const orderUpdate = await query(
+                `UPDATE line_orders SET rider_lat = $1, rider_lng = $2 WHERE rider_id = $3 AND status IN ('rider_assigned', 'picked_up') RETURNING id`,
+                [lat, lng, riderId]
+            );
+
+            // Notify POS (Real-time tracking)
+            // If an order was updated, include the orderId so CustomerTracking can filter it
+            if (orderUpdate.rows.length > 0) {
+                const orderId = orderUpdate.rows[0].id;
+                io.emit('rider-location-update', { riderId, lat, lng, orderId });
+            } else {
+                io.emit('rider-location-update', { riderId, lat, lng });
+            }
+
+            res.json({ success: true });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Get Rider Stats (Income & Jobs)
+    app.get('/api/riders/:id/stats', async (req, res) => {
+        const { id } = req.params;
+        try {
+            // Calculate today's income and jobs
+            // Assuming 'delivery_fee' goes to rider, or logic based on 'rider_share' column if implemented
+            // Using delivery_fee for simplicity now, or 0
+            const today = new Date().toISOString().split('T')[0];
+
+            const result = await query(`
+                SELECT 
+                    COUNT(*) as job_count,
+                    COALESCE(SUM(rider_share), 0) as total_income
+                FROM line_orders 
+                WHERE rider_id = $1 
+                AND status = 'completed'
+                AND DATE(updated_at) = $2
+            `, [id, today]);
+
+            res.json(result.rows[0]);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Get Rider Settings (PromptPay)
+    app.get('/api/riders/settings', async (req, res) => {
+        try {
+            const result = await query("SELECT key, value FROM settings WHERE key IN ('promptpay_number', 'promptpay_name')");
+            const settings = {};
+            result.rows.forEach(row => settings[row.key] = row.value);
+            res.json(settings);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Get Active Order for Rider
+    app.get('/api/riders/:id/active-order', async (req, res) => {
+        const { id } = req.params; // riderId
+        try {
+            const result = await query(`
+                SELECT * FROM line_orders 
+                WHERE rider_id = $1 
+                AND status IN ('rider_assigned', 'picked_up', 'delivering')
+                ORDER BY created_at DESC 
+                LIMIT 1
+            `, [id]);
+            res.json(result.rows[0] || null);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Get Rider History
+    app.get('/api/riders/:id/history', async (req, res) => {
+        const { id } = req.params;
+        try {
+            const result = await query(`
+                SELECT * FROM line_orders 
+                WHERE rider_id = $1 
+                AND status IN ('completed', 'cancelled')
+                ORDER BY created_at DESC 
+                LIMIT 50
+            `, [id]);
+            res.json(result.rows);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Update Rider Profile
+    app.put('/api/riders/:id', async (req, res) => {
+        const { id } = req.params;
+        // prevent updating 'name' or 'username' here strictly if needed, but UI handles it too.
+        // Allowed: phone, bank_account, profile_pic, vehicle_plate, vehicle_type
+        const { phone, bank_account, profile_pic, vehicle_plate, vehicle_type } = req.body;
+
+        try {
+            await query(`
+                UPDATE riders 
+                SET phone = COALESCE($1, phone), 
+                    bank_account = COALESCE($2, bank_account),
+                    profile_pic = COALESCE($3, profile_pic),
+                    vehicle_plate = COALESCE($4, vehicle_plate),
+                    vehicle_type = COALESCE($5, vehicle_type),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $6
+            `, [phone, bank_account, profile_pic, vehicle_plate, vehicle_type, id]);
+
+            // Return updated rider info
+            const result = await query("SELECT * FROM riders WHERE id = $1", [id]);
+            res.json({ success: true, rider: result.rows[0] });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Submit Rider Report
+    app.post('/api/riders/report', async (req, res) => {
+        const { riderId, orderId, reason, details } = req.body;
+        try {
+            await query(`
+                INSERT INTO rider_reports (rider_id, order_id, reason, details)
+                VALUES ($1, $2, $3, $4)
+            `, [riderId, orderId || null, reason, details]);
+            res.json({ success: true });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Get Rider Reports (Admin)
+    app.get('/api/riders/reports', async (req, res) => {
+        try {
+            const result = await query(`
+                SELECT rr.*, COALESCE(r.name, u.name, 'Unknown') as rider_name 
+                FROM rider_reports rr
+                LEFT JOIN riders r ON rr.rider_id = r.id
+                LEFT JOIN users u ON rr.rider_id = u.id
+                ORDER BY rr.created_at DESC
+            `);
+            res.json(result.rows);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Update Rider Report Status (Admin)
+    app.put('/api/riders/reports/:id/status', async (req, res) => {
+        const { id } = req.params;
+        const { status } = req.body;
+        try {
+            await query('UPDATE rider_reports SET status = $1 WHERE id = $2', [status, id]);
             res.json({ success: true });
         } catch (err) {
             res.status(500).json({ error: err.message });
@@ -3301,7 +3669,12 @@ async function startServer() {
     // Get All LINE Orders
     app.get('/api/line_orders', async (req, res) => {
         try {
-            const lineOrdersRes = await query("SELECT * FROM line_orders ORDER BY created_at DESC");
+            const lineOrdersRes = await query(`
+                SELECT lo.*, r.name as rider_name 
+                FROM line_orders lo
+                LEFT JOIN riders r ON lo.rider_id = r.id
+                ORDER BY lo.created_at DESC
+            `);
             const lineOrders = lineOrdersRes.rows;
             for (let order of lineOrders) {
                 const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [order.id]);
@@ -4469,7 +4842,12 @@ async function startServer() {
     app.get('/api/delivery-orders', async (req, res) => {
         const { status, type } = req.query;
         try {
-            let sql = "SELECT * FROM line_orders WHERE order_type = 'delivery'";
+            let sql = `
+                SELECT lo.*, r.name as rider_name, r.vehicle_plate, r.vehicle_type
+                FROM line_orders lo
+                LEFT JOIN riders r ON lo.rider_id = r.id
+                WHERE lo.order_type = 'delivery'
+            `;
             const params = [];
             let paramIdx = 1;
 
@@ -4501,9 +4879,9 @@ async function startServer() {
     app.get('/api/delivery-orders/pending-pickup', async (req, res) => {
         try {
             const ordersRes = await query(`
-                SELECT lo.*, u.name as rider_name
+                SELECT lo.*, r.name as rider_name
                 FROM line_orders lo
-                LEFT JOIN users u ON lo.rider_id = u.id
+                LEFT JOIN riders r ON lo.rider_id = r.id
                 WHERE lo.order_type = 'delivery' 
                 AND lo.status = 'ready'
                 ORDER BY lo.created_at ASC
@@ -4787,9 +5165,11 @@ async function startServer() {
                     lo.rider_lat, lo.rider_lng, lo.customer_lat, lo.customer_lng,
                     lo.total_amount, lo.delivery_fee, lo.created_at, lo.updated_at,
                     lo.delivery_started_at, lo.delivered_at, lo.estimated_delivery_time,
-                    lo.queue_position, u.name as rider_name, u.phone as rider_phone
+                    lo.queue_position, COALESCE(r.name, u.name) as rider_name, COALESCE(r.phone, u.phone) as rider_phone,
+                    r.profile_pic as rider_pic, r.vehicle_plate, r.vehicle_type
                 FROM line_orders lo
-                LEFT JOIN users u ON lo.rider_id = u.id
+                LEFT JOIN riders r ON lo.rider_id = r.id
+                LEFT JOIN users u ON lo.rider_id = u.id -- Keeps users mainly for fallback or owner cases if ID overlap isn't handled yet, but prioritizes RIDER
                 WHERE lo.tracking_token = $1
             `, [token]);
 

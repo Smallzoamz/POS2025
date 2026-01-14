@@ -16,12 +16,18 @@ L.Icon.Default.mergeOptions({
 });
 
 // Custom Rider Icon (blue motorcycle) - Themed
-const riderIcon = new L.DivIcon({
-    className: 'custom-rider-marker',
-    html: `<div style="background: linear-gradient(135deg, #f97316, #fb923c); width: 44px; height: 44px; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 8px 16px rgba(249, 115, 22, 0.4); border: 3px solid white;">🏍️</div>`,
-    iconSize: [44, 44],
-    iconAnchor: [22, 22],
-});
+const getRiderIcon = (type) => {
+    let icon = '🏍️';
+    if (type === 'car') icon = '🚗';
+    if (type === 'bicycle') icon = '🚲';
+
+    return new L.DivIcon({
+        className: 'custom-rider-marker',
+        html: `<div style="background: linear-gradient(135deg, #f97316, #fb923c); width: 44px; height: 44px; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 8px 16px rgba(249, 115, 22, 0.4); border: 3px solid white;">${icon}</div>`,
+        iconSize: [44, 44],
+        iconAnchor: [22, 22],
+    });
+};
 
 // Custom Customer Icon (green pin) - Themed
 const customerIcon = new L.DivIcon({
@@ -188,7 +194,7 @@ const CustomerTracking = () => {
 
                         {/* Rider Marker */}
                         {riderPos && (
-                            <Marker position={riderPos} icon={riderIcon}>
+                            <Marker position={riderPos} icon={getRiderIcon(order.vehicle_type)}>
                                 <Popup>
                                     <div className="text-center p-2">
                                         <p className="font-heading font-black text-slate-900">{order.rider_name || 'Rider'}</p>
@@ -225,6 +231,11 @@ const CustomerTracking = () => {
                                     <p className="text-xl font-heading font-black text-slate-900 leading-tight">{order.rider_name}</p>
                                     {order.rider_phone && (
                                         <p className="text-[11px] font-bold text-slate-500 mt-0.5">📞 {order.rider_phone}</p>
+                                    )}
+                                    {(order.vehicle_plate || order.vehicle_type) && (
+                                        <p className="text-[10px] font-bold text-slate-400 mt-0.5 bg-slate-50 inline-block px-1.5 py-0.5 rounded-lg border border-slate-100">
+                                            {order.vehicle_plate || ''} {order.vehicle_type ? `(${order.vehicle_type === 'motorcycle' ? 'มอเตอร์ไซค์' : order.vehicle_type})` : ''}
+                                        </p>
                                     )}
                                 </div>
                                 {order.rider_phone && (
