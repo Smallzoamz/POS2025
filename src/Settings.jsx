@@ -650,7 +650,7 @@ const Settings = () => {
                                                     <>
                                                         <div className="bg-white p-6 rounded-[32px] shadow-xl shadow-blue-500/10 border-4 border-white">
                                                             <QRCode
-                                                                value={`${settings.rider_app_url}/connect?api=${network?.cloudUrl || `http://${network?.localIp || '127.0.0.1'}:${window.location.port}`}&store=${settings.shop_name || 'Store'}`}
+                                                                value={`${(settings.rider_app_url || '').split('/#')[0].replace(/\/$/, '')}/#/connect?api=${encodeURIComponent(network?.cloudUrl || `http://${network?.localIp || '127.0.0.1'}:${window.location.port}`)}&store=${encodeURIComponent(settings.shop_name || 'Store')}`}
                                                                 size={180}
                                                                 level="H"
                                                             />
