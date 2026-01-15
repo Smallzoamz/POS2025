@@ -805,6 +805,16 @@ async function startServer() {
             if (status === 'completed') {
                 await query("UPDATE line_orders SET is_deposit_paid = TRUE WHERE id = $1", [id]);
                 result.rows[0].is_deposit_paid = true;
+
+                // 🎁 Award Loyalty Points
+                const orderRes = await query("SELECT customer_id, total_amount FROM line_orders WHERE id = $1", [id]);
+                const order = orderRes.rows[0];
+                if (order && order.customer_id) {
+                    console.log(`💎 Awarding points for rider-completed order: #${id}`);
+                    await earnLoyaltyPoints(order.customer_id, order.total_amount, null, id);
+                } else {
+                    console.log(`⚠️ [Loyalty DEBUG] SKIPPED points for rider-completed order #${id}: customer_id=${order?.customer_id}`);
+                }
             }
 
             // Notify POS
