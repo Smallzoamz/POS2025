@@ -270,3 +270,7 @@
 - [2026-01-14 23:55] | File: electron/server.js | Line: 190 | Keyword: Loyalty | Status: Fixed | Change: Relaxed is_following check to allow points earning if LINE ID exists.
 - [2026-01-15 00:00] | File: electron/db_pg.js | Line: 612 | Keyword: Migration | Status: Created | Change: Added migration to ensure order_id and line_order_id columns exist in loyalty_point_transactions.
 - [2026-01-15 00:00] | File: electron/server.js | Line: 4933 | Keyword: Bug Fix | Status: Fixed | Change: Fixed ambiguous status column reference in Delivery Orders query by explicitly qualifying with table alias.
+
+- [2026-01-15 11:36] | File: electron/server.js | Line: 273-296 | Keyword: Loyalty Flex | Status: Fixed | Change: Fixed earnLoyaltyPoints to fetch LINE token from DB settings (line_channel_access_token) instead of process.env. Added success/warning logs for Flex Message dispatch.
+- [2026-01-15 11:36] | File: electron/server.js | Line: 187 | Keyword: Debug | Status: Added | Change: Added debug logging at entry of earnLoyaltyPoints to trace customerId and amount.
+- [2026-01-15 11:36] | File: electron/server.js | Line: 4768, 4887, 5215 | Keyword: Debug | Status: Added | Change: Added debug logs to all payment endpoints showing when loyalty points are skipped due to missing customer_id.

@@ -185,7 +185,11 @@ async function startServer() {
 
     // --- LOYALTY HELPER ---
     const earnLoyaltyPoints = async (customerId, amount, orderId = null, lineOrderId = null) => {
-        if (!customerId) return null;
+        console.log(`[Loyalty DEBUG] earnLoyaltyPoints called: customerId=${customerId}, amount=${amount}, orderId=${orderId}, lineOrderId=${lineOrderId}`);
+        if (!customerId) {
+            console.log(`[Loyalty DEBUG] SKIPPED: No customerId provided`);
+            return null;
+        }
         try {
             // Check if customer is following LINE OA (Requirement)
             const customerRes = await query("SELECT id, line_user_id, points, is_following FROM loyalty_customers WHERE id = $1", [customerId]);
@@ -271,7 +275,17 @@ async function startServer() {
                     }
                 };
 
-                const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+                // Fetch Token from DB Settings (same as sendLineFlexMessage)
+                let token = null;
+                try {
+                    const tokenRes = await query("SELECT value FROM settings WHERE key = 'line_channel_access_token'");
+                    if (tokenRes.rows.length > 0 && tokenRes.rows[0].value) {
+                        token = tokenRes.rows[0].value;
+                    }
+                } catch (tokenErr) {
+                    console.error('Failed to fetch LINE token for points notification:', tokenErr);
+                }
+
                 if (token) {
                     fetch('https://api.line.me/v2/bot/message/push', {
                         method: 'POST',
@@ -280,7 +294,10 @@ async function startServer() {
                             to: lineUserId,
                             messages: [{ "type": "flex", "altText": `คุณได้รับ ${pointsToEarn} แต้ม! - ${shopName}`, "contents": pointBubble }]
                         })
-                    }).catch(err => console.error('Error sending point notification:', err));
+                    }).then(() => console.log(`[Loyalty] ✅ Sent points notification to ${lineUserId}`))
+                        .catch(err => console.error('Error sending point notification:', err));
+                } else {
+                    console.log(`[Loyalty] ⚠️ Skipped Flex Message: No LINE token configured in Settings`);
                 }
             }
 
@@ -4749,6 +4766,8 @@ async function startServer() {
             if (order && order.customer_id) {
                 console.log(`💎 Awarding points for completed LINE order: #${id}`);
                 await earnLoyaltyPoints(order.customer_id, order.total_amount, null, id);
+            } else {
+                console.log(`⚠️ [Loyalty DEBUG] SKIPPED points for order #${id}: customer_id=${order?.customer_id}, order_exists=${!!order}`);
             }
 
             io.emit('line-order-update', { orderId: id, status: 'completed' });
@@ -4865,6 +4884,8 @@ async function startServer() {
             if (order && order.customer_id) {
                 console.log(`💎 Awarding points for completed LINE order: #${id}`);
                 await earnLoyaltyPoints(order.customer_id, order.total_amount, null, id);
+            } else {
+                console.log(`⚠️ [Loyalty DEBUG] SKIPPED points for completed order #${id}: customer_id=${order?.customer_id}`);
             }
 
             io.emit('line-order-update', { orderId: id, status: 'completed' });
@@ -5192,6 +5213,8 @@ async function startServer() {
             if (orderForPoints && orderForPoints.customer_id) {
                 console.log(`💎 Awarding points for delivered LINE order: #${id}`);
                 await earnLoyaltyPoints(orderForPoints.customer_id, orderForPoints.total_amount, null, id);
+            } else {
+                console.log(`⚠️ [Loyalty DEBUG] SKIPPED points for delivered order #${id}: customer_id=${orderForPoints?.customer_id}`);
             }
 
             io.emit('delivery-order-update', { orderId: id, status: 'completed' });
