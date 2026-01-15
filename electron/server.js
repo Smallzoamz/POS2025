@@ -4762,6 +4762,31 @@ async function startServer() {
         }
     });
 
+    // Get LINE Order Details (for modal view)
+    app.get('/api/line-orders/:id/details', async (req, res) => {
+        const { id } = req.params;
+        try {
+            // Get order
+            const orderRes = await query("SELECT * FROM line_orders WHERE id = $1", [id]);
+            if (orderRes.rowCount === 0) {
+                return res.status(404).json({ error: 'Order not found' });
+            }
+            const order = orderRes.rows[0];
+
+            // Get order items
+            const itemsRes = await query("SELECT * FROM line_order_items WHERE line_order_id = $1", [id]);
+            const items = itemsRes.rows;
+
+            res.json({
+                ...order,
+                items
+            });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     app.post('/api/line-orders/:id/pay', async (req, res) => {
         const { id } = req.params;
         const { paymentMethod, paidAmount } = req.body;
