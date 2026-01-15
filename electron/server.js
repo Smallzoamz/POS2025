@@ -800,10 +800,11 @@ async function startServer() {
                 [status, id]
             );
 
-            // If status is 'completed' (Delivered), automatically Set 'Paid' status (is_deposit_paid = true)
-            // This assumes cash on delivery or transfer is collected by rider.
+            // If status is 'completed' (Delivered), change to 'paid' for consistency with in-store orders
+            // This enables proper revenue tracking in Dashboard and Sales History
             if (status === 'completed') {
-                await query("UPDATE line_orders SET is_deposit_paid = TRUE WHERE id = $1", [id]);
+                await query("UPDATE line_orders SET status = 'paid', is_deposit_paid = TRUE WHERE id = $1", [id]);
+                result.rows[0].status = 'paid';
                 result.rows[0].is_deposit_paid = true;
 
                 // 🎁 Award Loyalty Points
@@ -2153,7 +2154,7 @@ async function startServer() {
         try {
             // 1. Total Revenue Today (Combined In-store and LINE)
             const inStoreRes = await query("SELECT SUM(total_amount) as total FROM orders WHERE status = 'paid' AND (updated_at AT TIME ZONE 'Asia/Bangkok')::date = CURRENT_DATE");
-            const lineRes = await query("SELECT SUM(total_amount) as total FROM line_orders WHERE status = 'completed' AND (updated_at AT TIME ZONE 'Asia/Bangkok')::date = CURRENT_DATE");
+            const lineRes = await query("SELECT SUM(total_amount) as total FROM line_orders WHERE status = 'paid' AND (updated_at AT TIME ZONE 'Asia/Bangkok')::date = CURRENT_DATE");
 
             const inStoreRevenue = parseFloat(inStoreRes.rows[0].total || 0);
             const lineRevenue = parseFloat(lineRes.rows[0].total || 0);

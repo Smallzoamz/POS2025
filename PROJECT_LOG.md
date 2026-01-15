@@ -275,3 +275,5 @@
 - [2026-01-15 11:36] | File: electron/server.js | Line: 187 | Keyword: Debug | Status: Added | Change: Added debug logging at entry of earnLoyaltyPoints to trace customerId and amount.
 - [2026-01-15 11:36] | File: electron/server.js | Line: 4768, 4887, 5215 | Keyword: Debug | Status: Added | Change: Added debug logs to all payment endpoints showing when loyalty points are skipped due to missing customer_id.
 - [2026-01-15 12:09] | File: electron/server.js | Line: 805-820 | Keyword: Rider Loyalty | Status: Fixed | Change: Added earnLoyaltyPoints call to /api/riders/orders/:id/status when status=completed. This was the missing link - Rider App completes orders via this endpoint, not the delivery endpoint.
+- [2026-01-15 12:40] | File: electron/server.js | Line: 806 | Keyword: LINE Paid Status | Status: Fixed | Change: Changed Rider complete endpoint to set status='paid' instead of 'completed' for consistency with in-store orders.
+- [2026-01-15 12:40] | File: electron/server.js | Line: 2156 | Keyword: Dashboard Query | Status: Modified | Change: Updated Dashboard revenue query to use status='paid' for LINE orders instead of 'completed'.
